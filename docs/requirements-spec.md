@@ -1,0 +1,712 @@
+# Requirements Specification
+
+## Purpose
+
+This file is the canonical source of truth for all platform requirements. Update this file first when any business rule, product constraint, workflow, or UI behaviour changes.
+
+## How to Read This Document
+
+Requirements are grouped by implementing component so that all related requirements for a given service or layer are in one place. Each section carries a short scope note identifying the owning component and what the section covers.
+
+All requirement IDs follow the format `REQ-{DOMAIN}-{NNN}` with three-digit sequential numbers. IDs are stable once assigned — when adding new requirements, use the next available number in the section's sequence.
+
+---
+
+## Table of Contents
+
+- [Part 1 — Platform Foundation](#part-1--platform-foundation)
+  - [Product Boundary](#product-boundary)
+  - [Personas and Roles](#personas-and-roles)
+  - [Technology Stack](#technology-stack)
+  - [Canonical Data Ownership](#canonical-data-ownership)
+  - [Configuration Model](#configuration-model)
+  - [Non-Functional Requirements](#non-functional-requirements)
+- [Part 2 — Identity and Session](#part-2--identity-and-session)
+  - [Portal Session Management](#portal-session-management)
+  - [Authentication and FYERS Integration](#authentication-and-fyers-integration)
+- [Part 3 — Universe and Market Data](#part-3--universe-and-market-data)
+  - [Universe Management and Symbol Master](#universe-management-and-symbol-master)
+  - [Historical Storage and Symbol-to-Table Mapping](#historical-storage-and-symbol-to-table-mapping)
+  - [Trading Calendar and Timeframes](#trading-calendar-and-timeframes)
+  - [Market Data Provider and EOD Sync](#market-data-provider-and-eod-sync)
+  - [FYERS API Rate Management](#fyers-api-rate-management)
+- [Part 4 — Signals and Research](#part-4--signals-and-research)
+  - [Signal Types and Backtesting](#signal-types-and-backtesting)
+  - [Backtest Storage](#backtest-storage)
+- [Part 5 — Risk Management Engine](#part-5--risk-management-engine)
+  - [RME Core Architecture](#rme-core-architecture)
+  - [Position Sizing](#position-sizing)
+  - [Portfolio Heat and Exposure Controls](#portfolio-heat-and-exposure-controls)
+  - [Drawdown Control](#drawdown-control)
+  - [Pyramiding and Scaling](#pyramiding-and-scaling)
+  - [Position Lifecycle](#position-lifecycle)
+  - [Stop Losses and Exit Alerts](#stop-losses-and-exit-alerts)
+  - [Risk Metrics and Performance Tracking](#risk-metrics-and-performance-tracking)
+  - [Backtest Execution Modelling](#backtest-execution-modelling)
+- [Part 6 — Portfolio and Accounting](#part-6--portfolio-and-accounting)
+  - [Portfolio Analytics and Accounting](#portfolio-analytics-and-accounting)
+  - [Reconciliation and Manual Adjustment](#reconciliation-and-manual-adjustment)
+- [Part 7 — User Portal](#part-7--user-portal)
+  - [User Dashboard](#user-dashboard)
+  - [Charting and Decision Support](#charting-and-decision-support)
+  - [Notifications and Signal Delivery](#notifications-and-signal-delivery)
+  - [Execution Confirmation and Order Placement](#execution-confirmation-and-order-placement)
+- [Part 8 — Admin Portal](#part-8--admin-portal)
+  - [Admin Operations](#admin-operations)
+- [Part 9 — Future and Out of Scope](#part-9--future-and-out-of-scope)
+  - [V1.5 and Later](#v15-and-later)
+  - [Explicitly Out of Scope for Early Milestones](#explicitly-out-of-scope-for-early-milestones)
+
+---
+
+## Part 1 — Platform Foundation
+
+*Cross-cutting constraints that all components must respect. Implement these decisions before writing any feature code.*
+
+### Product Boundary
+
+*Scope guardrails. Every component must enforce these constraints — they are not optional checks.*
+
+- `REQ-BOUNDARY-001` The platform targets NSE-listed stocks from the Nifty 500 universe only.
+- `REQ-BOUNDARY-002` The platform is long-only.
+- `REQ-BOUNDARY-003` The platform is for decision support, research, charting, backtesting, portfolio analytics, and notifications.
+- `REQ-BOUNDARY-004` The platform must not place orders autonomously on behalf of users.
+- `REQ-BOUNDARY-005` User behaviour is not constrained to the platform; users may trade directly in the broker outside this system.
+- `REQ-BOUNDARY-006` All user and admin capabilities must be accessible through a unified browser-based portal.
+
+### Personas and Roles
+
+*Implemented by the identity and access layer. Defines the two supported personas and their access model.*
+
+- `REQ-ROLE-001` The platform supports normal users and exactly one admin user.
+- `REQ-ROLE-002` The admin is also a normal user and uses the same unified portal as all other users.
+- `REQ-ROLE-003` The admin receives an additional privileged admin menu inside the same portal.
+- `REQ-ROLE-004` New users remain blocked from protected platform features until approved by the admin.
+- `REQ-ROLE-005` The first admin account is bootstrapped from a seeded environment-configured email.
+- `REQ-ROLE-006` Admin bootstrap and later admin transfer are operationally controlled, not self-service.
+- `REQ-ROLE-007` Admin transfer is performed by updating the seeded admin email in the environment or Azure App Configuration bootstrap source and redeploying or restarting the API application. On restart, the platform must resolve the current admin email from bootstrap configuration, assign the admin role to the matching account if it exists, and revoke the admin role from any account that previously held it. No in-app UI for admin role transfer is provided. The outgoing admin's FYERS token used for shared market data ingestion is not automatically transferred; the incoming admin must complete FYERS authentication to re-establish a valid shared token before EOD sync and background jobs can resume. The admin transfer event must be recorded in the audit trail once the new admin first logs in.
+
+### Technology Stack
+
+*Mandatory technology choices. Do not introduce alternatives without updating this section and recording an ADR. Technology choices are intentionally aligned with the primary developer's skill profile: strong C# and .NET, proficient TypeScript, and beginner-level Node.js / full-stack web. Any proposed change must justify itself against that constraint.*
+
+- `REQ-TECH-001` The unified web frontend is a Node.js application using Next.js and TypeScript. Next.js is chosen because it is the most accessible full-stack React framework for a developer who knows TypeScript but is new to Node.js full-stack patterns.
+- `REQ-TECH-002` Backend APIs, background jobs, and backtesting services use C# on ASP.NET Core. This is non-negotiable: the primary developer is experienced in C# and all complex server-side logic must remain in the .NET layer.
+- `REQ-TECH-003` Backend logging in .NET services must use Microsoft `ILogger` with Serilog as the logging provider.
+- `REQ-TECH-004` Cross-system observability must use OpenTelemetry and OTLP so logs, traces, and metrics can be routed to different vendors without code changes.
+- `REQ-TECH-005` The frontend must not grow complex server-side logic beyond API route proxying, authentication session handling, and lightweight data transformation. Any business logic, risk calculations, or data-intensive processing must live in the .NET backend.
+
+### Canonical Data Ownership
+
+*Defines which database owns which class of data. Every data model decision must be consistent with this section.*
+
+- `REQ-DATA-001` MongoDB stores live operational data: user state, strategies, credentials metadata, tokens, signals, notifications, audits, and portfolio analytics.
+- `REQ-DATA-002` SQL Server stores shared historical Nifty 500 market data and persisted backtest results; these are kept in two separate databases.
+- `REQ-DATA-003` SQL Server data is shared reference data and is not user-specific.
+- `REQ-DATA-004` The SQL Server market data database holds only OHLCV history for active and archived Nifty 500 symbols. The SQL Server backtest database holds all backtest run data including trades, positions, and portfolio performance records.
+- `REQ-DATA-005` MongoDB may also store admin-managed runtime system settings in a `sys_config` collection for values that should be editable through the portal.
+- `REQ-DATA-006` Redis may be used for WebSocket fan-out, hot caches, and job coordination locks.
+
+### Configuration Model
+
+*Implemented by a shared configuration service consumed by all .NET applications. No application may query `sys_config` ad hoc from business logic.*
+
+- `REQ-CONFIG-001` The platform must use a hybrid configuration model with bootstrap config, shared technical config, and admin-managed runtime config.
+- `REQ-CONFIG-002` Mutable admin-managed runtime settings may be stored in MongoDB `sys_config`.
+- `REQ-CONFIG-003` `sys_config` records must use a stable schema with key, category, value type, current value, default value, validation metadata, editability, restart requirement, audit metadata, and version.
+- `REQ-CONFIG-004` `sys_config` must be limited to non-secret runtime settings and must not store connection strings, provider secrets, or seeded admin identity.
+- `REQ-CONFIG-005` The admin portal must allow viewing, editing, filtering, and resetting allowed `sys_config` values with audit trail.
+- `REQ-CONFIG-006` Applications must load configuration through a dedicated configuration service rather than querying `sys_config` ad hoc from business code.
+- `REQ-CONFIG-007` Runtime config must support category-based grouping at least for: jobs, market data, strategies, risk, position sizing, notifications, UI, feature flags, and operations.
+- `REQ-CONFIG-008` If `sys_config` is unavailable, startup-critical application behaviour must still work from bootstrap configuration, and runtime features must degrade safely.
+- `REQ-CONFIG-009` A complete seed table listing every required `sys_config` key, its category, value type, default value, and the requirement that mandates it must be maintained in `docs/system-config.md`. This seed table is the authoritative reference for the database seeding script and for operators validating a fresh deployment. When a new requirement introduces a `sys_config` key, the key must be added to the seed table at the same time the requirement is written.
+
+### Non-Functional Requirements
+
+*Platform-wide quality and operational requirements. Apply to all components.*
+
+- `REQ-NFR-001` Prioritise correctness and reproducibility over ultra-low latency in early milestones.
+- `REQ-NFR-002` Keep interactive requests responsive where practical.
+- `REQ-NFR-003` Degrade gracefully during FYERS or Telegram outages.
+- `REQ-NFR-004` Every production issue must be investigable through logs, metrics, and audit events.
+- `REQ-NFR-005` The platform is hosted on Azure and delivered through Azure DevOps.
+- `REQ-NFR-006` Third-party credentials must be protected with encryption and strict access controls.
+- `REQ-NFR-007` Risk controls and sizing defaults must remain conservative by default.
+- `REQ-NFR-008` All applications must emit logs, traces, and metrics through a shared OpenTelemetry and OTLP-based observability model.
+- `REQ-NFR-009` Application telemetry must target a stable OTLP collector or gateway endpoint so downstream vendors can be changed through configuration.
+- `REQ-NFR-010` Startup-critical configuration must not depend solely on MongoDB; applications must be able to bootstrap with environment or Azure-hosted configuration.
+- `REQ-NFR-011` Database connection strings, seeded admin identity, and other security-sensitive bootstrap values must remain outside `sys_config`.
+- `REQ-NFR-012` Shared non-secret technical configuration must be centrally managed and consumable by all applications from one place.
+- `REQ-NFR-013` The platform must use WebSockets for real-time push delivery of time-sensitive events to connected portal clients. The following events must be pushed via WebSocket rather than polled by the client: stop level breach alerts, add and reduce level advisory triggers, and pending-entry supersede notifications. All other data — dashboard portfolio figures, position summaries, notification feed contents — may be fetched on demand or on page load. Redis must be used as the WebSocket fan-out layer so that push events generated by background workers reach all connected portal instances. Clients that are not connected at the time an event fires must receive the alert through the portal notification feed on their next active session.
+
+---
+
+## Part 2 — Identity and Session
+
+*Implemented by the ASP.NET Core API layer (auth middleware, session management) and the Next.js frontend (OAuth flow, FYERS lock UI). Must be fully operational before any other user-facing feature is built.*
+
+### Portal Session Management
+
+*Governs the platform's own OAuth session lifecycle and the FYERS token lock behaviour.*
+
+- `REQ-SESSION-001` Portal OAuth sessions must be valid for 24 hours from the time of login; after expiry the user must re-authenticate via OAuth before accessing any protected portal features.
+- `REQ-SESSION-002` Concurrent portal sessions for the same user are not permitted; a new login from any device must immediately invalidate any existing active session for that user.
+- `REQ-SESSION-002a` Portal OAuth sessions must be stored server-side in a MongoDB `sessions` collection. Each session record must store the user ID, session token, issued-at timestamp, expires-at timestamp, and the device or user-agent context. On new login, any existing session record for the same user must be invalidated before the new session record is written, in a single atomic operation. All authenticated API requests must validate the session token against this collection. A TTL index must expire session documents automatically 24 hours after the issued-at timestamp.
+- `REQ-SESSION-003` When a user's FYERS token expires, becomes dirty, or is marked as requiring re-authentication, the portal must lock immediately and display a prominent modal notification requiring FYERS re-authentication before the user can continue.
+- `REQ-SESSION-004` The portal lock on FYERS token expiry must block all FYERS-dependent features including the dashboard, positions, charts, portfolio analytics, signal workflows, and any other feature requiring live or synced FYERS data.
+- `REQ-SESSION-005` The FYERS re-authentication modal must remain dismissible only by completing the FYERS re-auth flow successfully; it must not be closeable without action.
+- `REQ-SESSION-006` Step-up re-authentication for sensitive portal actions is deferred to a future version.
+- `REQ-SESSION-007` The portal must warn the user before their OAuth session expires. A non-blocking indicator must appear when fewer than a configurable number of minutes remain before session expiry (default 30 minutes), allowing the user to re-authenticate proactively without losing their current context.
+- `REQ-SESSION-008` When a portal OAuth session expires mid-use, the portal must redirect the user to the OAuth login page with a clear session-expired message. In-progress actions at the time of expiry must not fail silently; the user must see an unambiguous explanation of what happened.
+- `REQ-SESSION-009` When the admin's own FYERS token is dirty, expired, or missing, the admin portal must display a persistent high-visibility warning making clear that EOD sync and all admin-token-dependent background jobs will fail until the token is re-established. Unlike the user FYERS lock (REQ-SESSION-003), this warning must not block the admin portal — the admin must remain able to navigate and take recovery action while the warning is displayed.
+- `REQ-SESSION-010` The platform login journey for a regular user must enforce a strict two-step sequence: portal OAuth first, then FYERS authentication. No protected platform feature — including the dashboard, charting, strategies, portfolio analytics, and notifications — is accessible until both steps are complete and a valid FYERS token is on record for the user.
+- `REQ-SESSION-011` After a user's portal OAuth login is confirmed and the platform identifies them as an approved user with no valid FYERS token on record, the portal must automatically redirect them to the FYERS authentication flow. The redirect must happen before rendering any protected page. A clear explanation must be shown stating that FYERS authentication is required to proceed.
+- `REQ-SESSION-012` A user who has completed OAuth but whose account is still pending admin approval must see a dedicated approval-pending screen after login. The screen must state that their account is awaiting admin approval and must not expose any protected portal content. The user must be redirected automatically to the FYERS auth flow once the admin approves their account and they next attempt login.
+- `REQ-SESSION-013` Users in an unapproved, FYERS-not-connected, FYERS-locked, or deactivated state must all be shown purpose-specific screens that clearly describe their situation. The four states — pending approval, pending FYERS connection, FYERS token expired or dirty, and account deactivated — must each produce a distinct, unambiguous UI state so users are never left confused about why they cannot access the platform. The account-deactivated screen must instruct the user to contact their platform administrator.
+
+### Authentication and FYERS Integration
+
+*Covers OAuth login with third-party providers and FYERS token lifecycle for both the admin (shared data ingestion) and regular users (personal account data).*
+
+- `REQ-AUTH-001` The portal must support OAuth login with Google, Microsoft, and Facebook/Meta.
+- `REQ-AUTH-001a` Each unique combination of OAuth provider and email address creates a distinct platform account. No automatic account merging is performed. If a user registers via two different OAuth providers or with two different email addresses, two separate accounts are created. The admin may deactivate duplicate accounts through the user management portal per REQ-ADMIN-001a.
+- `REQ-AUTH-002` A user must complete portal OAuth before starting the FYERS authentication workflow.
+- `REQ-AUTH-003` The platform uses a single shared FYERS API application registered and managed by the admin. Users authenticate their individual FYERS brokerage accounts against the platform's shared FYERS API app using the FYERS OAuth flow. Users do not need to register or manage their own FYERS API applications. FYERS App ID and Secret credentials do not expire once created; there is no credential rotation or renewal lifecycle to manage. FYERS regulations require separate app registrations for data access and algo trading. The platform requires an algo trading app registration because it uses the FYERS API Connect JS widget (REQ-ORDER-006/014) for user-initiated order placement, which falls under the algo trading app type. The same app registration also covers market data access when FYERS is the configured market data provider. The admin must register a single FYERS algo trading app and provide its credentials for platform use; a data-only app registration is not sufficient.
+- `REQ-AUTH-003a` The platform's FYERS API application credentials (app_id and secret_key) must be stored in Azure Key Vault or equivalent secret storage and must never be placed in `sys_config`, environment variables accessible outside the deployment context, or source control.
+- `REQ-AUTH-004` The admin must authenticate with FYERS and provide the token used for shared symbol and market-data ingestion.
+- `REQ-AUTH-005` Each regular user must authenticate with FYERS using their own account so profile, positions, holdings, trades, and orders can be fetched.
+- `REQ-AUTH-006` User-scoped FYERS tokens must never be used for shared market-data jobs.
+- `REQ-AUTH-007` FYERS token state must be persisted in MongoDB with ownership, issue date, expiry metadata, status, and dirty or reauth-required state.
+- `REQ-AUTH-008` FYERS access tokens should be treated as day-scoped operational tokens for the current platform design.
+- `REQ-AUTH-009` If a sync or broker workflow fails because the persisted FYERS token is invalid, expired, or otherwise unusable, that token must be marked dirty and the user must reauthenticate with FYERS.
+- `REQ-AUTH-010` A dirty FYERS token must block dependent sync workflows until the token is re-established successfully.
+
+---
+
+## Part 3 — Universe and Market Data
+
+*Implemented by .NET background worker services (DataSync, HistoricDataSeed, Universe Sync) and the ASP.NET Core API layer for provider routing. Must be operational before any Signal runs or charting can work.*
+
+### Universe Management and Symbol Master
+
+*Governs how the Nifty 500 symbol list is maintained in MongoDB and how symbols are kept in sync with NSE changes.*
+
+- `REQ-UNIV-001` The platform universe is managed from the Nifty 500 CSV uploaded by the admin.
+- `REQ-UNIV-002` CSV import must require the columns `Company Name`, `Industry`, `Symbol`, `Series`, and `ISIN Code`. The `Industry` field is the sole classification field imported from the CSV and is the platform's canonical grouping dimension. All references to "sector" throughout the platform — including dashboard sector breakdown, sector exposure limits, sector concentration rules, and portfolio impact assessments — mean the `Industry` value from the symbol master. No separate sector field exists; the terms are synonymous within this platform.
+- `REQ-UNIV-002a` When a CSV upload changes the `Industry` value for an existing symbol, the platform must update the symbol master record in place and record the change in the audit trail, including the previous and new industry values and the upload that caused the change. The updated classification must be applied immediately to all live calculations — dashboard sector breakdown, portfolio heat sector exposure, and scan sector concentration rules — from the next sync or page load. Historical closed-position records in the trade ledger must retain the industry classification that was active at the time those positions were open; the reclassification must not retroactively alter completed trade history or closed-position portfolio impact records. Any open position in the reclassified symbol must be re-evaluated against the new sector exposure limits at the next RME portfolio heat recalculation, and the user must receive a notification of type `sector_exposure_breach` as defined in REQ-NOTIFY-006 if the reclassification causes their sector exposure to breach a configured threshold.
+- `REQ-UNIV-003` CSV import must compare uploaded rows against the existing MongoDB symbol master.
+- `REQ-UNIV-004` CSV import must import only rows where `Series = EQ`.
+- `REQ-UNIV-005` CSV import must skip rows where `Series != EQ` and report them in the upload summary.
+- `REQ-UNIV-006` Symbols removed from a newly uploaded CSV must be marked archived instead of deleted.
+- `REQ-UNIV-007` Archived symbols must remain queryable so prior charts, signals, trades, and audit trails continue to work.
+- `REQ-UNIV-008` Archived symbols must continue to receive EOD historical sync into SQL Server.
+- `REQ-UNIV-009` Admin must be able to temporarily exclude active symbols from scans without archiving them.
+- `REQ-UNIV-010` Symbol master must persist both archive state and scan-exclusion state with audit trail.
+- `REQ-UNIV-011` Admin upload summary must show how many new symbols were added.
+- `REQ-UNIV-012` Admin upload summary must show which symbols are no longer part of the uploaded index list.
+- `REQ-UNIV-013` Admin upload summary must show which symbols were skipped because `Series != EQ`.
+- `REQ-UNIV-014` When a CSV upload results in net-new symbols being added to the symbol master, the platform must automatically trigger the HistoricDataSeed job scoped to those new symbols only. The job must fetch the full available historical OHLCV data for each new symbol, working backward from the current date as far as the market data provider API supports. The auto-triggered run must be recorded in `job_runs` with `triggered_by: universe_upload` and must reference the upload record from `universe_upload_results`. New symbols must not be eligible for backtesting or EOD Signal Runner evaluation until their HistoricDataSeed run completes successfully.
+- `REQ-UNIV-015a` The admin CSV upload page must display the full current symbol master as a list alongside the upload interface. For each symbol the list must show: trading symbol, company name, current status (active or archived), scan-exclusion state, and data sync health. Data sync health is determined by comparing the most recent daily candle date in the symbol's SQL Server `D_` table against the most recent completed trading session from the internal trading calendar. A symbol is considered out of sync if its most recent candle date is earlier than the most recent completed trading session.
+- `REQ-UNIV-015b` The CSV upload page must display a count of out-of-sync symbols and provide a single action button to trigger a targeted reseed for all out-of-sync symbols simultaneously. This reseed must invoke the HistoricDataSeed job scoped to the out-of-sync symbols only, using the standard gap-fill behaviour: for each symbol the job fetches only from its most recent successfully written date forward, filling the gap up to the current date without overwriting existing rows. The job must be recorded in `job_runs` with `triggered_by: manual_reseed` and must list the symbols included in the run.
+- `REQ-UNIV-015c` While a HistoricDataSeed job triggered from the CSV upload page is in progress, the upload page must show a progress indicator and must prevent a duplicate reseed trigger for the same symbols. On completion, the symbol list must refresh its data sync health indicators automatically.
+- `REQ-UNIV-015` When a CSV upload archives a symbol (transitions it from active to archived state), the platform must check whether any user has an open position in that symbol. For each user with an open position in an archived symbol, the platform must generate a notification of type `symbol_archived_with_open_position` alerting the user that the symbol has been removed from the Nifty 500 universe and that their position will no longer receive new entry signal advisories but will continue to be monitored by the RME for stop updates, add and reduce level triggers, and exit conditions until they close the position. The RME must not suspend or auto-close open positions solely because the symbol was archived; the full position lifecycle continues unchanged. The chart page must continue to show the red archived indicator (REQ-CHART-005) for the symbol. The `symbol_archived_with_open_position` type must be added to the supported notification types alongside those in REQ-NOTIFY-006.
+
+### Historical Storage and Symbol-to-Table Mapping
+
+*Governs the SQL Server market data database layout: three tables per symbol, stable naming, and how DataSync populates weekly and monthly candles from daily data.*
+
+- `REQ-HIST-001` SQL Server historical storage uses three tables per symbol in the market data database: one for daily candles (`D_` prefix), one for pre-computed weekly candles (`W_` prefix), and one for pre-computed monthly candles (`M_` prefix).
+- `REQ-HIST-002` Each OHLCV table contains `Date`, `Open`, `High`, `Low`, `Close`, and `Volume`. This schema applies identically to the daily, weekly, and monthly tables.
+- `REQ-HIST-003` MongoDB symbol master must store a stable `sql_table_name_suffix` for each symbol. Full table names are constructed at runtime by prepending the timeframe prefix: `D_{suffix}`, `W_{suffix}`, `M_{suffix}`.
+- `REQ-HIST-004` SQL Server historical tables must be referenced using `sql_table_name_suffix`, not raw symbol text and not ISIN code.
+- `REQ-HIST-005` `sql_table_name_suffix` must be generated deterministically from `Symbol`.
+- `REQ-HIST-006` Unsupported characters such as `&` and `-` must be replaced with `_` when generating `sql_table_name_suffix`.
+- `REQ-HIST-007` If the sanitised name starts with a digit, it must be prefixed with `SYM_`.
+- `REQ-HIST-008` Once assigned, `sql_table_name_suffix` must remain stable even if symbol metadata changes later.
+- `REQ-HIST-009` DataSync and HistoricDataSeed must write to all three table variants (`D_`, `W_`, `M_`) for each symbol on each sync run.
+- `REQ-HIST-010` Weekly candles in `W_` tables must span from the first to the last trading session of each ISO calendar week as defined by the internal NSE trading calendar. Monthly candles in `M_` tables must span from the first to the last trading session of each calendar month. DataSync is responsible for deriving and upserting these from the daily data it has ingested.
+
+### Trading Calendar and Timeframes
+
+*The internal NSE trading calendar is the single authoritative source for all session-based calculations across the platform. All components must use it.*
+
+- `REQ-CALENDAR-001` The platform must maintain an internal NSE trading calendar in `Asia/Kolkata`.
+- `REQ-CALENDAR-002` The admin must be able to add or update all session types in the internal calendar: normal trading sessions, special sessions, and Muhurat trading sessions. Every session record — regardless of type — must store the session date, session type, session start time, and session end time in `Asia/Kolkata`. The platform treats all session types as valid trading sessions and applies the same session start and end times from the calendar record as the authoritative market hours for that day.
+- `REQ-CALENDAR-003` The internal trading calendar is the shared authority for chart aggregation, rolling timeframes, weekly/monthly boundaries, EOD sync timing, scans, and stop monitoring.
+- `REQ-CALENDAR-004` The default EOD sync schedule must run after exchange close and post-close processing, with `17:00 IST` as the initial default unless changed operationally.
+- `REQ-CALENDAR-005` All scheduled background jobs that depend on market activity — including DataSync, the EOD Signal Runner (EODSR), EOD stop-level updates, and intraday account sync — must check the internal NSE trading calendar at startup before performing any work. If the current date has no session record in the internal calendar, the job must exit immediately with a status of `skipped_holiday` and record this outcome in `job_runs`. A holiday skip must not be treated as a failure and must not trigger alerts or retry logic. The intraday account sync polling loop (REQ-PORT-019) and the Live Market Data Scan (LMDS, REQ-STOP-006) must additionally check the calendar before each poll cycle and cease polling for the remainder of the session if the session is detected as a holiday mid-run.
+- `REQ-CALENDAR-006` Wherever the platform must determine whether it is currently within market hours — including the Live Market Data Scan (LMDS, REQ-STOP-006a), the intraday account sync polling loop (REQ-PORT-019), live quote fetching (REQ-DASH-003), and the Phase 1 order modal market-hours indicator (REQ-ORDER-018) — it must derive the session start and end times from the current day's session record in the internal trading calendar. No component may hardcode session times. If the current day has no session record, it must be treated as outside market hours.
+- `REQ-TIMEFRAME-001` Supported global timeframes must include daily, weekly, monthly, and rolling 3-day, 5-day, and 7-day views.
+- `REQ-TIMEFRAME-002` Rolling timeframe candles must be built from trading sessions, not calendar dates.
+- `REQ-TIMEFRAME-003` In a rolling 3-day candle, the opening bar is the oldest included trading session and the closing bar is the most recent trading session in the window.
+- `REQ-TIMEFRAME-004` The same timeframe definitions must be used consistently in charting, Signal runs, EOD Signal Runner evaluation, and backtesting.
+- `REQ-TIMEFRAME-005` Weekly and monthly candles in charting and backtesting must be sourced directly from the pre-computed `W_` and `M_` SQL tables for the relevant symbol. They must not be re-derived at query time from daily data.
+- `REQ-TIMEFRAME-006` Rolling window candles (rolling 3-day, 5-day, 7-day) must be computed on demand from the daily `D_` tables. No dedicated SQL table is maintained for rolling window candles.
+
+### Market Data Provider and EOD Sync
+
+*Covers the provider abstraction layer design (REQ-MKTPROV) and the specific behaviour of DataSync and HistoricDataSeed jobs (REQ-MARKET). The abstraction must be implemented first; the jobs depend on it.*
+
+#### Provider Abstraction
+
+- `REQ-MKTPROV-001` The platform must implement a market data provider abstraction layer so that the source of shared historical OHLCV data and real-time quotes can be changed through configuration without code changes.
+- `REQ-MKTPROV-002` All components that need market data must call through the provider abstraction; no component may bind directly to a specific provider's API.
+- `REQ-MKTPROV-003` The initial supported providers must include FYERS (using the admin daily token) and at least one third-party provider such as TrueData or Global Data Feeds.
+- `REQ-MKTPROV-004` Each provider implementation must conform to a common market data interface exposing at minimum: fetch historical daily OHLCV candles for a symbol over a date range, and fetch the latest real-time or delayed quote for a symbol.
+- `REQ-MKTPROV-005` The active market data provider must be selectable through an admin-managed configuration setting; switching providers must not require a code deployment or application restart where possible.
+- `REQ-MKTPROV-006` Provider credentials such as API keys for third-party providers must be stored in Azure Key Vault or equivalent secret storage and must never be placed in `sys_config` or source control.
+- `REQ-MKTPROV-007` When a third-party provider is the configured market data provider, market data ingestion must operate independently of the admin FYERS token; the admin FYERS token is then required only for user account data workflows.
+- `REQ-MKTPROV-008` The user's FYERS token must never be used for shared market data ingestion regardless of which market data provider is configured.
+- `REQ-MKTPROV-009` FYERS must always remain the provider for user-specific account data including positions, orders, trades, and profile data; this is not configurable.
+- `REQ-MKTPROV-010` The admin portal must display which market data provider is currently active and the last successful data fetch timestamp for that provider.
+- `REQ-MKTPROV-011` When displaying live quotes and real-time price data in the portal, the platform must use the individual logged-in user's FYERS token to fetch that data; this distributes API load across user sessions rather than routing live portal requests through the admin market data provider.
+- `REQ-MKTPROV-012` Historical OHLCV chart data served to the portal must be read from SQL Server via the API layer; live and intraday price updates displayed in the portal must be fetched at display time using the user's FYERS token.
+- `REQ-MKTPROV-013` Background jobs including DataSync, HistoricDataSeed, and the EOD Signal Runner must use the admin-configured market data provider; they must never use a user's FYERS token for this purpose.
+
+#### EOD Sync Jobs
+
+- `REQ-MARKET-001` The platform must route all shared market data access through the configured market data provider; the provider is an abstracted, swappable integration layer.
+- `REQ-MARKET-002` When FYERS is the configured market data provider, shared symbol and market-data ingestion jobs must use the admin FYERS token.
+- `REQ-MARKET-003` After market close, a post-market DataSync job must refresh SQL Server historical data before any end-of-day signal scan runs.
+- `REQ-MARKET-004` When FYERS is the configured market data provider, the DataSync job must require a valid admin FYERS token; the existing dirty-token and re-auth rules apply. **Operational note:** FYERS access tokens are day-scoped; when FYERS is the active market data provider the admin must generate a fresh FYERS token each trading day before EOD sync runs. The persistent admin portal warning defined in REQ-SESSION-009 is the sole notification mechanism for a missing or expired admin token. No automated proactive reminder is provided — this is an operator responsibility. When the active market data provider is switched to a third-party provider such as TrueData or GDF, the admin FYERS token is no longer required for market data ingestion and this daily renewal obligation falls away entirely.
+- `REQ-MARKET-005` If the market data provider is unavailable or authentication fails, the DataSync job must fail and the EOD Signal Runner must abort for that session.
+- `REQ-MARKET-006` If today's daily data is unavailable for a specific symbol, that symbol may be skipped from the scan for that session while the rest of the eligible universe continues.
+- `REQ-MARKET-007` The DataSync job must write an explicit success marker for the trading session so the EOD Signal Runner knows when it is safe to start.
+- `REQ-MARKET-008` The admin portal must provide a way to trigger or retry DataSync and the EOD Signal Runner manually when scheduled execution fails or needs operator intervention. If an admin attempts to manually trigger a job that is already in a running state, the platform must reject the request and display a clear message stating that the job is currently running, along with its start time. A duplicate manual trigger must never spawn a second concurrent instance of the same job.
+- `REQ-MARKET-009` The post-market DataSync job must fetch daily candles from the current trading session minus 10 sessions through the current session to automatically recover from missed sync days or missed admin token generation.
+- `REQ-MARKET-010` A separate HistoricDataSeed job must be available for operator-triggered execution to seed SQL Server with historical daily candles for all active symbols. The default behaviour in all invocations is gap-fill: the job identifies the most recent successfully written date per symbol and fetches only from that date forward, leaving existing rows untouched. For operator-triggered manual runs from the admin portal, an optional from-date parameter may be provided; when supplied, the job overwrites rows from that date forward for the targeted symbols, providing a corrective path for known bad data. A full-wipe of all historical data is not exposed through the platform UI and must only be performed as a direct database operation by an operator. The job fetches backward from the current date as far as the market data provider API supports when no existing data is present for a symbol.
+- `REQ-MARKET-011` HistoricDataSeed API calls must be batched to respect the market data provider's per-call data point limits and any applicable rate limits; the job must be resumable if interrupted.
+- `REQ-MARKET-012` HistoricDataSeed must not run automatically as part of the regular post-market schedule. It may only be triggered in two ways: by an operator explicitly invoking it from the admin portal (full-universe seed or targeted reseed), or automatically as a scoped event-driven invocation when net-new symbols are added via a CSV upload per REQ-UNIV-014.
+- `REQ-MARKET-013` DataSync and HistoricDataSeed must validate each OHLCV candle before writing to SQL Server. A candle is invalid if: High is less than Low, any of Open, High, Low, or Close is zero or negative, or Volume is negative. Invalid candles must be rejected and logged with the symbol, date, and failing rule; they must never be written to SQL Server.
+- `REQ-MARKET-014` If a candle for a specific symbol and session fails data quality validation, that symbol must be skipped from that session's scans in the same way as a missing candle per REQ-MARKET-006. The failure must be recorded in the job run log.
+- `REQ-MARKET-015` If the proportion of invalid candles across all symbols in a single DataSync run exceeds a configurable threshold, the job must abort with a clear error rather than continuing to write, to prevent a bad data batch from silently corrupting the dataset. The threshold must be seeded in `sys_config`.
+
+### API Rate Management
+
+*Implemented by a centralised throttling layer in the .NET application layer. Every call to FYERS or any third-party market data provider from any component must pass through this layer.*
+
+- `REQ-RATE-001` The platform must implement a centralised API request throttling layer that all components use when calling FYERS or any configured third-party market data provider; no component may call these APIs directly bypassing this layer.
+- `REQ-RATE-002` The throttling layer must enforce configurable per-second, per-minute, and per-day call limits stored in `sys_config` so limits can be updated by the admin without a code deployment.
+- `REQ-RATE-003` The default FYERS rate limit values must be seeded in `sys_config` as: 10 calls per second, 200 calls per minute, and 100,000 calls per day.
+- `REQ-RATE-004` The throttling layer must use a request queue with exponential back-off when a rate limit response is received; rate limit errors must be treated as transient and retried automatically.
+- `REQ-RATE-005` If a background job is significantly delayed due to rate limiting, the delay duration must be logged and surfaced as a warning through the standard observability model.
+- `REQ-RATE-006` If rate limiting prevents a job from completing before its next scheduled run window, the job must fail with a clear error and the failure must be observable and alertable.
+- `REQ-RATE-007` Live scan polling intervals and post-market sync batch sizes must be configured to keep total daily FYERS API calls within the configured daily limit across all concurrent consumers.
+- `REQ-RATE-008` The admin portal must display current FYERS API call consumption for the day alongside the configured daily limit so the operator can monitor headroom.
+- `REQ-RATE-009` The throttling layer must enforce separate, independently configurable rate limits for each third-party market data provider (TrueData, Global Data Feeds, and any future providers). Default rate limits for each supported provider must be seeded in `sys_config` under the `integrations` category. A rate limit response from one provider must not affect calls to any other provider or to FYERS.
+- `REQ-RATE-010` Observable daily call consumption metrics must be maintained per provider so the operator can monitor API headroom for each integration independently.
+
+---
+
+## Part 4 — Signals and Research
+
+*Implemented by a .NET Signal service (Signal types, backtest runner) and the SQL Server backtest database. Depends on Part 3 (market data) being operational.*
+
+> **Naming note:** All requirement IDs in this part use the `REQ-STRAT-` prefix, which was assigned before the component was renamed from "Strategy" to "Signal." The prefix is stable and will not change. Whenever you see `REQ-STRAT-`, read it as a Signal requirement. The canonical names — Signal, Signal Subscription, entry signal, Signal Builder, EOD Signal Runner — are defined in `docs/terminology.md` and must be used in all code, logs, and documentation going forward.
+
+### Signal Types and Backtesting
+
+*Signal types are post-market opportunity scanners that emit entry signals only. Everything after signal emission is owned by the RME (Part 5).*
+
+- `REQ-STRAT-001` The platform must support multiple named Signal types, each with a defined purpose, configurable parameters, and a configured timeframe.
+- `REQ-STRAT-001a` Signal types are defined and deployed by developers as coded implementations. Users subscribe to available Signal types and configure their parameters within the bounds each Signal type exposes. The Signal Builder is a subscription configurator, not a Signal logic authoring tool. Adding a new Signal type requires a developer code change and deployment. Removing a Signal type from the codebase is prohibited without first disabling it via the admin portal (REQ-ADMIN-011); a Signal type must remain in a disabled state for at least one full release cycle before its code is removed to ensure no active subscriptions or open positions reference it. Each Signal type implementation must carry a stable string identifier that is persisted on Signal Subscription records, entry signal records, and backtest run records; this identifier must never be reused for a different Signal type.
+- `REQ-STRAT-002` Examples of Signal types include Price Volatility Signal, Volume Spike Signal, and similar post-market opportunity scanners; the platform must be extensible to add new Signal types without structural changes to the surrounding Signal engine, subscription model, or notification pipeline.
+- `REQ-STRAT-003` Each Signal type must have a human-readable name that is included in all alerts and notifications generated by that Signal type.
+- `REQ-STRAT-004` Each Signal type must record the timeframe it ran on and include that timeframe in all alerts and notifications it generates.
+- `REQ-STRAT-005` Users must be able to subscribe to one or more developer-defined Signal types and configure their parameters per Signal Subscription.
+- `REQ-STRAT-006` Signal parameters must be user-configurable and persisted per Signal Subscription.
+- `REQ-STRAT-007` Users must be able to choose timeframes and indicator parameters as part of their Signal Subscription configuration.
+- `REQ-STRAT-007a` Users must be able to pause a Signal Subscription without deleting it. While paused, the Signal Subscription must not be evaluated by the EOD Signal Runner and must not generate entry signals. Open positions (in Open state) opened under the Signal Subscription are not affected; the RME continues monitoring them regardless of subscription pause state, including all advisory types — stop level updates, add advisories, reduce advisories, trailing stop updates, and exit advisories all continue to fire normally. All advisory notifications and portal alerts generated for Open positions under a paused Signal Subscription must include a visible note stating that the parent Signal Subscription is currently paused; this applies to both Telegram notifications and the portal notification feed. Any PendingEntry position associated with the paused Signal Subscription must be immediately transitioned to Suspended state with reason `subscription_paused` at the moment of pause. On subscription resume, those suspended PendingEntry positions must not be automatically reinstated; they remain Suspended until superseded by a fresh EOD Signal Runner entry signal per REQ-PLC-009 or until they expire per REQ-PLC-008.
+- `REQ-STRAT-007b` A paused Signal Subscription must be clearly labelled as inactive in the Signal list. Users must be able to resume a paused Signal Subscription at any time, after which it participates in the next eligible EOD Signal Runner run.
+- `REQ-STRAT-008` Scan logic must support long-entry opportunity identification only in the current platform.
+- `REQ-STRAT-009` Backtests must run against SQL Server historical data.
+- `REQ-STRAT-010` Backtest runs must be reproducible against a defined historical data slice.
+- `REQ-STRAT-011` Standard backtests must use the current active Nifty 500 universe.
+- `REQ-STRAT-011a` Backtests using the current active universe introduce survivorship bias: symbols removed from the Nifty 500 before the backtest is run are not included, which may make historical results appear better than they would have been in live trading. The backtest result record and result UI must display a prominent caveat stating that the universe is current-state and that results are subject to survivorship bias. Point-in-time universe tracking is deferred to a later phase per REQ-NEXT-009.
+- `REQ-STRAT-012` Standard backtests must exclude archived symbols unless a future broader research mode is introduced.
+- `REQ-STRAT-013` The EOD Signal Runner must read SQL Server data and evaluate user-subscribed Signal types for next-trading-day entry signals.
+- `REQ-STRAT-013a` EOD Signal Runner execution is user-scoped. For each EOD run, the Signal engine must evaluate every active (non-paused) Signal Subscription independently per user. Signal generation, deduplication, suppression, and the combined-signal merging rule in REQ-STRAT-015a all apply within a single user's context for that run; one user's subscriptions do not affect another user's signal output. A single shared market data read pass over SQL Server may be used for efficiency, but signal records, portfolio impact assessments, and notifications must be isolated per user.
+- `REQ-STRAT-014` The Live Market Data Scan (LMDS), EOD Signal Runner, and backtesting must honour admin-configured scan exclusions.
+- `REQ-STRAT-015` The EOD Signal Runner must persist generated entry signals, failures, and delivery attempts.
+- `REQ-STRAT-015a` When multiple user-subscribed Signal types qualify the same symbol in the same EOD run, the platform must generate a single combined entry signal record for that symbol for that session. The entry signal record must list all qualifying Signal types and their names. The Telegram notification and portal signal entry must clearly name every Signal type that contributed to the entry signal.
+- `REQ-STRAT-015b` When a combined entry signal is generated from multiple qualifying Signal types, the RME profile used for sizing and advisory calculations must be taken from the Signal Subscription with the highest user-defined priority among the qualifying subscriptions. The contributing Signal type names are carried in the entry signal record for transparency.
+- `REQ-STRAT-016` Each Signal Subscription must declare its RME configuration including the position sizing model, stop loss type, add and reduce rules, and position lifecycle parameters.
+- `REQ-STRAT-017` A Signal Subscription's RME configuration must be versioned and persisted with the Signal Subscription definition so that backtests and Signal runs always use the same risk rules that were active when the Signal Subscription was defined.
+- `REQ-STRAT-017a` A Signal Subscription's RME configuration must be locked from editing while any position opened under that Signal Subscription version is in an active state (PendingEntry, Open, or Suspended). The edit UI must display which active positions are preventing the change. Users wishing to update the RME configuration must first close or resolve all blocking positions. Positions transitioned to Suspended state as a direct result of a system-level action — specifically kill switch activation per REQ-ADMIN-007, admin signal suspension per REQ-ADMIN-010, account deactivation per REQ-ADMIN-001a, or platform-wide Signal type disable per REQ-ADMIN-013 — must not contribute to the edit lock. Only positions that entered Suspended state due to market events, risk breaches, or user-initiated Signal Subscription pause per REQ-STRAT-007a must hold the edit lock. The edit UI must distinguish between these suspension reasons when displaying which positions are preventing a configuration change.
+- `REQ-STRAT-018` Backtest results must never be reported without the configured slippage and commission assumptions applied.
+- `REQ-STRAT-019` The minimum number of historical trading sessions required before a backtest may run must be calculated dynamically: minimum sessions = indicator length × sessions per candle for the configured timeframe.
+- `REQ-STRAT-020` Sessions per candle for each timeframe must be: daily = 1, rolling 3-day = 3, rolling 5-day = 5, rolling 7-day = 7, weekly = resolved from the trading calendar (typically 5, accounting for holidays), monthly = resolved from the trading calendar.
+- `REQ-STRAT-021` A backtest must be refused with a clear reason if the symbol's available historical data in SQL Server falls below the dynamically calculated minimum session count.
+- `REQ-STRAT-022` If individual sessions are missing within an otherwise valid historical data range, those sessions must be skipped and the count of skipped sessions must be recorded in the backtest result metadata.
+- `REQ-STRAT-023` Backtest runs with a skipped session count exceeding a configurable percentage of total sessions in the evaluated date range must be flagged as low-confidence results. The threshold must be seeded in `sys_config` under the key `strategies.backtest.low_confidence_skip_threshold_pct` with a default of 5%.
+- `REQ-STRAT-024` Entry signal deduplication is governed by the one-PendingEntry-per-symbol rule (REQ-PLC-007) and the supersede-on-new-signal rule (REQ-PLC-009). Within a single EOD run, the combined-signal rule (REQ-STRAT-015a) merges multiple qualifying Signal types into one entry signal record per symbol. Across EOD runs, a fresh entry signal for a symbol with an existing PendingEntry supersedes the old PendingEntry rather than generating a duplicate advisory. The EOD Signal Runner must not emit a second entry signal record for the same user and symbol within the same EOD run under any circumstances; entry signals from different Signal types within the same run are merged per REQ-STRAT-015a, not emitted separately. An entry signal is suppressed entirely for a given user and symbol if that user already has an Open position in that symbol, since no new PendingEntry can coexist with an active Open position for the same symbol.
+
+### Backtest Storage
+
+*All backtest output is persisted to the SQL Server backtest database. Stored results must be retrievable at any time without re-running Signal or RME logic.*
+
+- `REQ-BTSTORE-001` All backtest output must be persisted to the SQL Server backtest database so results can be retrieved and analysed at any time without re-running the Signal or RME logic.
+- `REQ-BTSTORE-002` Backtest database tables must use a `BT_` prefix to distinguish them clearly from market data tables.
+- `REQ-BTSTORE-003` Each backtest run record must capture: a unique run ID, Signal type, snapshot of the Signal parameter set used, snapshot of the RME profile used, timeframe, execution model assumptions (slippage and commission), symbol universe evaluated, date range covered, and run timestamp.
+- `REQ-BTSTORE-004` Each trade generated by a backtest must be persisted linked to its run: symbol, entry date and price, stop level at entry, exit date and price, exit reason, R multiple achieved, position size in units and value, gross PnL, and net PnL after execution model assumptions.
+- `REQ-BTSTORE-005` Each backtest position lifecycle must be persisted linked to its run: symbol, all add and reduce events with dates and prices, final exit event, peak R multiple, and the RME lifecycle state at each transition.
+- `REQ-BTSTORE-006` Portfolio-level performance per backtest run must be persisted: total trades, win rate, expectancy, maximum drawdown, Sharpe ratio, profit factor, XIRR, peak equity, starting and ending equity, and a point-in-time equity curve as a time-series of dated equity values.
+- `REQ-BTSTORE-006a` Each backtest run must require an explicit starting equity value provided by the user at the time of initiating the run. The backtest UI must present a starting equity input field, pre-populated with the user's current account equity derived from their latest portfolio snapshot. The user may override this value before launching the run. The starting equity value used must be persisted in the backtest run header record alongside the other run parameters, and must be displayed prominently in the backtest result summary so that return percentages and equity curve figures are always interpretable in context. A backtest must be refused if no starting equity value is provided or if the provided value is zero or negative.
+- `REQ-BTSTORE-007` The RME profile optimisation workflow must read from stored backtest results rather than re-executing backtests when ranking profiles and generating recommendations, unless the scan parameters, RME profile, or underlying historical data have changed since the last stored run.
+- `REQ-BTSTORE-008` The backtest database must be kept in a separate SQL Server database instance or logical database from the market data database so that backtest write load does not affect market data read performance.
+
+---
+
+## Part 5 — Risk Management Engine
+
+*Implemented as a dedicated .NET RME service. The RME is Signal-independent: Signal types emit entry signals; the RME manages everything from initial sizing through the full position lifecycle. The same RME logic runs in both live and backtest modes.*
+
+### RME Core Architecture
+
+*Core design principles, inputs, outputs, and plugin architecture. All other RME sections depend on this foundation.*
+
+- `REQ-RME-001` The platform must implement a dedicated Risk Management Engine (RME) as a Signal-independent, pluggable module responsible for all risk calculations across trade, position, portfolio, and account levels.
+- `REQ-RME-002` The RME must operate consistently across backtesting and live signal workflows; the same risk logic and rules must apply in both modes.
+- `REQ-RME-003` The RME must be deterministic: identical inputs must always produce identical outputs.
+- `REQ-RME-004` The RME must be event-driven and respond to trade signals, price updates, stop events, portfolio state changes, and market events.
+- `REQ-RME-005` The RME must not calculate trading indicators internally; Signal-produced outputs such as entry signals, ATR values, and indicator readings are provided to the RME as inputs.
+- `REQ-RME-006` All risk calculations must be based on current account equity, not fixed capital amounts.
+- `REQ-RME-006a` When a user's equity curve has no records yet — specifically during the period between their first FYERS account sync completing and the end of their first completed trading session — the RME must derive current account equity from the initial FYERS account sync. Equity for this purpose is defined as the market value of all holdings present in the platform's symbol master at last known prices plus the FYERS-reported available cash balance. Holdings in symbols not present in the symbol master are excluded from the equity base, consistent with REQ-PORT-005a. This derived value must be used for all RME sizing and heat calculations until the first equity curve record is written at EOD. If the FYERS sync returns zero holdings in the symbol master and zero cash balance, the RME must treat equity as zero and block all position sizing recommendations until a valid equity value is available, surfacing a clear message to the user that their account balance could not be determined. Note: users with significant holdings outside the Nifty 500 universe will have a smaller equity base visible to the RME than their total FYERS account value; this is a known and intentional consequence of the platform's Nifty 500 scope boundary.
+- `REQ-RME-007` The RME must operate using Risk Units (R) where 1R equals the cash amount lost if the stop loss is hit at the entry price. The stop price must be strictly less than the entry price; a stop at or above the entry price is an invalid configuration. The RME must reject any position entry where this condition is not met, recording the rejection reason as `invalid_stop_distance` on the position record and surfacing a clear error to the user in the Phase 1 order modal. This rule applies in both live and backtest modes.
+- `REQ-RME-008` All trade and portfolio performance metrics must be tracked in R multiples including average R, expectancy in R, and drawdown in R.
+- `REQ-RME-009` Averaging down (adding to a losing position below the entry price) must be disabled by default and require explicit per-Signal Subscription configuration to enable.
+- `REQ-RME-010` Total portfolio open risk must be continuously known and current.
+- `REQ-RME-011` All RME outputs are advisory: position size recommendations, stop levels, add and reduce level advisories, and exit recommendations all require explicit user-initiated action; the platform must never place orders autonomously.
+- `REQ-RME-012` The RME must be configurable through the platform's runtime configuration model, with defaults managed via `sys_config` and per-Signal Subscription overrides persisted with the Signal Subscription definition.
+- `REQ-RME-013` The RME must use an abstract plugin architecture for stop loss determination, trailing stop updates, and position level generation so that concrete implementations can be swapped without changing surrounding RME logic.
+- `REQ-RME-014` Each pluggable mechanism type must implement a common interface accepting standard inputs and producing consistent outputs, enabling mechanisms to be tested and compared independently.
+- `REQ-RME-015` The RME configuration for a position is set as a unified profile at the time of entry and governs the entire position lifecycle until the position is fully closed; the profile must not be changed mid-lifecycle.
+- `REQ-RME-016` The RME profile selected at entry must be persisted with the position record and remain immutable for audit and reproducibility purposes.
+- `REQ-RME-017` Before surfacing an entry advisory, the RME must generate a portfolio impact assessment including: projected portfolio heat after entry, projected sector exposure after entry, cash reserve remaining, number of positions from the same sector, sector concentration relative to existing positions (the V1 proxy for correlation risk), and the maximum portfolio loss scenario if all current open stops were hit simultaneously. Statistical cross-position correlation modelling is deferred to a later phase per REQ-NEXT-006.
+- `REQ-RME-018` Portfolio impact insights must be delivered as a brief summary in the Telegram entry signal notification and as a full breakdown on the portal chart and position entry page.
+- `REQ-RME-019` Portfolio impact insights must also be available when the user browses positions manually, reflecting the current live portfolio state at the time of viewing.
+- `REQ-RME-020` The platform must support automated RME profile optimisation backtests that run a symbol's historical entry signals through multiple RME profile configurations and compare outcomes to recommend the best-performing profile for that symbol. The set of profile configurations to compare is a developer-defined grid of stop type, trailing stop type, and sizing model combinations; users do not define the grid. The optimisation run is triggered manually by the user from the Signal configuration screen for a specific Signal Subscription and symbol; it is not triggered automatically. The UI must display a progress indicator while the run is in progress and must prevent duplicate triggers for the same symbol and subscription while a run is active. On completion, the results screen must rank all evaluated profile configurations by expectancy in R, show the key metrics for each (win rate, average R, max drawdown, profit factor), and highlight the top-ranked configuration as the suggested profile.
+- `REQ-RME-021` RME profile optimisation backtest results must be stored per symbol and surfaced as the suggested default profile when the user next configures an entry for that symbol. Results must carry a staleness indicator: if the underlying historical data or scan parameters have changed since the stored result was generated, the suggested profile must be shown with a visible "results may be outdated" warning and a prompt to re-run the optimisation.
+
+### Position Sizing
+
+*Pluggable sizing models conforming to a common interface. The default is Fixed Percentage Risk Per Trade.*
+
+- `REQ-SIZING-001` The RME must support multiple pluggable position sizing models that share a common interface so models can be swapped per Signal Subscription without changing the surrounding system.
+- `REQ-SIZING-002` Supported sizing models must include at minimum: Fixed Percentage Risk Per Trade, ATR and Volatility-Based Sizing, Portfolio Heat-Based Sizing, and Drawdown-Adjusted Sizing.
+- `REQ-SIZING-003` Additional sizing models should be supportable as configurable options including: Fixed Percentage Risk with Pyramiding, Equal Risk Contribution, Trend Following Pyramiding, and Breakout Add-on.
+- `REQ-SIZING-004` Each sizing model must accept the same standard inputs (entry price, stop price, account equity, available capital, current portfolio state) and produce a recommended position size.
+- `REQ-SIZING-005` The default sizing model is Fixed Percentage Risk Per Trade. The default risk per trade is configurable within a band defined by a minimum and maximum percentage of current account equity, seeded at 0.5% minimum and 1.0% maximum. The RME must use the minimum value as the default risk per trade unless the user has explicitly configured a different value within the band for their Signal Subscription. The band bounds must be seeded in `sys_config` under the `position_sizing` category and are editable by the admin to adjust platform-wide defaults.
+- `REQ-SIZING-006` Z-score deviation-based advisory overlays must remain supported as an additional signal layer on top of the primary sizing model for add-more and reduce-size suggestions.
+- `REQ-SIZING-007` The default z-score timeframe is rolling 5-day trading-session candles; the default add-more threshold is `+3` and the default reduce-size threshold is `-3`.
+- `REQ-SIZING-008` The system must determine the price levels that would produce the configured z-score thresholds and surface those levels as advisory add-more and reduce-size targets.
+- `REQ-SIZING-009` All sizing suggestions must be explainable and expose the model used, its inputs, the thresholds applied, and the derived price or quantity levels.
+- `REQ-SIZING-010` Position quantities must be rounded to comply with NSE and FYERS minimum quantity constraints; fractional quantities are not supported.
+- `REQ-SIZING-011` The RME must reject or downsize any proposed position that would breach maximum notional, maximum quantity, or configurable liquidity thresholds.
+- `REQ-SIZING-012` Single stock exposure must default to a maximum of 10% of portfolio equity.
+- `REQ-SIZING-013` Total open risk across all positions must default to a maximum of 5% of portfolio equity.
+- `REQ-SIZING-014` Sector or correlated-basket exposure must default to a maximum of 20% of portfolio equity.
+
+### Portfolio Heat and Exposure Controls
+
+*Real-time portfolio heat governs whether new positions or adds are permitted. Blocks are hard stops enforced by the RME.*
+
+- `REQ-HEAT-001` The platform must calculate and maintain Portfolio Heat defined as Total Open Risk divided by Current Account Equity, expressed as a percentage.
+- `REQ-HEAT-002` Maximum portfolio heat must be configurable with a conservative default managed via `sys_config`.
+- `REQ-HEAT-003` New trade signals must be blocked by the RME when adding the proposed position would push portfolio heat above the configured maximum.
+- `REQ-HEAT-004` Portfolio heat at or approaching the configured maximum must trigger position reduction advisories surfaced to the user.
+- `REQ-HEAT-005` Maximum number of concurrent open positions must be configurable.
+- `REQ-HEAT-006` Concentration rules must prevent new add-on entry recommendations in a sector when both portfolio heat is at or above a configurable elevated-heat threshold and that sector's current exposure is at or above a configurable sector concentration threshold. Both thresholds must be seeded in `sys_config` under the `risk` category with defaults of 4% for the elevated-heat trigger and 15% for the sector concentration block.
+- `REQ-HEAT-007` Minimum cash reserve as a percentage of account equity must be configurable and enforced before approving new position sizing recommendations.
+
+### Drawdown Control
+
+*Graduated account-level drawdown response. Thresholds are configurable; the defaults below are the safe starting values.*
+
+- `REQ-DRDN-001` The platform must track account-level drawdown from the equity high-water mark on a continuous basis. Drawdown must be derived from the append-only `equity_curve` collection (REQ-PORT-022), which records the equity high-water mark and drawdown percentage at the end of each completed trading session.
+- `REQ-DRDN-002` Daily, weekly, and monthly loss limits must be configurable and monitored. Breaching any limit must surface an advisory to the user via the portal notification feed and dashboard. Breach of a loss limit is advisory only and does not block trading automatically; the graduated drawdown response rules in REQ-DRDN-003 govern hard restrictions. Default values must be seeded in `sys_config` under the `risk` category: daily loss limit 2% of account equity, weekly loss limit 4%, and monthly loss limit 6%.
+- `REQ-DRDN-003` The platform must implement graduated drawdown response rules that progressively restrict trading activity as drawdown deepens, with the following default thresholds: at 5% drawdown, reduce recommended new position size proportionally; at 10% drawdown, suspend add-on entry recommendations; at 15% drawdown, surface advisory to reduce all open positions; at 20% drawdown, block new trade signal recommendations; at 25% drawdown, surface advisory to close the weakest open positions; at 30% drawdown, surface advisory to stop all trading activity.
+- `REQ-DRDN-004` All drawdown thresholds must be configurable through `sys_config` with the values in REQ-DRDN-003 as safe defaults.
+- `REQ-DRDN-005` Position sizing must be dynamically scaled down in proportion to current drawdown depth when drawdown mode is active.
+- `REQ-DRDN-006` The platform must support equity-curve-based sizing adjustments as a configurable option, reading the historical equity series from the `equity_curve` collection (REQ-PORT-022). When enabled, the RME must reduce recommended position sizes when the equity curve is in a declining trend, as determined by a configurable lookback window stored in `sys_config`.
+- `REQ-DRDN-007` An admin-controlled global kill switch must be available to suspend all Signal generation and recommendation output platform-wide.
+
+### Pyramiding and Scaling
+
+*Add-on and scale-out advisory rules. All actions are advisory — user-initiated execution is required.*
+
+- `REQ-PYR-001` The RME must support adding to an open winning position (pyramiding) at configurable price levels as an advisory action.
+- `REQ-PYR-002` Supported add triggers must include: fixed percentage move from entry, R multiples from entry, ATR multiples from entry, breakout above a resistance level, and pullback to a support level.
+- `REQ-PYR-003` Maximum number of add-on entries per position must be configurable with a safe default.
+- `REQ-PYR-004` Add-on quantity must reduce progressively with each successive add; add size must never increase on subsequent entries.
+- `REQ-PYR-005` Total position risk including all add-on entries must never exceed the configured maximum single-position risk limit.
+- `REQ-PYR-006` Add-on recommendations must be blocked when portfolio heat would exceed the configured maximum after the add.
+- `REQ-PYR-007` The RME must support reducing an open position (scaling out) at configurable levels as an advisory action.
+- `REQ-PYR-008` Supported reduce triggers must include: configured profit targets, volatility increase beyond a threshold, portfolio heat exceeding maximum, and time-based reduction rules. In backtest mode only, trend weakening may additionally be detected by re-evaluating the Signal type's entry conditions against subsequent candles; if the entry condition is no longer met at a later candle, this constitutes a trend weakening signal for reduce advisory purposes. In live signal workflows, Signal types are post-market scanners that emit entry signals once and do not produce ongoing trend readings; the trend weakening trigger therefore does not apply in live mode and must be excluded from live position advisory logic.
+- `REQ-PYR-009` All add and reduce actions are advisory and require explicit user-initiated execution.
+- `REQ-PYR-010` After each confirmed add or reduce, the platform must recalculate the position's average entry price, active stop level, current R multiple, and portfolio heat contribution.
+
+### Position Lifecycle
+
+*The RME manages positions through a small set of formal states. Advisory conditions within an open position are tracked as flags, not as separate states.*
+
+- `REQ-PLC-001` Each position must be managed as a lifecycle object with formal, explicitly tracked states.
+- `REQ-PLC-002` Supported position lifecycle states are: PendingEntry, Open, Suspended, Closed, and Rejected. Advisory conditions active on an open position — add advisory active, reduce advisory active, trailing stop active, and exit advisory active — are tracked as boolean flags on the position record rather than as separate lifecycle states.
+- `REQ-PLC-003` State transitions must be event-driven and constrained to the following allowed transitions: PendingEntry → Open or Rejected; Open → Closed or Suspended; any non-terminal state → Suspended. Closed and Rejected are terminal states; no further state transitions are permitted once a position reaches either of these states. Any attempt to transition a Closed or Rejected position must be rejected and logged as an error. Advisory flags on the Open state are updated in response to price and portfolio events without triggering a state transition.
+- `REQ-PLC-004` Each position must persist: symbol, entry date and price, current size, average entry price, active stop level, trailing stop level, initial risk amount (1R), current R multiple, unrealised and realised PnL, number of adds completed, configured add and reduce levels and quantities, maximum allowed position size, last add price, last reduce price, locked profit amount, distance to stop, ATR at entry, holding period, time stop date if applicable, portfolio heat contribution, and the four advisory flags (add advisory active, reduce advisory active, trailing stop active, exit advisory active) with timestamps of when each was last set or cleared.
+- `REQ-PLC-005` A position must be moved to Suspended state when a risk event prevents normal operation, including circuit limit breaches, extreme gap events, and drawdown threshold triggers.
+- `REQ-PLC-006` Position lifecycle events that must be handled include: entry signal received, entry fill confirmed via sync, add level reached, reduce level reached, stop level updated, stop breached, portfolio heat limit exceeded, drawdown threshold breached, time stop reached, gap event, and circuit limit event.
+- `REQ-PLC-007` Only one PendingEntry position may exist per symbol per user at any time, regardless of how many Signal Subscriptions contributed to the underlying entry signal. This is consistent with the combined-signal rule in REQ-STRAT-015a, which merges multiple qualifying Signal types into a single entry signal record per EOD run.
+- `REQ-PLC-008` A PendingEntry position must auto-expire and transition to Rejected state if no entry fill is confirmed within a configurable number of trading sessions from the date the signal was generated. The expiry window must be stored in `sys_config` under the key `risk.pending_entry.expiry_sessions` with a default of 1 trading session. On expiry, the Rejected record must carry the reason `pending_entry_expired` and the expiry event must be logged in `rme_events`.
+- `REQ-PLC-009` If the EOD Signal Runner for a new trading session generates a fresh entry signal for a symbol that already has a PendingEntry position for the same user, the existing PendingEntry must be automatically superseded: it must be transitioned to Rejected with reason `superseded_by_new_signal`, and a new PendingEntry must be created from the fresh signal with updated entry parameters, ATR, and RME advisory values. The user must receive a notification indicating the advisory has been refreshed. This ensures that PendingEntry positions always reflect the most current signal data.
+
+### Stop Losses and Exit Alerts
+
+*Stop loss calculation and trailing stop updates are pluggable RME mechanisms. Exit priority ordering is fixed and must not be overridden.*
+
+- `REQ-STOP-001` Each position must have a defined initial stop loss set at the time of entry based on the Signal Subscription's configured stop type.
+- `REQ-STOP-002` The platform must support multiple stop loss types, configurable per Signal Subscription.
+- `REQ-STOP-003` Supported stop types must include: Fixed Stop Loss, ATR-based Stop, Trailing Stop (percentage-based), Trailing Stop (ATR-based), Swing Low Stop, Break-Even Stop, and Time Stop. Time Stop exits a position after a configurable number of trading sessions from the entry date, as counted by the internal NSE trading calendar. The session count must be configurable per Signal Subscription. The `time_stop_date` field required by REQ-PLC-004 is populated at entry by adding the configured session count to the entry date using the trading calendar.
+- `REQ-STOP-004` Additional stop types should be supportable including: Volatility Stop, Portfolio Stop, Equity Curve Stop, Gap Risk Stop, and Circuit Limit Stop.
+- `REQ-STOP-005` An EOD job must update trailing stop and break-even stop levels for all active positions based on each Signal Subscription's configured stop rules.
+- `REQ-STOP-006` A Live Market Data Scan job must run during NSE market hours and monitor all price levels — stop loss, add levels, and reduce levels — for every open position across all users. The job must fetch live prices using the configured shared market data provider (admin token when FYERS is the configured provider); it must never use individual users' FYERS tokens for this purpose. When a price level is breached, the job must write an alert record to the `notifications` collection and notify the RME so it can update the affected position's state and advisory flags. The scan interval must be configurable via `sys_config`. If the shared market data provider token is unavailable or dirty, the Live Market Data Scan must suspend and a high-visibility warning must appear in the admin portal; this is distinct from and does not affect the per-user Live Account Data Scan.
+- `REQ-STOP-006a` The Live Market Data Scan must only run during NSE market hours as defined by the internal trading calendar; it must not poll outside market sessions.
+- `REQ-STOP-006c` When the configured shared market data provider delivers delayed quotes (i.e., quotes that are not real-time), the Live Market Data Scan must surface a persistent per-position indicator on the positions summary page and on the individual chart page stating that level monitoring is based on delayed data and showing the known delay duration. The delay duration for each provider must be configured in `sys_config` under the `integrations` category. When FYERS is the configured provider, quotes are treated as real-time and no delay indicator is shown. When any other provider is active, the delay duration seeded in `sys_config` for that provider must be displayed. The indicator must not prevent stop monitoring from running; it is informational only.
+- `REQ-STOP-006b` If the shared market data provider is unavailable for a polling cycle, all positions must be skipped for that cycle and the skip must be recorded in the job log. Positions must not be moved to Suspended state solely due to a temporarily unavailable provider. Each open position must display a visible "Level monitoring suspended" indicator on the positions summary page and on the individual chart page while the provider is unavailable. The indicator must clear automatically once the provider is reachable and monitoring resumes.
+- `REQ-STOP-007` Exit alerts must deep-link the user to the chart page for the affected symbol.
+- `REQ-STOP-008` When the RME has set the exit advisory flag on an open position, the chart page must offer a user-initiated exit action through the standard two-phase execution flow defined in REQ-ORDER-006. The exit action must be available for both full exit and partial exit quantities. When no exit advisory is active, the exit action must still be accessible from the chart page so the user can exit a position at their own discretion at any time. The FYERS API Connect widget handles final submission in Phase 2 as with all other action types.
+- `REQ-STOP-009` A break-even stop must be capable of moving the stop to the entry price once the position reaches a configurable profit level, defaulting to 1R gain.
+- `REQ-STOP-010` Gap risk stop handling must detect when a session opens with price gapping past the active stop level and surface an advisory alert treating the gap open as the effective exit price.
+- `REQ-STOP-011` Circuit limit stop handling must detect when a held stock hits an NSE upper or lower circuit limit and surface an advisory alert for the user.
+- `REQ-STOP-012` When multiple exit conditions are triggered simultaneously, the platform must apply the following exit priority order: catastrophic gap or circuit stop first, then hard stop loss, trailing stop, portfolio risk reduction, drawdown control exit, time stop, strategy exit signal, rebalancing exit, and profit target exit last.
+
+### Risk Metrics and Performance Tracking
+
+*Metrics captured at trade, position, and portfolio level for live tracking and backtest reporting.*
+
+- `REQ-RMET-001` The platform must track per-trade risk metrics for every completed trade including: R multiple achieved, trade duration, maximum adverse excursion (MAE), maximum favorable excursion (MFE), realised PnL, and risk amount committed.
+- `REQ-RMET-002` The platform must maintain an ongoing portfolio performance view including: equity curve, current drawdown, maximum drawdown, portfolio heat over time, number of open positions, win rate, average R, expectancy in R, and profit factor.
+- `REQ-RMET-003` Backtest results must include at minimum: total return, win rate, average R, expectancy in R, profit factor, maximum drawdown, drawdown in R, Sharpe ratio, Sortino ratio, recovery factor, and total number of trades.
+- `REQ-RMET-004` The reason each signal was allowed, blocked, downsized, or rejected by the RME must be persisted with the signal record for audit and review.
+- `REQ-RMET-005` The risk parameters and RME configuration active at the time of each Signal Subscription run or backtest must be persisted with the run record so results are reproducible and auditable.
+
+### Backtest Execution Modelling
+
+*Covers how the RME models realistic execution conditions during backtesting. These requirements only apply in backtest mode, not live.*
+
+- `REQ-EXEC-001` The RME must model execution reality for backtesting by applying configurable slippage and commission assumptions to all entry and exit fills.
+- `REQ-EXEC-002` Slippage and commission assumptions must be explicit, configurable per Signal Subscription backtest, and visible in the backtest result summary.
+- `REQ-EXEC-003` Gap risk must be modelled in backtesting: when a session opens with price gapping past the configured stop level, the gap open price must be used as the effective fill price rather than the stop price.
+- `REQ-EXEC-004` Position quantities must be rounded using NSE and FYERS minimum quantity rules before any sizing recommendation is surfaced; fractional quantities are not valid.
+- `REQ-EXEC-005` Liquidity constraints should be applied when sizing positions in lower-liquidity Nifty 500 symbols to avoid recommending quantities that would represent an unrealistic share of average daily volume.
+
+---
+
+## Part 6 — Portfolio and Accounting
+
+*Implemented by a .NET portfolio service that syncs from FYERS and maintains the internal trade ledger. Depends on Part 2 (auth) and Part 3 (market data) being operational.*
+
+### Portfolio Analytics and Accounting
+
+*The platform maintains its own trade ledger and computes FIFO-based PnL independently of broker-provided figures.*
+
+- `REQ-PORT-001` The platform must sync user trades, holdings, positions, and orders from FYERS into MongoDB.
+- `REQ-PORT-002` The platform must maintain an internal immutable trade ledger in MongoDB for each user.
+- `REQ-PORT-003` When a user first connects FYERS, the platform must fetch their available trade history using the FYERS Trade History API going as far back as the API permits, and their current-day trades using the FYERS transaction endpoint, to initialise the internal trade ledger and FIFO state for current holdings and positions. If the API returns zero trades (a new FYERS account with no prior activity), the platform must silently initialise an empty trade ledger for the user and proceed normally; an empty history is not an error and must not trigger the incomplete-history warning defined in REQ-PORT-013.
+- `REQ-PORT-004` Ongoing FYERS sync must ingest new trades, orders, holdings, and positions incrementally and idempotently.
+- `REQ-PORT-005` The platform must tolerate users placing orders outside this portal directly through the broker.
+- `REQ-PORT-005a` When FYERS sync returns trades or holdings for symbols not present in the platform's symbol master, those records must be silently ignored and must not be ingested into the trade ledger, displayed in the portal, or considered in any RME calculation including portfolio heat, position sizing, drawdown tracking, and scan eligibility. All trades in symbols that are present in the symbol master — regardless of whether the order was placed via the platform or directly through the FYERS app — must be ingested and tracked. The platform does not display or account for activity in symbols outside the Nifty 500 symbol master.
+- `REQ-PORT-006` The platform must tolerate arbitrary user trade sequences including add, partial sell, full exit, and re-entry.
+- `REQ-PORT-007` The platform must compute average buy, realised PnL, and unrealised PnL for holdings using synced trade history because broker-provided position PnL is limited.
+- `REQ-PORT-008` Average buy must be derived from the remaining open lots under FIFO after partial exits.
+- `REQ-PORT-009` FIFO calculations must use the platform's internal trade ledger as the source of truth, with broker positions and holdings used as reference and reconciliation inputs.
+- `REQ-PORT-010` Platform-calculated realised and unrealised PnL are gross and exclude brokerage, taxes, and statutory charges.
+- `REQ-PORT-011` Portfolio analytics must cover holdings that span multiple days, months, or years.
+- `REQ-PORT-012` The platform must reconcile computed holdings against broker-reported holdings and surface mismatches for investigation.
+- `REQ-PORT-013` For any holding where FIFO state cannot be fully initialised because trade history predates the earliest date available from the FYERS Trade History API, the holding must be flagged as having incomplete trade history.
+- `REQ-PORT-014` Holdings flagged as having incomplete trade history must prompt the user to enter a manual opening adjustment to seed the FIFO state, providing quantity, average buy price, and an approximate date; this uses the same audited adjustment flow as the reconciliation adjustment mechanism.
+- `REQ-PORT-015` A manual opening adjustment used to seed an incomplete-history holding must be recorded as a seeded opening balance entry in the trade ledger, clearly distinguished from broker-synced trade records, and must carry an audit trail including who entered it and when.
+- `REQ-PORT-016` Until corporate actions handling is available (Phase 9), the platform must detect potential corporate action events by monitoring for discontinuities between FYERS-reported holding quantities or prices and the internal trade ledger state that cannot be explained by known trades. A discontinuity must be flagged if either of the following conditions is true: (a) the FYERS-reported quantity for a holding differs from the platform's FIFO-computed quantity by any non-zero amount; or (b) the implied average cost per unit derived from the FYERS-reported holding value differs from the platform's FIFO-derived average buy price by more than 50%. The 50% threshold is calibrated to detect splits, bonuses, and rights issues while tolerating normal mark-to-market price drift. When a discontinuity meeting either condition is detected on sync, the affected holding must be flagged with a prominent warning that a corporate action may have occurred and that portfolio figures for that holding may be inaccurate. No automatic price or quantity adjustment must be made.
+- `REQ-PORT-017` A holding flagged under REQ-PORT-016 must remain visibly marked until the user explicitly dismisses the warning or raises a manual adjustment. The user must be prompted to review the holding and use the standard audited manual adjustment flow if a correction is needed.
+- `REQ-PORT-018` An initial FYERS account sync must be triggered automatically when a user logs in and their FYERS token is valid, and again each time a user successfully completes FYERS re-authentication. This ensures portfolio data is refreshed at the start of every session without requiring manual action.
+- `REQ-PORT-019` During NSE market hours as defined by the internal trading calendar, the platform must run FYERS account sync for each user with a valid FYERS token on a configurable recurring interval. The interval must be stored in `sys_config` under the key `jobs.account_sync.intraday_interval_minutes` and must support values of 5, 10, 15, 30, and 60 minutes. Sync must not run outside market hours under this schedule; it must respect the trading calendar and not poll during exchange holidays or after market close.
+- `REQ-PORT-020` An EOD account sync must run automatically after market close for all users with valid FYERS tokens, after the market data DataSync job has completed for the session. This final sync must capture settled trades, updated positions, and end-of-day holdings before the next trading session begins. The EOD account sync must write an explicit per-user success or failure marker so the dashboard can show data freshness accurately. EOD account sync must proceed independently of DataSync outcome: if DataSync fails for the session, EOD account sync must still run to capture settled trades and updated positions from FYERS. However, when DataSync has failed for the session, the portfolio snapshot written after EOD account sync must carry a visible data quality warning indicating that market prices in the snapshot may be stale because EOD market data sync did not complete successfully for that session. This warning must be surfaced on the dashboard data freshness indicator required by REQ-DASH-013 until a successful DataSync run updates the SQL Server data for that session.
+- `REQ-PORT-021` Users must be able to trigger a manual account sync at any time from the dashboard or holdings page regardless of market hours. Manual sync must be rate-limited per user to prevent abuse; the minimum interval between manual sync requests must be configurable via `sys_config` (default 2 minutes). The portal must show sync status (in progress, last successful sync timestamp, or last error) so the user knows when data was last refreshed.
+- `REQ-PORT-022` The platform must maintain a separate append-only equity curve time series for each user in the `equity_curve` MongoDB collection. One record must be written per completed trading session (after EOD account sync completes per REQ-PORT-020), storing: user ID, session date, total portfolio market value, cumulative realised PnL to date, unrealised PnL, equity high-water mark at that point, and drawdown from the high-water mark as a percentage. The equity curve is the authoritative source for drawdown tracking (REQ-DRDN-001), equity-curve-based sizing adjustments (REQ-DRDN-006), and historical portfolio performance visualisation. It is entirely separate from the `portfolio_snapshots` collection, which serves only as a display cache for the current-state dashboard view. An equity curve record must be written even when the user has no open positions and zero unrealised PnL, so that the time series remains unbroken for drawdown and XIRR calculations; in this case, total portfolio market value equals zero and all PnL fields are zero. If a user's initial FYERS sync completes mid-session rather than at EOD, no partial-day equity curve record is written; the first equity curve entry for that user is written at the end of the first completed trading session after onboarding, following the normal EOD sync flow.
+
+### Reconciliation and Manual Adjustment
+
+*The reconciliation flow follows a defined recovery order. Manual adjustments are the last resort and are always audited.*
+
+- `REQ-RECON-001` If auto-sync cannot run or misses data, the platform must support manual sync or update assistance so MongoDB records can be aligned again.
+- `REQ-RECON-002` When reconciliation is needed, recovery must follow a defined order: first, a user-triggered refresh or resync from FYERS; second, extended backfill or resync for a selected historical period if that is insufficient; third, an audited manual adjustment only when broker sync cannot fully restore accuracy.
+- `REQ-RECON-003` The platform must not silently edit historical trade-ledger records; manual corrections must be recorded as explicit adjustment entries with audit trail.
+- `REQ-RECON-004` Manual adjustment entries must be recorded against the affected holding or position context in MongoDB.
+- `REQ-RECON-005` The holdings page must show a warning indicator when broker-reported quantity and platform-computed quantity do not match, including the quantity difference as `+/- units`.
+- `REQ-RECON-006` The holdings page must let the user create an explicit adjustment for the mismatched holding.
+- `REQ-RECON-007` After a manual adjustment is applied, the holding must remain visibly flagged as adjusted for audit and review purposes.
+- `REQ-RECON-008` If a later sync still leaves the holding quantity mismatched after adjustment, the warning indicator must appear again and prompt the user for further review or another adjustment.
+
+---
+
+## Part 7 — User Portal
+
+*Implemented by the Next.js frontend and ASP.NET Core API layer. Depends on all earlier parts being operational.*
+
+### User Dashboard
+
+*The default home page after sign-in. Shows portfolio health, performance, sector breakdown, and RME advisory state at a glance.*
+
+- `REQ-DASH-001` The platform must provide a user dashboard as the default home page after sign-in.
+- `REQ-DASH-002` The dashboard must display a portfolio summary section showing: total invested amount (cost basis of all open positions), current market value, absolute return in both cash value and percentage, and XIRR return.
+- `REQ-DASH-003` XIRR must be calculated from the internal trade ledger using actual buy dates and invested amounts as cash flow inputs and current market value as the terminal value. Current market value must be derived from the most recently available closing price from SQL Server. During NSE market hours, if a live FYERS quote fetched via the user's token is available and more recent than the last SQL Server close, the live quote may be used as the current price instead. The pricing source and its timestamp must be reflected in the data freshness indicator required by REQ-DASH-013.
+- `REQ-DASH-004` The dashboard must display portfolio performance for the following periods: today, rolling last 5 trading sessions, rolling last 15 trading sessions, rolling last 30 trading sessions, week to date (WTD), and month to date (MTD).
+- `REQ-DASH-005` All rolling period calculations must use trading sessions from the internal NSE trading calendar, not calendar days.
+- `REQ-DASH-006` When the current day is a trading holiday or before market open, the today period must reflect the last completed trading session.
+- `REQ-DASH-007` Period performance is the net change in portfolio market value during that period, comprising unrealised PnL movement plus realised PnL from any positions closed within the period.
+- `REQ-DASH-008` The dashboard must display a sector breakdown section showing portfolio exposure and performance grouped by the Industry classification from the symbol master.
+- `REQ-DASH-009` The sector breakdown must show per sector: number of open positions, total invested, current market value, absolute return value and percentage, and sector weight as a percentage of total portfolio value.
+- `REQ-DASH-010` The dashboard must display a positions summary section showing all open positions with per-position data: symbol, quantity, average buy price, current price, current market value, absolute PnL, percentage PnL, current R multiple, holding period, and active RME advisory state.
+- `REQ-DASH-011` Active RME advisory flags that must be visible per position on the dashboard include: add advisory active, reduce advisory active, exit advisory active, and whether the position is in Suspended state.
+- `REQ-DASH-012` The dashboard must display a persistent RME portfolio health strip showing: current portfolio heat as a percentage, current drawdown from equity high-water mark, active drawdown mode level if any, and total number of open positions.
+- `REQ-DASH-013` Market value and performance figures on the dashboard must display the most recently available price data and must show a data freshness timestamp so the user knows when prices were last updated.
+- `REQ-DASH-014` The dashboard must be responsive to the NSE trading calendar; performance period labels and calculations must automatically shift at the start of each new trading session.
+- `REQ-DASH-015` Dashboard portfolio figures must be served from the user's latest portfolio snapshot (stored in the `portfolio_snapshots` MongoDB collection) on every normal page load. This avoids a live FYERS API call on every visit and reduces load on the trade ledger query layer. A snapshot is written to the collection — overwriting the previous one in place — after each account sync completion (intraday polling sync per REQ-PORT-019, on-login sync per REQ-PORT-018, and EOD sync per REQ-PORT-020) and after each user-triggered manual refresh per REQ-DASH-016. If no snapshot yet exists for a user (first login after FYERS connection), the dashboard must compute portfolio figures on demand from the trade ledger and SQL Server closing prices, write the result as the initial snapshot, and then display it. Period performance calculations (REQ-DASH-004/007) reconstruct the portfolio's historical market value at each period boundary by replaying the FIFO trade ledger to derive holdings as of that date and applying the corresponding session closing prices from SQL Server; these computed period values are also stored in the snapshot so they are not recomputed on every page load.
+- `REQ-DASH-016` The dashboard must provide a manual refresh button that forces a full recomputation of all portfolio figures using the latest available market data, regardless of when the last snapshot was written. On refresh: the platform fetches fresh live quotes from FYERS using the user's token for all open positions, replays the trade ledger for current holdings, recomputes all dashboard figures including period performance and sector breakdown, writes the result as the new snapshot, and renders the updated figures. The data freshness timestamp required by REQ-DASH-013 must reflect the moment the refresh completed. The refresh button must be visibly disabled while a refresh is in progress to prevent concurrent requests. The refresh must be subject to the per-user rate limit governed by `sys_config` key `jobs.account_sync.manual_sync_min_interval_seconds` to prevent abuse.
+- `REQ-DASH-017` The admin portal must include a platform portfolio overview page that reads the latest snapshot from each user's `portfolio_snapshots` record and displays an aggregate view of all active user portfolios. The view must show per-user: last snapshot timestamp, total market value, total unrealised PnL, portfolio heat, and active position count. This page is read-only and intended for the admin to monitor portfolio health and risk concentration across the platform without triggering live FYERS API calls. For users who have completed FYERS authentication but have no snapshot yet (first sync has not completed), the row must still appear in the overview with all metric columns showing a "No data yet" placeholder and the last snapshot timestamp shown as "Never".
+
+### Watchlist
+
+*A dedicated page for users to track symbols of interest independent of their current holdings or active signals.*
+
+- `REQ-WATCH-001` The platform must provide a dedicated watchlist page where users can add and remove any active Nifty 500 symbol. When a symbol on a user's watchlist is subsequently archived via CSV upload, it must remain on the watchlist and be displayed with the same red archived indicator used on the chart page (REQ-CHART-005), rather than being silently removed. The user may manually remove an archived symbol from their watchlist at any time. Archived symbols must not appear in the watchlist add-symbol search results, preventing new additions, but existing entries must be preserved.
+- `REQ-WATCH-002` For each symbol on the watchlist the page must display: trading symbol, company name, a flag indicating whether the symbol is part of the user's current holdings or open positions, current price, and day's change.
+- `REQ-WATCH-003` During NSE market hours, watchlist price and day's change data must be fetched using the user's own FYERS token.
+- `REQ-WATCH-004` Outside NSE market hours, the watchlist must show the last trading session's closing price and that session's change, also fetched using the user's own FYERS token. SQL Server is not used as a data source for watchlist price display.
+- `REQ-WATCH-005` If the user's FYERS token is dirty or expired, the watchlist must display the last successfully fetched price with a visible stale indicator rather than an error state, consistent with the FYERS lock behaviour defined in REQ-SESSION-003.
+- `REQ-WATCH-006` From the watchlist, users must be able to navigate to the chart page for any listed symbol.
+- `REQ-WATCH-007` The watchlist must be persisted per user in MongoDB and must be available across sessions.
+
+### Charting and Decision Support
+
+*The chart page is the primary decision-making screen. It combines the technical chart (TradingView Lightweight Charts), RME advisory panel, position context, and TradingView fundamental widgets.*
+
+- `REQ-CHART-001` The charting page must use TradingView Lightweight Charts (self-hosted JS library) to render OHLCV data served from SQL Server. If no historical data exists for the selected symbol — for example, while a HistoricDataSeed job is still in progress after a CSV upload — the chart area must display a clear placeholder message stating that historical data is being loaded and that the chart will be available once seeding is complete. The RME advisory panel and any open position context for the symbol must remain accessible in the placeholder state; only the chart canvas itself is replaced by the placeholder. The symbol must remain navigable from the portal during seeding.
+- `REQ-CHART-002` Telegram signal notifications must include a deep link that opens the relevant chart page in the portal.
+- `REQ-CHART-002a` When a user follows a deep link (from Telegram or any external source) to a protected portal page and does not have an active portal session, the platform must preserve the intended destination URL and redirect the user there automatically after they complete both OAuth login and FYERS authentication (per REQ-SESSION-010/011). The user must not be dropped on the dashboard after login if they arrived via a deep link. If the destination page is no longer valid (e.g., the symbol has been removed from the universe) the user must be redirected to the dashboard with a clear explanatory message.
+- `REQ-CHART-003` The chart page must display the user's active FYERS holding or position for the selected symbol when available.
+- `REQ-CHART-004` The chart page must show average buy, active holding or position state, current active orders if any, recent and current-day trades, and current trailing stop-loss level.
+- `REQ-CHART-005` The chart page must show a red archived indicator when a symbol is no longer part of the active Nifty 500 universe.
+- `REQ-CHART-006` The chart page must show a yellow caution indicator when a symbol is temporarily excluded from scans.
+- `REQ-CHART-007` The platform may offer FYERS API Connect buy or sell actions for user convenience, but execution remains user-initiated.
+- `REQ-CHART-008` The chart page must embed TradingView's Financials widget for the selected symbol, displaying the income statement, balance sheet, and cash flow statement switchable between quarterly and annual views. This is a TradingView-hosted iframe embed using the symbol in `NSE:{symbol}` format; data is sourced from TradingView's servers, not the platform's own databases.
+- `REQ-CHART-009` The chart page must embed TradingView's Fundamental Data widget for the selected symbol, providing key ratios in a compact panel including market capitalisation, P/E ratio, earnings per share, dividend yield, and 52-week high and low.
+- `REQ-CHART-010` The chart page must embed TradingView's Company Profile widget for the selected symbol, providing the business description, sector, industry, and related company metadata.
+- `REQ-CHART-011` The TradingView fundamental widgets must be presented in a dedicated section of the chart page alongside but clearly separated from the technical chart, the RME advisory panel, and the position context. The layout must allow the user to view technical and fundamental data together without excessive scrolling.
+- `REQ-CHART-012` TradingView widget embeds are subject to TradingView's own data availability and terms. The platform must handle widget load failures gracefully; a failed widget embed must not break the chart page or prevent the user from accessing technical or RME data.
+- `REQ-CHART-013` The chart page must include a symbol search bar allowing users to search by trading symbol or company name within the active Nifty 500 universe. Selecting a result loads that symbol's chart. Archived symbols must not appear in search results.
+- `REQ-CHART-005a` When a user navigates directly to the chart page for an archived symbol — whether via a Telegram deep link, browser bookmark, or any other direct URL — the page must load normally and display the full chart with historical data and the red archived indicator required by REQ-CHART-005. If the user has an open position in the archived symbol, the full RME advisory panel and position context must be shown as normal, since the RME continues monitoring archived symbols per REQ-UNIV-015. If the user has no open position and no recent signal history for the symbol, the RME advisory panel must be hidden and replaced with a clear message stating that this symbol is no longer part of the active Nifty 500 universe and that no new entry advisories will be generated for it. The FYERS API Connect execution actions must remain available if the user has an open position, and must be hidden if they do not. The TradingView fundamental widgets must continue to load normally regardless of archive state.
+
+### Notifications and Signal Delivery
+
+*All notifications are persisted to MongoDB first (synchronous, guaranteed). Telegram delivery is async via a worker. The portal notification feed is always the fallback.*
+
+- `REQ-NOTIFY-001` Telegram integration is part of the platform.
+- `REQ-NOTIFY-002` Live signals and exit alerts must be deliverable through Telegram.
+- `REQ-NOTIFY-003` Telegram links must deep-link into the chart page so the user can make an informed decision.
+- `REQ-NOTIFY-004` All notifications and alerts must be persisted in MongoDB for the target user at the time of generation, before any Telegram delivery is attempted; persistence is synchronous and must not depend on Telegram availability.
+- `REQ-NOTIFY-005` Each notification record must store: user ID, notification type, Signal type name if applicable, timeframe used if applicable, associated symbol if applicable, content, generated-at timestamp, Telegram bot ID, Telegram delivery status (pending, delivered, or failed), number of delivery attempts, and last attempt timestamp.
+- `REQ-NOTIFY-006` Supported user-facing notification types must include: entry signal, exit alert, add advisory, reduce advisory, portfolio impact insight, drawdown mode alert, portfolio heat warning, gap risk alert, circuit limit alert, corporate action warning, pending entry superseded, pending entry expired, and sector exposure breach. The `sector_exposure_breach` type is generated when a symbol reclassification via CSV upload causes a user's sector exposure to exceed the configured sector exposure threshold per REQ-UNIV-002a; it must carry the affected symbol, the old and new industry classification, the sector now in breach, the current exposure percentage, and the configured threshold. The `pending_entry_superseded` type is generated when a fresh EOD signal causes an existing PendingEntry to be replaced per REQ-PLC-009; the `pending_entry_expired` type is generated when a PendingEntry transitions to Rejected due to the expiry window per REQ-PLC-008. Both types must carry the affected symbol and, where applicable, the updated signal details.
+- `REQ-NOTIFY-006a` Supported admin-only operational notification types must include: DataSync job failure, EOD Signal Runner failure or abort, and global kill-switch activation confirmation. Operational notifications must be stored in the same notification store as user notifications but must be targeted to the admin user only and must not appear in regular user notification feeds.
+- `REQ-NOTIFY-007` Telegram delivery must be handled by a single dedicated Notification Delivery Job. This job is the sole component responsible for dispatching Telegram messages regardless of the notification type or the component that generated the alert. All alert-generating components — the Live Market Data Scan (LMDS), EOD Signal Runner, and the RME — write to the `notifications` collection and stop there; none of them dispatch to Telegram directly. The Notification Delivery Job reads pending notification records and delivers them asynchronously; the generating workflow must not block waiting for delivery to complete.
+- `REQ-NOTIFY-008` Telegram delivery must use retry with exponential back-off governed by the `notifications.telegram` settings in `sys_config`; if all retries are exhausted the record must be marked as delivery failed.
+- `REQ-NOTIFY-009` The portal must provide a notification feed where users can view all their notifications regardless of Telegram delivery status, so no alert is ever inaccessible to the user.
+- `REQ-NOTIFY-010` Notifications in the portal feed must be navigable to the relevant chart or position page via the same deep link used in Telegram.
+- `REQ-NOTIFY-011` Notifications with failed Telegram delivery must be visibly flagged in the portal feed so users can identify missed deliveries at a glance.
+- `REQ-NOTIFY-012` The portal notification feed must support filtering by notification type, symbol, date range, and delivery status.
+- `REQ-NOTIFY-013` A dirty Telegram notification channel must show a persistent non-blocking banner warning in the portal; it must not lock or restrict any platform functionality.
+- `REQ-NOTIFY-014` The user dashboard must display a notification feed indicator showing the count of unread notifications and any failed Telegram deliveries requiring attention.
+- `REQ-NOTIFY-015` The platform must operate with a single shared Telegram bot provisioned by the admin. The bot token must be stored in Azure Key Vault or equivalent secret storage and must never be placed in `sys_config`, source control, or environment variables outside the secure secrets store. The admin portal must allow the active bot to be viewed and replaced; replacement must take effect without a code deployment. The admin must be able to enter a new bot token directly through the admin portal; the platform API must validate the token with Telegram (via the Telegram `getMe` endpoint) before writing it to Key Vault using the application's managed identity, and must reject the token if validation fails. On successful replacement, the new token must be used for all subsequent deliveries immediately with no grace period for the old token. The admin portal must display the bot's verified username and the timestamp of the last successful Telegram delivery as the bot health indicator. The admin portal must provide a test-send action that sends a test message to the admin's own linked Telegram account to verify the bot is operational after provisioning or replacement; the test-send must fail visibly if the admin does not have a linked Telegram account or if delivery fails.
+- `REQ-NOTIFY-016` Users must be able to link their Telegram account to their platform account through the portal. The linking flow must work as follows: the portal generates a single-use time-limited linking token for the user; the user sends that token (or follows a deep link containing it) to the shared platform bot; the bot validates the token and registers the user's Telegram chat ID against their platform account; the portal confirms the successful link. The linking token must expire after a configurable period (default 15 minutes) and must be single-use.
+- `REQ-NOTIFY-017` Telegram is optional. Users who have not linked a Telegram account must still receive all notifications in the portal notification feed. Signal generation, RME advisories, and all other platform workflows must not be blocked or degraded by the absence of a Telegram link. When Telegram is not linked, the portal must surface a non-blocking prompt on the dashboard encouraging the user to set it up, but the prompt must not prevent access to any feature.
+- `REQ-NOTIFY-018` Users must be able to unlink their Telegram account from the portal at any time. Unlinking must stop all further Telegram delivery attempts for that user. Existing notification records must retain their Telegram delivery status for audit purposes and must remain accessible in the portal feed. Users must be able to re-link a Telegram account after unlinking using the same flow as initial setup.
+- `REQ-NOTIFY-019` If a user's Telegram chat ID becomes unreachable (e.g. they blocked the bot or deleted their Telegram account), delivery failures must be recorded on the notification record per the standard retry and failure marking flow (REQ-NOTIFY-008). After a configurable number of consecutive delivery failures to the same chat ID, the platform must mark the user's Telegram link as dirty and surface a non-blocking banner warning in the portal prompting re-linking, consistent with REQ-NOTIFY-013.
+
+### Execution Confirmation and Order Placement
+
+*Two-phase flow: Phase 1 is the platform-owned modal (RME context, checks, parameter adjustment). Phase 2 is the FYERS API Connect widget pop-up (auth, exchange checks, final submission). The platform backend must never call the FYERS order placement REST API directly.*
+
+- `REQ-ORDER-001` All order placement actions must be explicitly initiated by the logged-in user. The platform must never submit an order to FYERS without an explicit user confirmation step.
+- `REQ-ORDER-002` The user's FYERS token must be valid and non-dirty before any order placement flow can proceed. If the token is expired or dirty, the execution action must be blocked and the user directed to re-authenticate before continuing.
+- `REQ-ORDER-003` If the global RME kill switch is active, new entry orders must be blocked at the confirmation stage with a clear message stating the kill switch reason.
+- `REQ-ORDER-004` If the account drawdown state is at the block-new-entries threshold, new entry orders must be blocked at the confirmation stage with the current drawdown state and threshold shown as the reason.
+- `REQ-ORDER-005` If an order for the same symbol and action type is already in flight (submitted to FYERS but not yet confirmed or rejected), duplicate submission must be prevented and the user shown a status message for the in-flight order.
+- `REQ-ORDER-006` The execution flow for every action (Entry, Add, Reduce, Exit) must consist of two distinct phases. Phase 1 is platform-owned: a modal that surfaces all RME context, pre-flight checks, and warnings and allows the user to review and adjust parameters. Phase 2 is FYERS-owned: the FYERS API Connect JS widget opens as a pop-up and handles auth verification, exchange window checks, final order submission to FYERS, and success or error display. The platform backend must not call the FYERS order placement REST API directly; all order submission must go through the API Connect widget.
+- `REQ-ORDER-007` The Phase 1 platform modal must display: action type (Entry / Add / Reduce / Exit), symbol name and trading symbol, proposed quantity, estimated fill value at the last available quoted price, the RME stop level for the position, and portfolio heat before and after the trade. For Exit actions the modal must additionally specify whether the exit is a full exit or partial exit. When an exit advisory is active, the proposed quantity must be pre-populated with the RME-recommended exit quantity, which may be a partial amount if the advisory is for a scale-out. When no exit advisory is active and the user initiates a discretionary exit, the proposed quantity must be pre-populated with the full open quantity. In both cases the user may adjust the quantity freely down to a minimum of one share, with estimated fill value and post-trade portfolio heat recalculating in real time. After a confirmed partial exit the position remains in Open state with its quantity, average buy price, and portfolio heat contribution recalculated. After a confirmed full exit the position transitions to Closed. Both cases are audited per REQ-ORDER-015a with the requested and filled quantities recorded.
+- `REQ-ORDER-008` The proposed quantity in the Phase 1 modal must be derived from the RME-recommended size for the action. The user may adjust the quantity; estimated fill value and post-trade portfolio heat must recalculate in real time.
+- `REQ-ORDER-009` The user must be able to select order type in the Phase 1 modal: market order or limit order. Limit order must default to the RME-suggested price for the action; the user may modify it with estimated fill value updating in real time.
+- `REQ-ORDER-010` All orders must use CNC product type. The product type is not user-configurable in the current platform.
+- `REQ-ORDER-011` The Phase 1 modal must display a non-blocking warning if the current market price is not within a configurable tolerance of the RME-suggested price for the action. The tolerance is configured via `sys_config` key `integrations.fyers.price_deviation_warning_pct` (default 1%). The user may acknowledge and proceed.
+- `REQ-ORDER-012` The Phase 1 modal must display a non-blocking warning if the trade will cause portfolio heat to approach or exceed the configured warning threshold after execution. The warning threshold is configured via `sys_config` key `risk.default.portfolio_heat_warning_threshold_pct` (default 4%), which must always be strictly less than `risk.default.max_portfolio_heat_pct`. The user may still proceed.
+- `REQ-ORDER-013` The Phase 1 modal must display a non-blocking warning if the active drawdown state has caused the RME to reduce the recommended position size below the nominal size; the adjusted quantity and reason must both be shown.
+- `REQ-ORDER-014` When the user confirms in the Phase 1 modal, the platform must invoke the FYERS API Connect widget pre-populated with the finalised order parameters: symbol, CNC product type, quantity, order type, limit price if applicable, and transaction type (BUY or SELL). The FYERS widget pop-up then takes over the interaction.
+- `REQ-ORDER-015` The platform must handle the FYERS API Connect `finished` callback. On success, the platform must record the FYERS order ID, surface a confirmation to the user with a link to the orders screen, and queue an RME state refresh on the next portfolio sync. On failure, the platform must surface the FYERS error to the user; no RME state change must occur.
+- `REQ-ORDER-015a` The platform must handle partial fills detected via the FYERS API Connect `finished` callback or discovered on the subsequent portfolio sync. A partial fill occurs when the confirmed filled quantity is greater than zero but less than the quantity submitted. On detecting a partial fill: the platform must accept the filled quantity as a valid position entry; the RME advisory (stop level, initial risk amount, portfolio heat contribution, and R calculation) must be recalculated using the actual filled quantity and average fill price; the user must be notified of the partial fill, shown the filled quantity, the unfilled remainder, and the FYERS order ID; and the audit log entry must record both the requested and filled quantities. The unfilled remainder requires no automated follow-up; the user decides independently whether to place an additional order.
+- `REQ-ORDER-016` Every order submission attempt, whether successful or failed, must be recorded in the audit log with the action type, symbol, quantity, order type, limit price if applicable, the FYERS outcome, and the user identity.
+- `REQ-ORDER-017` The portal must detect whether the FYERS API Connect JS library (`fyers-lib.js`) has loaded successfully before offering any execution action to the user. If the library is unavailable at the time the user attempts an execution action, the platform must display a clear error message stating that the execution interface could not be loaded and directing the user to use the FYERS app or web platform directly for the order. No Phase 1 modal must be opened and no audit entry must be created when the library is not loaded.
+- `REQ-ORDER-017a` When the FYERS API Connect library has loaded but the widget pop-up fails to open or the `finished` callback does not fire within a configurable timeout window after the widget is invoked, the platform must surface a dismissible error message to the user stating that the FYERS execution interface could not be opened and directing them to use the FYERS app or web platform directly. The timeout duration must be stored in `sys_config` under the key `integrations.fyers.widget_callback_timeout_seconds` with a default of 10 seconds. No RME state change must occur and no audit entry must be created for a widget invocation that produced no FYERS outcome; only invocations that result in a FYERS callback response (success or failure) are audited per REQ-ORDER-016.
+- `REQ-ORDER-018` The Phase 1 platform confirmation modal must display a non-blocking informational indicator when the current time is outside NSE market hours as defined by the internal trading calendar. The indicator must state that the exchange is not currently open and that the order will be subject to FYERS's own pre-market, after-market, or AMO rules. The user may still proceed through Phase 1 and invoke the FYERS widget; exchange window enforcement is FYERS's responsibility in Phase 2. This indicator must not block or disable the confirm button.
+- `REQ-ORDER-019` The platform must support execution assistance for externally-opened holdings — Nifty 500 positions that were placed directly through FYERS and synced into the platform's trade ledger but were never opened via a platform signal and therefore have no position lifecycle record in the `positions` collection. For such holdings the FYERS API Connect execution flow must remain accessible from the chart page so the user is not forced to use the FYERS app separately for exit actions. The Phase 1 modal for an externally-opened holding must operate in reduced mode: it must display symbol, quantity, estimated fill value, and post-trade portfolio heat impact, but must omit all RME-specific fields — stop level, R multiple, and RME advisory context — replacing them with a clearly visible note stating that this holding has no platform RME profile and that risk management context is unavailable. The full Phase 2 FYERS API Connect flow proceeds normally. An externally-opened holding that subsequently receives a platform entry signal transitions to a platform-tracked position from that point forward and thereafter uses the full Phase 1 modal.
+
+---
+
+## Part 8 — Admin Portal
+
+*Admin capabilities are delivered through a privileged section of the same portal. All admin actions are audited.*
+
+### Admin Operations
+
+- `REQ-ADMIN-001` The admin portal must support pending-user approval workflows.
+- `REQ-ADMIN-001a` The admin must be able to deactivate an already-approved user account. Deactivation must immediately invalidate all active portal sessions for that user and block them from accessing any protected platform features. The user's trade history, position records, and audit trail must be preserved intact; deactivation must not delete any data. If a deactivated user completes OAuth and attempts to access the platform, they must be shown a dedicated account-deactivated screen — consistent with the purpose-specific screen model in REQ-SESSION-013 — that clearly states their account has been deactivated and instructs them to contact their platform administrator. No protected portal content must be accessible from this screen. When a user account is deactivated, all their PendingEntry positions must be immediately transitioned to Suspended state with reason `account_deactivated`. Open positions must remain in Open state and continue to be monitored passively: the Live Market Data Scan must continue evaluating their stop, add, and reduce levels; the RME must continue updating trailing stop levels via the EOD stop update job; and stop breach alerts must continue to be written to the notifications collection. No Telegram notifications must be dispatched to a deactivated user, and no new entry signals or RME entry advisories must be generated for them. EOD account sync must not run for deactivated users. On reactivation per REQ-ADMIN-001b, Telegram delivery resumes, EOD account sync resumes, and the platform must trigger an immediate account sync to re-establish current broker state before the user can interact with their positions.
+- `REQ-ADMIN-001b` The admin must be able to reactivate a previously deactivated user account, restoring their access to the platform. Reactivation must be recorded in the audit trail.
+- `REQ-ADMIN-002` The admin portal must support Nifty 500 CSV upload and synchronisation.
+- `REQ-ADMIN-003` The admin portal must support internal trading-calendar management.
+- `REQ-ADMIN-004` The admin portal must support job monitoring and explicit manual triggering or retry of key operational jobs.
+- `REQ-ADMIN-005` All privileged actions must be attributable to a user or service identity.
+- `REQ-ADMIN-006` The admin portal must support management of shared runtime system settings stored in `sys_config`, with audit trail.
+- `REQ-ADMIN-007` The admin must be able to activate the global RME kill switch to suspend all Signal generation and recommendation output platform-wide, with the action recorded in the audit trail. On kill switch activation, all PendingEntry positions across all users must be immediately transitioned to Suspended state with reason `kill_switch_activated`. On kill switch deactivation, these suspended PendingEntry positions must not be automatically reinstated; they remain Suspended until superseded by a fresh EOD Signal Runner entry signal per REQ-PLC-009 or until they expire per REQ-PLC-008. The next eligible EOD Signal Runner run after deactivation is the natural recovery path for generating fresh advisories.
+- `REQ-ADMIN-008` The admin portal must display current RME-related `sys_config` values including drawdown thresholds, portfolio heat limits, and sizing defaults, and allow editing within permitted bounds.
+- `REQ-ADMIN-009` The admin portal must include a read-only Data Management help page that lists every MongoDB collection, its retention mechanism (TTL, Online Archive, or permanent), the active window or expiry period, and a setup checklist for TTL indexes and Online Archive policies. Default values must match those defined in `docs/data-management.md`. This page exists to assist operators during database setup and periodic audits.
+- `REQ-ADMIN-010` The admin must be able to suspend signal delivery for a specific user without deactivating their account. While signal-suspended, the user retains full read access to the platform — including charting, portfolio analytics, notification history, and Signal browsing — but the EOD Signal Runner must not generate new entry signals or RME advisories for that user and no new Telegram notifications must be dispatched to them. On suspension, all PendingEntry positions for that user must be immediately transitioned to Suspended state with reason `user_signal_suspended`. On re-enabling, suspended PendingEntry positions must not be automatically reinstated; they remain Suspended until superseded by a fresh EOD Signal Runner entry signal per REQ-PLC-009 or until they expire per REQ-PLC-008. The admin must be able to re-enable signals for the user at any time. Both actions must be recorded in the audit trail and must appear visibly in the user's record in the admin user management view.
+- `REQ-ADMIN-011` The admin must be able to disable a specific Signal type platform-wide from the admin portal.
+- `REQ-ADMIN-012` The admin portal must display a persistent badge indicator on the user management menu item showing the count of accounts currently pending approval. The badge must update in real time and clear automatically as approvals are processed. No Telegram notification is required for pending user registrations.
+- `REQ-ADMIN-014` The admin portal must include a system health section providing a centralised, proactive view of all major platform components. The section must display a traffic-light status indicator (healthy, warning, or critical) for each component, derived from configurable staleness thresholds and error rate thresholds seeded in `sys_config`. For each component the section must show the current state and a 7-day daily breakdown of outcomes, warning counts, and error counts so the admin can identify when a degradation began. The lookback window must be configurable via `sys_config` key `operations.system_health.lookback_days` with a default of 7. Components that must be represented are: (a) each background job (DataSync (DS), HistoricDataSeed (HDS), EOD Signal Runner (EODSR), Live Market Data Scan (LMDS), Live Account Data Scan (LADS), Notification Delivery Job (NDJ)) — showing last run timestamp, last outcome, and per-day run count, success count, warning count, and error count sourced from `job_runs`; (b) admin FYERS token — current state (valid, dirty, or missing), expiry timestamp, and 7-day history of token validity events sourced from `audit_events`; (c) market data provider — active provider, last successful data fetch timestamp, current API call consumption versus daily limit, and 7-day history of provider fetch outcomes sourced from `job_runs`; (d) Telegram delivery pipeline — last successful delivery timestamp and 7-day daily breakdown of delivery attempts, successes, and failures sourced from `notifications`; (e) global kill switch — current active or inactive status and the timestamp and actor of the last state change sourced from `audit_events`. Clicking any component row must navigate to the relevant filtered detail view or job log. All data for the health section is sourced from existing collections; no new persistence layer is required.
+
+- `REQ-ADMIN-013` A disabled Signal type must not be evaluated by the EOD Signal Runner for any user regardless of their subscription state. Individual user Signal Subscriptions to the disabled Signal type must be preserved so they resume automatically when the Signal type is re-enabled. The disabled state must be clearly indicated in the Signal management view for both admin and users. Disabling and re-enabling a Signal type must be recorded in the audit trail. When a Signal type is disabled, all PendingEntry positions across all users that were generated under that Signal type must be immediately transitioned to Suspended state with reason `signal_type_disabled`. On re-enable, these suspended PendingEntry positions must not be automatically reinstated; they remain Suspended until superseded by a fresh EOD Signal Runner entry signal per REQ-PLC-009 or until they expire per REQ-PLC-008. The next eligible EOD Signal Runner run after re-enable is the natural recovery path for generating fresh advisories.
+
+---
+
+## Part 9 — Future and Out of Scope
+
+*Requirements here are intentionally deferred. Do not implement them until this section is updated and moved to the appropriate part above.*
+
+### V1.5 and Later
+
+- `REQ-NEXT-001` Corporate actions support for splits, bonuses, dividends, and symbol continuity belongs to the next phase.
+- `REQ-NEXT-002` Corporate-action-adjusted analytics are out of scope for the early simplified phase.
+- `REQ-NEXT-003` Multi-account, team, advanced signal-routing, richer charting, and other expanded capabilities belong after the core platform is stable.
+- `REQ-NEXT-004` Paper trading mode (simulated live execution using real market data without actual orders) is a future capability to be added after the core RME and live signal workflows are stable.
+- `REQ-NEXT-005` Market regime detection and regime-based RME parameter switching are future enhancements once the core RME is operational.
+- `REQ-NEXT-006` Statistical cross-position correlation exposure modelling (beyond sector classification) is a future enhancement. For V1, sector concentration limits and sector exposure relative to existing positions serve as the primary correlation control, as required by REQ-RME-017.
+- `REQ-NEXT-007` Advanced sizing models including Kelly Fraction, Equal Risk Contribution, and Rebalancing-based sizing are future additions once the foundational sizing models are validated through backtesting.
+- `REQ-NEXT-008` Step-up re-authentication for sensitive portal actions such as manual trade-ledger adjustments and RME profile changes on live positions is deferred to a future version.
+- `REQ-NEXT-009` Point-in-time universe tracking: storing historical Nifty 500 membership derived from each admin CSV upload so that backtests can use the universe that was active at each historical date, eliminating survivorship bias. This is a future enhancement once the core backtest engine is stable.
+- `REQ-NEXT-010` A dedicated read-only compliance or support reviewer role with access to audit events, job outcomes, signal history, and reconciliation views across all users is a future addition. For V1, the admin is the only privileged role and handles any compliance or audit access needs directly.
+
+### Explicitly Out of Scope for Early Milestones
+
+- `REQ-OOS-001` Options, futures, and other derivatives.
+- `REQ-OOS-002` Instruments outside the Nifty 500 listed on NSE.
+- `REQ-OOS-003` Short selling or short-side strategy support.
+- `REQ-OOS-004` Tax reporting.
+- `REQ-OOS-005` Mobile-native apps.
