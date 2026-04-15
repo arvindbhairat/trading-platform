@@ -34,6 +34,8 @@ Business and product requirements must live in one canonical reference file so t
   - decision log entry for OTLP, Serilog, and centralized configuration strategy
 - [legal/](./legal/README.md)
   - versioned user-facing legal content (tester acknowledgement, disclaimers, and eventually ToS and Privacy Policy) referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
+- [operations/fyers-api-budget.md](./operations/fyers-api-budget.md)
+  - quantified daily FYERS API call budget model required by `REQ-RATE-011` and used by `REQ-RATE-012` to warn on config changes that would breach the 80% threshold
 
 ## Editing Rules
 
