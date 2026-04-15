@@ -36,6 +36,8 @@ Business and product requirements must live in one canonical reference file so t
   - versioned user-facing legal content (tester acknowledgement, disclaimers, and eventually ToS and Privacy Policy) referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
 - [operations/fyers-api-budget.md](./operations/fyers-api-budget.md)
   - quantified daily FYERS API call budget model required by `REQ-RATE-011` and used by `REQ-RATE-012` to warn on config changes that would breach the 80% threshold
+- [operations/runbooks/](./operations/runbooks/README.md)
+  - operational runbook catalog required by `REQ-LEGAL-005`; three runbooks are mandatory in Phase A (DataSync recovery, admin FYERS token re-auth, data-breach response), the remainder are required before Phase B
 
 ## Editing Rules
 
