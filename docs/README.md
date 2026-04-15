@@ -32,6 +32,8 @@ Business and product requirements must live in one canonical reference file so t
   - decision log entry for this documentation structure
 - [adr/0002-observability-and-configuration.md](./adr/0002-observability-and-configuration.md)
   - decision log entry for OTLP, Serilog, and centralized configuration strategy
+- [legal/](./legal/README.md)
+  - versioned user-facing legal content (tester acknowledgement, disclaimers, and eventually ToS and Privacy Policy) referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
 
 ## Editing Rules
 

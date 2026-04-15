@@ -171,6 +171,8 @@ Use these initial categories:
   - maintenance-mode style toggles, non-secret operational controls
 - `integrations`
   - external API rate limits, back-off settings, retry policies, and timeout defaults for third-party providers such as FYERS and Telegram
+- `legal`
+  - versioned disclaimer and policy document pointers, user-acknowledgement version identifiers; non-secret values only, audited on change
 
 ## What Must Not Go Into `sys_config`
 
@@ -305,6 +307,14 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `integrations.fyers.price_deviation_warning_pct` | integrations | number | 1 | REQ-ORDER-011 |
 | `risk.default.portfolio_heat_warning_threshold_pct` | risk | number | 4 | REQ-ORDER-012 |
 | `operations.system_health.lookback_days` | operations | number | 7 | REQ-ADMIN-014 |
+| `operations.phase.current` | operations | string | `A` | REQ-LEGAL-001 |
+| `operations.phase_a.tester_ceiling` | operations | number | 30 | REQ-LEGAL-003 |
+| `legal.disclaimer.short_text` | legal | string | *(seeded per deployment — see REQ-LEGAL-007)* | REQ-LEGAL-007 |
+| `legal.disclaimer.long_url` | legal | string | *(seeded per deployment — see REQ-LEGAL-007)* | REQ-LEGAL-007 |
+| `legal.disclaimer.long_version` | legal | string | `v1` | REQ-LEGAL-007 |
+| `legal.tos.current_version` | legal | string | `v1` | REQ-LEGAL-008 |
+| `legal.privacy.current_version` | legal | string | `v1` | REQ-LEGAL-008 |
+| `legal.tester_acknowledgement.current_version` | legal | string | `v1` | REQ-LEGAL-004 |
 
 ## Implementation Guidance
 
