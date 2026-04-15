@@ -242,7 +242,9 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `jobs.eod_sync.retry_delay_seconds` | jobs | number | 60 | REQ-MARKET-005 |
 | `jobs.scan.max_parallel_strategies` | jobs | number | 5 | REQ-STRAT-013 |
 | `jobs.scan.abort_on_missing_success_marker` | jobs | boolean | true | REQ-MARKET-007 |
-| `jobs.live_market_scan.poll_interval_seconds` | jobs | number | 60 | REQ-STOP-006 |
+| `jobs.live_market_scan.poll_interval_seconds` | jobs | number | 90 | REQ-STOP-006 |
+| `market_data.halt.consecutive_stale_polls` | market_data | number | 3 | REQ-HALT-001 |
+| `market_data.halt.stale_symbol_pct` | market_data | number | 80 | REQ-HALT-001 |
 | `jobs.account_sync.intraday_interval_minutes` | jobs | number | 15 | REQ-PORT-019 |
 | `jobs.account_sync.manual_sync_min_interval_seconds` | jobs | number | 120 | REQ-PORT-021 |
 | `market_data.quote.stale_after_seconds` | market_data | number | 300 | REQ-DASH-013 |
