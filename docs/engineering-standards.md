@@ -80,10 +80,25 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 
 ## Testing Standards
 
+### Coverage targets
+
+- unit test coverage minimum 70% for the .NET solution measured by line coverage; minimum 60% for the TypeScript portal codebase
+- integration tests must cover every critical workflow end-to-end: OAuth signup, FYERS authentication, Signal Subscription creation and pause/resume, EOD Signal Runner full pass against a seeded universe, RME profile evaluation, order placement Phase 1 modal through to Phase 2 callback handling, account reconciliation, manual adjustment, and admin operations including kill-switch activation
+- end-to-end tests must exercise at least the critical user journeys end-to-end through a real browser harness (Playwright or equivalent)
+- regression tests are mandatory for any defect found in auth, sessions, FYERS integration, market data ingestion, RME, portfolio accounting, permissions, reconciliation, or notification delivery — the regression test must accompany the fix in the same pull request
+
+### Test classes
+
 - unit test calculations, rules, and state transitions
 - integration test persistence-backed workflows across MongoDB and SQL Server
-- end-to-end test at least the critical user journeys
-- add regression tests for bugs in auth, strategies, provider integration, permissions, and reconciliation
+- end-to-end test the critical user journeys via a real browser harness
+- contract test the Market Data Provider abstraction against each concrete provider implementation
+
+### Performance and resilience
+
+- a load test must be executed and recorded before the Phase B transition: simulate the Phase A approved-user ceiling at peak concurrent activity (dashboard load, chart navigation, intraday sync, LMDS active) and verify all SLO targets in the requirements spec hold; load-test results gate the Phase B transition per REQ-LEGAL-005 indirectly through REQ-NFR-014
+- chaos and failure-injection exercises must be performed and recorded before the Phase C transition: simulate provider outages, MongoDB primary failover, Key Vault transient failures, and FYERS rate-limit responses; the platform must degrade gracefully in each scenario per REQ-NFR-003
+- both load tests and chaos exercises must be recorded in `audit_events` with scope, outcome, and remediation tracking
 
 ## Market Data Provider (MDP) Standards
 
