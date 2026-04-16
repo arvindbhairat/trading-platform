@@ -33,7 +33,9 @@ Business and product requirements must live in one canonical reference file so t
 - [adr/0002-observability-and-configuration.md](./adr/0002-observability-and-configuration.md)
   - decision log entry for OTLP, Serilog, and centralized configuration strategy
 - [legal/](./legal/README.md)
-  - versioned user-facing legal content (tester acknowledgement, disclaimers, and eventually ToS and Privacy Policy) referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
+  - versioned user-facing legal content: tester acknowledgement, short and long disclaimers, Terms of Service, and Privacy Policy. Referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
+- [privacy/ropa.md](./privacy/ropa.md)
+  - internal Record of Processing Activities required by `REQ-PRIVACY-010`. Operator-only document; the source of truth that the user-facing Privacy Policy summarises
 - [operations/fyers-api-budget.md](./operations/fyers-api-budget.md)
   - quantified daily FYERS API call budget model required by `REQ-RATE-011` and used by `REQ-RATE-012` to warn on config changes that would breach the 80% threshold
 - [operations/runbooks/](./operations/runbooks/README.md)

@@ -14,15 +14,14 @@ These artifacts are distinct from the requirements themselves:
 | `tester-acknowledgement-v1.md` | The text every Phase A user accepts before gaining access. Referenced by `REQ-LEGAL-004`. | v1 |
 | `disclaimer-short-v1.md` | Short-form disclaimer strings for Telegram, dashboard, chart advisory, and order modal. Referenced by `REQ-LEGAL-007`. | v1 |
 | `disclaimer-long-v1.md` | Long-form disclaimer linked from every short-form surface and from the portal footer. Referenced by `REQ-LEGAL-007`. | v1 |
+| `terms-of-service-v1.md` | The Terms of Service users accept at signup. Referenced by `REQ-LEGAL-008`. | v1 |
+| `privacy-policy-v1.md` | The Privacy Policy users accept at signup. Referenced by `REQ-LEGAL-008` and `REQ-PRIVACY-002`. | v1 |
 
 ## Not Yet Drafted
 
-The following are required by the requirements spec and must be authored before production use. I'd suggest drafting each one just before the milestone it unblocks, so the content doesn't go stale:
+- **Personal data breach runbook** — required by `REQ-PRIVACY-006`. Lives at `docs/operations/runbooks/data-breach-response.md`; the v1 stub is in place.
 
-- **Terms of Service** (`terms-of-service-v1.md`) — required by `REQ-LEGAL-008`. Needed before the first external tester accepts signup.
-- **Privacy Policy** (`privacy-policy-v1.md`) — required by `REQ-LEGAL-008` and `REQ-PRIVACY-002`. Needed before the first external tester accepts signup.
-- **Record of Processing Activities** (`../privacy/ropa.md`) — required by `REQ-PRIVACY-010`. Internal document, not user-facing.
-- **Personal data breach runbook** — required by `REQ-PRIVACY-006`. Lives in operational docs.
+The internal Record of Processing Activities required by `REQ-PRIVACY-010` lives at `docs/privacy/ropa.md` (separate folder because it is operator-internal, not user-facing).
 
 ## Versioning and Change Flow
 
