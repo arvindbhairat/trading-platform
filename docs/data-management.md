@@ -187,6 +187,8 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 **Purpose**: Position records representing the platform's internal model of each user's open and closed positions. Includes entry details, quantity, average buy, RME profile snapshot (immutable for position lifecycle), current RME state (stop level, add and reduce levels, trailing stop state, lifecycle state, current R multiple), and closed outcome data.
 
+**Required fields (schema notes)**: Every position document must carry a `_version` field (long integer, initialised to 1 on creation, incremented on every successful write) to support the optimistic concurrency control mechanism required by `REQ-RME-CONC-002`. All RME writes to this collection must filter on `{ _id, _version }` and check `MatchedCount`. A migration seeding `_version: 0` on any pre-existing documents without this field must run before Phase 6 RME implementation. The first successful RME write upgrades each document to `_version: 1`.
+
 **Lifecycle**: Active while a position is open or recently closed (within 12 months of close date). Older closed positions move to archive tier.
 
 **Mechanism**: Online Archive. Archive condition: `closed_at` present and older than 12 months. Open positions (no `closed_at`) are never archived.
