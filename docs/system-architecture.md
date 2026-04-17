@@ -376,18 +376,57 @@ Applies to all user-initiated order actions: Entry, Add, Reduce, and Exit. The f
 3. If a hard-block applies, the modal opens in a blocked state — reason displayed, confirm button disabled.
 4. Otherwise the modal opens showing: action type, symbol, RME-recommended quantity, estimated fill value at last quoted price, RME stop level, and portfolio heat before and after.
 5. Non-blocking warnings are surfaced where applicable: price distance from RME-suggested level, post-trade heat approaching limit, drawdown-reduced sizing.
-6. User may adjust quantity and order type (Market or Limit; Limit defaults to RME-suggested price). All dependent values recalculate in real time.
-7. User clicks Confirm. The platform assembles the final order parameters and invokes the FYERS API Connect widget.
+6. User may adjust quantity and order type (Market or Limit; Limit defaults to RME-suggested price). All dependent values recalculate in real time; the rendered `<fyers-button>` element re-renders with updated `data-*` attributes on every recalculation.
+7. User clicks the Confirm control, which is a FYERS-branded `<fyers-button>` element pre-populated with the final order parameters. Before the FYERS widget activates, the platform writes a matching `intent_ledger` record synchronously. See the FYERS API Connect Branded Button Contract below for the attribute surface, click-capture strategy, and reconciliation model.
 
 **Phase 2 — FYERS API Connect widget**
 
-8. The FYERS-hosted pop-up opens pre-populated with the order parameters (symbol, CNC product type, quantity, order type, price if limit, transaction type BUY or SELL).
-9. FYERS handles user auth verification, exchange window checks, input validation, and final submission to the exchange within their own UI.
-10. The platform receives the result via the API Connect `finished` callback.
-11. On success: platform records the FYERS order ID, shows confirmation to the user with a link to the orders screen, writes the outcome to the audit log, and queues an RME state refresh on next portfolio sync.
-12. On failure: platform surfaces the FYERS error to the user, writes the failed attempt to the audit log, and makes no RME state change.
+8. The FYERS-hosted pop-up opens pre-populated with the order parameters supplied via the `<fyers-button>` attributes (symbol, product, quantity, order type, price if limit, transaction type BUY or SELL).
+9. FYERS handles user auth verification, exchange window checks, input validation, final submission to the exchange, user-facing success and error display, and retry UX entirely within its own pop-up.
+10. The widget does not call back into the host page. The platform learns of the submission outcome exclusively through the next Local Account Data Scan (LADS) cycle.
+11. LADS reconciles observed FYERS orders and trades against pending `intent_ledger` records. On a match: the ledger entry is marked `matched`, the RME position lifecycle transitions as appropriate (PendingEntry → Submitted → Filled → Open, and analogous for Add, Reduce, and Exit), and the outcome is written to the audit log.
+12. On intent timeout (no matching order observed within `sys_config.orders.intent_timeout_minutes`): the intent transitions to `unresolved` and an advisory is surfaced to the user asking whether the order was actually submitted.
+13. On orphan detection (a LADS-observed order with no matching intent): an orphan advisory is surfaced to the user for acknowledgement and the position lifecycle is updated from the observed trade.
 
-This approach positions every order as a user-initiated, per-order manually confirmed action flowing through FYERS's own hosted infrastructure, which is architecturally distinct from automated or server-side algorithmic order placement.
+This approach positions every order as a user-initiated, per-order manually confirmed action flowing through FYERS's own hosted infrastructure, which is architecturally distinct from automated or server-side algorithmic order placement. The platform-facing integration contract is defined in the following section.
+
+### FYERS API Connect Branded Button Contract
+
+This section captures the integration surface for FYERS API Connect branded-button mode against which Phase 7 must be built.
+
+**SDK loading.** The SDK script is loaded from `https://api-connect-docs.fyers.in/fyers-lib.js` once per page, placed immediately before the closing `</body>` tag. The SDK URL is pinned in platform configuration. A change-detection step in the deployment pipeline triggers re-execution of the contract test suite before any release that picks up a new SDK revision.
+
+**Custom element.** The SDK registers a `<fyers-button>` custom element. The platform renders one `<fyers-button>` per user-initiated order with order parameters supplied as `data-*` attributes. The element is the direct target of the user click; the platform cannot trigger the widget programmatically.
+
+**Attribute surface.** Confirmed from the FYERS branded-button samples reviewed to date:
+
+- `data-fyers` — platform app-level API key. Client-exposed (not a secret); rotated through the FYERS admin console.
+- `data-symbol` — exchange-qualified symbol, format `NSE:{TICKER}-EQ`.
+- `data-quantity` — integer.
+- `data-price` — number. Required for limit orders.
+- `data-order_type` — enum. `LIMIT` confirmed; the full enum (presumed `MARKET`, `SL`, `SL-M`) and per-type required fields such as `data-trigger_price` for SL variants are TBD and must be confirmed from FYERS docs before Phase 7 build.
+- `data-transaction_type` — `BUY` or `SELL`.
+- `data-product` — enum. `INTRADAY` confirmed; the full enum (presumed `CNC`, `MARGIN`, `CO`, `BO`) and any per-product required fields (for example cover-order stop-loss) are TBD.
+- `data-disclosed_quantity` — integer. Confirmed on the custom-button sample; presumed to apply to branded buttons and TBD for confirmation.
+- `data-validity` — TBD. DAY and IOC are presumed candidates.
+- Correlation or tag attribute for intent-to-order matching — TBD. If the SDK does not expose one, LADS reconciliation must fall back to heuristic matching on (user, symbol, side, quantity, price, timestamp window), which is fragile when a user places two similar orders in quick succession; this fallback must be documented as a known limitation until a correlation attribute is available.
+
+**No host-side callback.** The branded-button widget owns the entire user-facing flow — user authentication, exchange-window checks, validation, submission, success and error display, retry, and redirect back to the originating page. The widget does not call back into the host page. The platform must not wire any state transition or user-facing outcome to a widget-sourced callback.
+
+**Intent ledger.** The platform persists a MongoDB `intent_ledger` record the moment the user triggers the branded button and before the FYERS widget activates. The record carries: `user_id`, `position_id` (when applicable), `signal_id` (when applicable), `action` (Entry / Add / Reduce / Exit), `symbol`, `side`, `quantity`, `order_type`, `price`, `product`, `created_at`, and `status` (`pending` / `matched` / `unresolved` / `orphan_ack`).
+
+**Intent capture strategy.** The platform guarantees the intent is persisted before FYERS takes over. Two implementation options satisfy this guarantee:
+
+- *Capture-phase click handler.* The platform registers a click listener on the `<fyers-button>` in the DOM capturing phase and writes the intent synchronously before the event reaches FYERS's own handler. This preserves a single-click UX at the cost of ordering complexity and dependence on browser capturing semantics.
+- *Two-step confirm.* Phase 1's modal presents a platform Confirm control that, on click, writes the intent and then reveals the `<fyers-button>` inline in the modal for the user to click. This trades an extra click for deterministic ordering and observability on the write.
+
+Phase 7 selects one strategy and documents the choice here. Either strategy must be exercised by a contract test that verifies no widget activation path bypasses the intent write.
+
+**Reconciliation model.** Because the widget does not call back, LADS is the sole source of truth for submission outcomes. Each LADS cycle matches FYERS-observed orders and trades against pending `intent_ledger` records for that user. Matches drive RME position-lifecycle transitions; unmatched intents past `sys_config.orders.intent_timeout_minutes` (default 10) transition to `unresolved` with a user advisory; LADS-observed orders without a matching intent transition to `orphan_ack` with a user advisory. All such advisories are written to the notifications collection through the normal Notification Store path.
+
+**User-token handoff.** The FYERS intro text indicates the host can start an API session using the user token "once the flow is initiated." The handoff mechanism (redirect URL, `postMessage`, cookie, or a separate OAuth exchange) is not documented in the samples reviewed and is TBD. Until confirmed, the platform continues to obtain user FYERS tokens exclusively through the existing OAuth flow described in the Session and FYERS Lock Flow and does not depend on the widget for token acquisition or refresh.
+
+**SDK version pinning and contract tests.** The SDK URL and any detected payload hash are recorded with each deployment. Phase 7 includes a contract test suite, run against the FYERS sandbox before release and on every detected SDK URL change, covering at minimum: (1) a successful order submission produces an intent that matches a LADS-observed order within the timeout window, (2) an intent created without a subsequent order submission times out to `unresolved`, (3) a LADS-observed order with no matching intent surfaces as an `orphan_ack` advisory.
 
 ## Cross-Cutting Concerns
 
