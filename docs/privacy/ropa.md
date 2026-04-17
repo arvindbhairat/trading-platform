@@ -154,7 +154,17 @@ For each activity: purpose, data categories used, lawful basis, retention, recip
 - **Retention:** Re-acceptance records retained indefinitely as proof of consent.
 - **Recipients:** Internal only.
 
-### A12. Hosting, storage, and backup
+### A12. Admin "View as user" impersonation
+
+- **Purpose:** Allow the designated admin to access a read-only view of any user's portal session for operational support, troubleshooting, and platform diagnostics.
+- **Data categories:** All data visible in the target user's portal session — identity and contact (display name), trading data (positions, holdings, broker orders), platform-derived analytics (portfolio snapshot, equity curve, RME state), scan and subscription configuration, notification history, and settings. No financial credentials (FYERS token) are transferred to the admin session; the admin views only the data already stored and rendered by the platform.
+- **Lawful basis:** Legitimate interest of the data fiduciary in operating and maintaining the platform and resolving operational issues on behalf of users, subject to the safeguards below.
+- **Safeguards:** (a) Admin must complete step-up re-authentication (fresh OAuth within the previous 5 minutes) before entering and exiting each impersonation session (REQ-SEC-011). (b) The session is strictly read-only; all write-path API calls originating from an impersonation session are rejected server-side (REQ-ADMIN-015). (c) Every impersonation session — entry time, exit time, and pages visited — is recorded in `audit_events` with the admin identity and target user identity (REQ-ADMIN-015). (d) Impersonation sessions auto-expire after a configurable idle timeout (default 15 minutes, `sys_config` key `operations.impersonation.idle_timeout_minutes`). (e) A persistent high-visibility banner labels every page during the session.
+- **Disclosure:** The Privacy Policy served to users must disclose, in plain language, that the admin may access a read-only view of any user's account for operational support purposes and that each such access is recorded. Required by REQ-PRIVACY-012 before the first non-admin user is onboarded.
+- **Retention:** Impersonation session audit records are retained as part of `audit_events` per the standard audit trail retention (A8). No separate copy of user data is created or exported during an impersonation session.
+- **Recipients:** Internal only (the admin).
+
+### A13. Hosting, storage, and backup
 
 - **Purpose:** Operate the platform's databases, secret stores, configuration stores, and observability pipeline.
 - **Data categories:** All categories listed above are hosted on Azure infrastructure.
@@ -247,3 +257,4 @@ Procedure documented in `docs/operations/runbooks/data-breach-response.md`. 72-h
 ## Change log
 
 - **v1** — Initial draft. Phase A scope. Processor list bounded to actually-used third parties. Observability vendor is a placeholder pending selection. Pen-test record absent until completed before Phase C. Operating entity is a sole proprietor (Arvind Bhairat); RoPA must be re-issued under the entity name when SignalStack incorporates.
+- **v1.1** — Added A12 (Admin "View as user" impersonation) as a distinct processing activity per REQ-PRIVACY-012. Former A12 (Hosting) renumbered to A13.
