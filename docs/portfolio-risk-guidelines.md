@@ -163,10 +163,10 @@ The RME must support multiple stop loss types configurable per strategy.
 - Trailing Stop (ATR) — stop trails by an ATR multiple, updated on each session close
 - Swing Low Stop — stop placed below the most recent swing low
 - Break-Even Stop — stop moved to entry price once position reaches a configurable profit level (default 1R)
+- Time Stop — exit after a configurable number of NSE trading sessions from the entry date regardless of price; the session count is configured per Signal Subscription and the `time_stop_date` is calculated at entry using the internal NSE trading calendar (see REQ-STOP-003)
 
 ### Additional Stop Types (Future)
 
-- Time Stop — exit after a defined holding period regardless of price
 - Volatility Stop — tighten stop when volatility spikes beyond a threshold
 - Portfolio Stop — reduce position when portfolio heat limit is breached
 - Equity Curve Stop — reduce sizing or exit when equity curve deteriorates
