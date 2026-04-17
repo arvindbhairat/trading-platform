@@ -89,11 +89,21 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ### `symbol_master`
 
-**Purpose**: Nifty 500 symbol definitions including ISIN, trading symbol, company name, series, industry classification (the `Industry` field from the NSE CSV, used as the platform's sector grouping), archive state, scan-exclusion state, and the stable `sql_table_name_suffix` used to construct the `D_`, `W_`, and `M_` SQL Server table names for that symbol.
+**Purpose**: Nifty 500 symbol definitions including ISIN, trading symbol, company name, series, industry classification (the `Industry` field from the NSE CSV, used as the platform's sector grouping), archive state, scan-exclusion state, and the stable `sql_table_name_suffix` used to construct the `D_`, `W_`, and `M_` SQL Server table names for that symbol. ISIN is stored alongside symbol as the continuity anchor used by the rename-detection workflow (REQ-UNIV-020) and the Symbol Validity Probe resolution path (REQ-UNIV-021b): when an NSE rebranding changes the trading symbol but leaves the underlying security unchanged, the ISIN match drives an in-place update that preserves `sql_table_name_suffix` and the associated historical tables. Stock splits, bonus issues, and consolidations change the ISIN while leaving the trading symbol unchanged — the symbol master record updates ISIN in place and the suffix remains stable.
 
-**Lifecycle**: Permanent. Symbols are archived in place when removed from the universe; historical records are never deleted because the `sql_table_name_suffix` mapping must remain stable for backtest queries.
+**Lifecycle**: Permanent. Symbols are archived in place when removed from the universe; historical records are never deleted because the `sql_table_name_suffix` mapping must remain stable for backtest queries. `sql_table_name_suffix` is immutable once assigned: it never changes for the lifetime of the symbol master record, even across trading symbol renames.
 
 **Mechanism**: No TTL. No archive.
+
+---
+
+### `symbol_health`
+
+**Purpose**: Per-symbol daily health tracking populated by the Symbol Validity Probe (REQ-UNIV-021). One document per active symbol. Fields: `symbol`, `last_successful_probe_at`, `last_unknown_symbol_at`, `consecutive_failure_count`, `last_error_code`, `last_error_at`, `status` (`ok`, `flagged`, `resolved`), and a bounded recent-event history for admin diagnostics. Drives the admin work queue when `consecutive_failure_count` reaches the configured flag threshold; cleared or archived on rename, delisting, or dismissal resolutions per REQ-UNIV-021b.
+
+**Lifecycle**: Updated in place on every probe run. When a symbol is archived via either rename rejection or a "mark delisting" resolution, its `symbol_health` record is retained in a resolved state for audit purposes alongside the archived `symbol_master` entry.
+
+**Mechanism**: No TTL. No archive. Small collection (capped at the active universe size).
 
 ---
 
@@ -331,6 +341,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 | `sessions` | TTL | Expire 24 hours after issuance |
 | `fyers_tokens` | TTL (superseded records) | 30 days after supersession |
 | `symbol_master` | No expiry | Permanent |
+| `symbol_health` | No expiry (updated in place) | One record per active symbol |
 | `watchlists` | No expiry (updated in place) | One record per user, permanent |
 | `trading_calendar` | No expiry | Permanent |
 | `sys_config` | No expiry | Permanent |

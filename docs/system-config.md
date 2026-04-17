@@ -320,6 +320,9 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `operations.universe.stale_after_days` | operations | number | 180 | REQ-UNIV-016 |
 | `operations.universe.archive_confirm_threshold_pct` | operations | number | 5 | REQ-UNIV-018 |
 | `operations.universe.rollback_retention_days` | operations | number | 30 | REQ-UNIV-019 |
+| `operations.universe.symbol_probe_enabled` | operations | boolean | true | REQ-UNIV-021 |
+| `operations.universe.symbol_probe_batch_size` | operations | number | 50 | REQ-UNIV-021 |
+| `operations.universe.symbol_probe_flag_threshold_days` | operations | number | 2 | REQ-UNIV-021b |
 | `operations.impersonation.idle_timeout_minutes` | operations | number | 15 | REQ-ADMIN-015 |
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |

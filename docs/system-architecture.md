@@ -206,6 +206,10 @@ A worker job that runs continuously during NSE market hours. Fetches live prices
 
 A worker job that runs on a configurable interval during NSE market hours, once per user with a valid FYERS token. Fetches orders, trades, positions, and holdings from FYERS using each user's own token. Updates account equity, portfolio state, and the portfolio snapshot. When confirmed trades are detected, notifies the RME to recalculate position levels for the affected positions. More aggressive scan frequency than the Live Market Data Scan because load is distributed across individual user rate limits.
 
+### Symbol Validity Probe
+
+A worker task that runs once per trading day, triggered immediately after the first successful admin FYERS token generation of the day. Fetches FYERS LTP for every active Nifty 500 symbol — including scan-excluded symbols — through the admin FYERS token, in batches that respect the configured rate limits. Updates the `symbol_health` collection with per-symbol outcomes. Distinguishes transient failures from FYERS "unknown symbol" errors; only the latter increment `consecutive_failure_count`. When a symbol's count reaches the configured threshold (`operations.universe.symbol_probe_flag_threshold_days`, default 2), the probe adds it to the admin work queue as a rename-or-delisting candidate. The probe and the CSV-based ISIN rename detection in the Universe Sync flow feed the same queue; cases where both fire for the same symbol are tagged `high_confidence`. The probe is disabled via a `sys_config` flag for incident response, with a visible admin banner when paused.
+
 ## Primary Data Stores
 
 ### MongoDB
@@ -275,11 +279,24 @@ Use Redis where useful for:
 
 1. Admin uploads the Nifty 500 CSV.
 2. The API validates structure and filters to `Series = EQ`.
-3. The symbol master is updated in MongoDB.
-4. Removed symbols are archived, not deleted.
-5. Active symbols may also carry a separate scan-exclusion flag.
-6. Upload results are stored for audit and review.
-7. If net-new symbols were added, the platform automatically triggers HistoricDataSeed for those symbols so their full historical OHLCV data is available before they appear in backtest or scan workflows.
+3. A pre-commit diff preview is assembled showing adds, archives, industry reclassifications, and skipped rows. The diff also detects candidate renames by matching rows where a new `Symbol` appears alongside an `ISIN Code` that matches a currently active symbol whose `Symbol` is absent from the upload; these are presented as `old → new` pairs for admin resolution.
+4. The admin resolves each rename candidate as either approve (update symbol master in place, preserve `sql_table_name_suffix` and existing `D_/W_/M_` tables, preserve all historical references) or reject (treat as separate archive-and-add, new symbol gets a fresh suffix and tables).
+5. After the admin confirms the diff, the symbol master is updated in MongoDB.
+6. Symbols absent from the upload that were not resolved as renames are archived, not deleted.
+7. Active symbols may also carry a separate scan-exclusion flag.
+8. Upload results, rename resolutions, and a pre-upload snapshot for rollback are stored for audit and review.
+9. If net-new symbols were added, the platform automatically triggers HistoricDataSeed for those symbols so their full historical OHLCV data is available before they appear in backtest or scan workflows. Approved renames do not trigger HistoricDataSeed because the underlying tables are preserved.
+
+### Symbol Validity Probe Flow
+
+1. Admin generates the daily FYERS token; the first successful generation of the trading day triggers the probe.
+2. The worker loads the current active universe from `symbol_master` (including scan-excluded symbols) and partitions it into batches sized by `operations.universe.symbol_probe_batch_size`.
+3. For each batch, the worker fetches LTP from FYERS using the admin token, respecting the FYERS rate-limit configuration.
+4. Each per-symbol response is classified as Success, Transient failure, or Unknown-symbol failure per REQ-UNIV-021a. Transient failures are retried within the run with exponential back-off; if any retry succeeds the outcome becomes Success.
+5. The `symbol_health` record for each symbol is updated in place with the classified outcome. Success resets `consecutive_failure_count` to zero; Unknown-symbol increments it; Transient failures do not change the count.
+6. When a symbol's `consecutive_failure_count` reaches `operations.universe.symbol_probe_flag_threshold_days` (default 2), the platform enqueues a rename-or-delisting candidate entry tagged with that symbol's recent failure history. The entry appears in the same admin work queue as candidates raised by the Universe Sync rename-detection step.
+7. Admin resolves each flagged entry as Approve rename (in-place update preserving suffix and tables, same path as REQ-UNIV-020), Mark delisting (archive the symbol and notify users with open positions), or Dismiss (audit the decision but leave the count unchanged, so re-flagging continues).
+8. The probe run is recorded in `job_runs`; resolutions are written to `audit_events`.
 
 ### EOD Sync and Scan Flow
 
