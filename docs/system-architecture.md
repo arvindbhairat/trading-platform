@@ -114,6 +114,12 @@ When a logged-in user views live quotes or real-time chart updates in the portal
 **User Account Data Provider (always FYERS)**
 Fetches user-specific account data — positions, orders, trades, and profile — using the individual user's FYERS token. This is not configurable; FYERS is the sole broker integration for account data in the current platform.
 
+**Backend access is REST-only (REQ-MARKET-002a / REQ-MARKET-002b)**
+All three of the above provider concerns — shared MDP ingestion, Portal Live Data, and User Account Data — are accessed from backend services (API and Worker) exclusively via the provider's REST interface. The FYERS Data WebSocket, and any equivalent streaming interface a future provider exposes, is explicitly out of scope for the backend. The browser tier may consume the FYERS Data WebSocket directly using the logged-in user's token for in-browser chart and quote refresh; this stream is never proxied or multiplexed through the API service. This rule exists to keep rate-limit accounting, retry, and observability uniform across provider adapters and to keep the provider-abstraction surface narrow.
+
+**Provider-selection note — FYERS is a testing/evaluation choice only**
+FYERS was selected as the initial market data provider because its APIs are free of cost during the testing and evaluation phase. The platform is designed to migrate to a commercial third-party data provider (TrueData, Global Data Feeds, or equivalent) ahead of broader rollout. The Market Data Provider abstraction exists precisely to isolate FYERS-specific quirks — rate-limit accounting semantics, daily admin token renewal, bulk-quote batch sizes, per-second pacing — so migration is a configuration and adapter change, not a domain-code change. Reviewers and implementers encountering FYERS-specific assumptions in backend code should treat them as adapter-layer concerns, not platform-level facts. This mirrors REQ-MARKET-002c.
+
 ### Configuration Layer
 
 Resolves configuration from:

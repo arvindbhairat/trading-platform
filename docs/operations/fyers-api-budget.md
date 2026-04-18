@@ -5,6 +5,17 @@
 
 ---
 
+## Phase 2 Preconditions
+
+Two facts about FYERS rate-limit accounting must be verified against the FYERS sandbox before any Phase 2 market-data code is written. They change the shape of the LMDS math materially.
+
+1. **Bulk Quotes rate-limit counting.** A Quotes REST request for up to 50 comma-separated symbols must be confirmed as either one rate-limit hit per request or `N` rate-limit hits (where `N` equals the symbol count in the request). The budget figures in § Per-Job Math § LMDS below assume one hit per bulk request; if the verified accounting is per-symbol, the LMDS row expands from 1,250 calls/day to 62,500 calls/day at the 90 s default interval, and tightening the interval below 60 s becomes infeasible at Phase A scale.
+2. **Daily limit value.** REQ-RATE-003 notes the seeded 100,000 calls/day is an unverified estimate and must be confirmed against FYERS's current published documentation for the active app tier before Phase 2 code begins. If the verified daily limit is lower than 100,000, every row in the § Total Shared-Pool Budget table must be recomputed against the new ceiling.
+
+The verified outcome of both checks must be recorded in this document — inline in the § Per-Job Math and § Total Shared-Pool Budget sections — and the `sys_config` seed for `integrations.fyers.rate_limit.per_day` and `jobs.live_market_scan.poll_interval_seconds` adjusted if the verification invalidates the current defaults. Per REQ-MARKET-002c, the same verification must be performed — against the new provider's documented rate-limit rules — whenever the platform switches to a third-party market data provider.
+
+---
+
 ## Purpose
 
 This document quantifies expected daily FYERS API call consumption from every platform component that uses the shared admin FYERS token. It exists so that sys_config changes affecting any input can be evaluated against the configured daily limit before they're saved, and so the admin portal has a concrete model to project against.

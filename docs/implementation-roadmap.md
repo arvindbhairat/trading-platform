@@ -33,6 +33,12 @@ Ship in thin vertical slices that end in something a user or operator can valida
 
 ## Phase 2: Universe and Market Data
 
+**Preconditions (must be confirmed against the FYERS sandbox before Phase 2 market-data code is written):**
+
+- Bulk Quotes rate-limit accounting: verify whether a single Quotes REST request for up to 50 comma-separated symbols consumes one rate-limit hit or `N` rate-limit hits (where `N` equals the number of symbols in the request). The result determines the safe lower bound on `jobs.live_market_scan.poll_interval_seconds` and the overall LMDS capacity model. The verified outcome must be recorded in `docs/operations/fyers-api-budget.md` § LMDS before any LMDS implementation work starts, and the default `sys_config` seed value must be adjusted if the verified accounting invalidates the current 90 s default. Per REQ-MARKET-002c, this verification is FYERS-specific; when the platform migrates to a third-party market data provider the equivalent check must be performed against that provider's published rate-limit rules and the budget model refreshed accordingly.
+
+**Build work:**
+
 - create symbol master and universe state models
 - build admin CSV upload with archive and exclusion handling
 - implement internal trading calendar and admin management screens

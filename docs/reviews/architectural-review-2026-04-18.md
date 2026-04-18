@@ -23,11 +23,21 @@
 
 ## Critical Gaps
 
-### 1. Stop-detection SLO is unreachable at the configured LMDS interval
+### 1. Stop-detection SLO is unreachable at the configured LMDS interval — **RESOLVED 2026-04-18**
+
+**Original finding (retained for audit trail):**
 - **Where:** `docs/operations/fyers-api-budget.md` Inputs table (`jobs.live_market_scan.poll_interval_seconds = 90`) vs. `docs/requirements-spec.md` REQ-SLO-010.
 - **Problem:** p95 ≤ 15s from breach to notification requires polling at ≤ 15s. The budget model shows 90s is load-bearing to fit the FYERS 100,000-call/day limit without bulk. Tightening to 15s breaches the budget.
-- **Why it matters:** Either the SLO is a false promise or the API budget is wrong. One must move.
-- **Smallest fix:** Redefine REQ-SLO-010 as measuring from "first LMDS poll where the breach is observable" rather than "breach occurrence", and make the poll interval an explicit component of the SLO math.
+
+**Correction:** Re-reading REQ-SLO-010, the 15 s p95 measures from "stop breach being detected within an LMDS cycle" to notification write — i.e., intra-cycle processing time, not wall-clock from the breach itself. The poll interval is not part of the 15 s. The original finding was based on a misreading of the requirement and is withdrawn. REQ-SLO-010 is correct as written.
+
+**Real concern carried through:** user-observable breach-to-alert latency is `poll_interval + 45 s` (REQ-SLO-010 intra-cycle + REQ-SLO-005 Telegram), which at the 90 s default sums to up to ~135 s. This is explicitly accepted: the platform is a swing/position-trading decision-support tool, not an intraday or options system; sub-minute breach detection is not a product requirement.
+
+**Resolution (2026-04-18):**
+- No change to REQ-SLO-010. No change to the 90 s LMDS default.
+- New `requirements-spec.md` requirements **REQ-MARKET-002a / 002b / 002c** added: backend is REST-only against market data and account data providers; FYERS Data WebSocket is browser-tier only; FYERS is documented as a testing/evaluation-phase provider with migration to a commercial third-party provider planned.
+- New **Phase 2 Preconditions** block added to `implementation-roadmap.md` and `operations/fyers-api-budget.md`: bulk Quotes rate-limit accounting and the 100,000/day daily-limit assumption must be verified against the FYERS sandbox before Phase 2 market-data code is written; LMDS default poll interval is re-evaluated against the verified outcome.
+- `CLAUDE.md` Default Technical Direction now explicitly notes FYERS is temporary and backend is REST-only, so future reviewers do not re-open this question.
 
 ### 2. PendingEntry → Open has two authoritative sources
 - **Where:** `docs/implementation-roadmap.md` Phase 7 build items 6 and 9; `docs/requirements-spec.md` REQ-ORDER-015 / REQ-ORDER-015c.
