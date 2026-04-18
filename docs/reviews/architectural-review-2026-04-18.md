@@ -9,7 +9,7 @@
 ## Summary
 
 1. The **LMDS 90-second poll interval** (`operations/fyers-api-budget.md` Inputs table) is incompatible with **REQ-SLO-010** (stop-detection-to-notification p95 ≤ 15s). The two cannot both hold.
-2. **PendingEntry → Open authority is split** between the FYERS `finished` callback (`roadmap` Phase 7 build item 6) and LADS reconciliation (Phase 7 build item "LADS-confirmed fill evidence, not the callback alone"). No document names the single source of truth.
+2. ~~**PendingEntry → Open authority is split** between the FYERS `finished` callback (`roadmap` Phase 7 build item 6) and LADS reconciliation (Phase 7 build item "LADS-confirmed fill evidence, not the callback alone"). No document names the single source of truth.~~ **Resolved 2026-04-18** — on re-read the spec already names LADS as the single authority for position lifecycle (REQ-ORDER-015). New REQ-ORDER-015e / 015f added to define portal awaiting-confirmation UX and LADS-gated fill notifications; roadmap Phase 7 cross-reference tightened.
 3. The **Worker Service single-instance assumption** is load-bearing for RME correctness (`adr/0003` § Scale context) but is not declared as a guardrail in `CLAUDE.md`, `system-architecture.md`, or the roadmap. Default Azure App Service scale-out silently breaks the model.
 4. **Per-symbol SQL Server tables** (`data-management.md` § Historical Data Layer, `sql_table_name_suffix`) combined with quarterly Nifty 500 rebalance implies runtime DDL, yet `engineering-standards.md` § Data Migrations names FluentMigrator, a startup-migration tool. No runtime table-creation path is described.
 5. **Bootstrap ordering** for `sys_config` is unspecified: `system-config.md` lists ~85 seed keys that must exist before any admin can log in, but admin seeding is itself a Phase 1 deliverable that depends on runtime reads from `sys_config`.
@@ -39,11 +39,28 @@
 - New **Phase 2 Preconditions** block added to `implementation-roadmap.md` and `operations/fyers-api-budget.md`: bulk Quotes rate-limit accounting and the 100,000/day daily-limit assumption must be verified against the FYERS sandbox before Phase 2 market-data code is written; LMDS default poll interval is re-evaluated against the verified outcome.
 - `CLAUDE.md` Default Technical Direction now explicitly notes FYERS is temporary and backend is REST-only, so future reviewers do not re-open this question.
 
-### 2. PendingEntry → Open has two authoritative sources
+### 2. PendingEntry → Open has two authoritative sources — **RESOLVED 2026-04-18**
+
+**Original finding (retained for audit trail):**
 - **Where:** `docs/implementation-roadmap.md` Phase 7 build items 6 and 9; `docs/requirements-spec.md` REQ-ORDER-015 / REQ-ORDER-015c.
 - **Problem:** The `finished` callback marks intent `matched` (item 6); Phase 7 simultaneously says "PendingEntry → Open is driven by LADS-confirmed fill evidence, not by the callback alone" (item 9). If the callback is authoritative for intent but not for position state, a position can be `matched` at the intent layer and still `PendingEntry` at the lifecycle layer.
 - **Why it matters:** The RME consumes position state, not intent state. Advisories will compute against `PendingEntry` for up to one LADS cycle after the order is actually filled.
 - **Smallest fix:** Add a requirement that the callback updates the intent ledger only (never the position document); LADS is the sole authority for PendingEntry → Open. Delete or soften the implication that `match_source = "callback"` is terminal.
+
+**Correction:** On re-reading the spec, REQ-ORDER-015 is already explicit: *"The callback confirms submission, not fill: the `PendingEntry → Open` lifecycle transition per REQ-PLC-002 must be driven by confirmed fill evidence from LADS (REQ-PORT family), not by the callback alone."* REQ-ORDER-015a corroborates for partial fills; REQ-ORDER-015c names LADS as the driver of the downstream RME lifecycle update. A single source of truth already exists — the callback writes only to `intent_ledger`, and LADS is the sole authority for `PendingEntry → Open`. The original review framing ("two authoritative sources") was a misread of the roadmap in isolation from the spec.
+
+**Real concerns that survived the re-read:**
+1. **Roadmap Phase 7 language was easy to misread.** Build items 6 and 9 sat ~80 lines apart with no cross-reference; a reader scanning the roadmap in sequence could plausibly conclude the callback was terminal for position state.
+2. **Portal UX during the callback-success → LADS-confirmation window was undefined.** Worst case ~15 minutes (`jobs.account_sync.intraday_interval_minutes` default 15). During that window: intent is `matched`, position is still `PendingEntry`. REQ-ORDER-005 blocks duplicate in-flight submission for the same symbol/action, but the spec said nothing about what the chart page, positions summary, or Phase 1 modal actually show the user.
+3. **Entry-fill Telegram notification gating was unstated.** Whether the "entry filled" Telegram fires on callback success (fast, risk of false positive) or on LADS-confirmed fill (slow, accurate, consistent with the fill-evidence-only discipline) was not named explicitly in REQ-NOTIFY or REQ-ORDER.
+
+**Resolution (2026-04-18):**
+- No change to REQ-ORDER-015 / 015a / 015c. They are correct as written.
+- New `requirements-spec.md` requirement **REQ-ORDER-015e** added: explicit portal awaiting-confirmation state visible on chart page, positions summary, and the Phase 1 modal block; displays submission timestamp and most recent LADS poll timestamp so the worst-case wait is bounded and visible; uses "submitted to FYERS — awaiting fill confirmation from the next Live Account Data Scan" wording for the REQ-ORDER-005 block; clears on LADS-driven `PendingEntry → Open`, on partial-fill record, or on REQ-ORDER-015c `unresolved`/`orphan_ack` transition.
+- New `requirements-spec.md` requirement **REQ-ORDER-015f** added: "entry filled" and "entry partially filled" user notifications (Telegram and portal feed) are LADS-gated, never fired on the callback alone. Callback success produces a portal-only, feed-free confirmation banner. Fill-independent notifications (`unresolved`, `orphan_ack`, widget-timeout error, audit log) are unchanged.
+- `implementation-roadmap.md` Phase 7 build item 6 reworded with a **bold cross-reference** making the submission-vs-fill distinction impossible to miss at the roadmap layer. New build items added for REQ-ORDER-015e (awaiting-confirmation UX) and REQ-ORDER-015f (LADS-gated fill notifications).
+- Phase 7 contract test suite extended with three new cases (items 8, 9, 10): callback success does not advance position lifecycle; callback success produces no Telegram or feed entry; awaiting-fill modal block wording is enforced.
+- **Accelerated per-user LADS trigger on callback success was considered and rejected.** Consistent with the CG #1 decision that the platform is a swing/position-trading decision-support tool and sub-minute responsiveness is not a product requirement, the default 15-minute LADS cadence is retained. The 15-minute worst-case wait is now explicit and honest via REQ-ORDER-015e rather than papered over with an ad-hoc poll.
 
 ### 3. Worker Service single-instance constraint is not declared as a guardrail
 - **Where:** `docs/adr/0003-rme-per-position-event-serialisation.md` § Scale context and § Decision vs. `CLAUDE.md` Non-Negotiable Guardrails, `docs/system-architecture.md`, `docs/implementation-roadmap.md` Phase 0.
@@ -113,10 +130,11 @@
 - **Problem:** The channel serialises events on an existing position, not position creation. Two simultaneous entry signals from the same user/subscription can produce two PendingEntry documents, both valid.
 - **Fix:** Require a uniqueness check (symbol + user + signal_subscription + decision_window) at position create time; a second concurrent creation must be rejected.
 
-### 2. Post-callback, pre-LADS-reconciliation portal state
+### 2. Post-callback, pre-LADS-reconciliation portal state — **RESOLVED 2026-04-18**
 - **Where:** `docs/implementation-roadmap.md` Phase 7 build items 6 and 9.
-- **Problem:** After a `finished` callback with `status = success`, the user's portal sees `matched` intent but `PendingEntry` position. How long does the modal show "pending"? Can the user submit another order for the same symbol? Undefined.
-- **Fix:** Define a frontend lock keyed on `intent_ledger.id` that blocks the Phase 1 modal for that symbol until LADS confirms; add a visible "awaiting broker confirmation" UX.
+- **Problem (original):** After a `finished` callback with `status = success`, the user's portal sees `matched` intent but `PendingEntry` position. How long does the modal show "pending"? Can the user submit another order for the same symbol? Undefined.
+- **Fix (original):** Define a frontend lock keyed on `intent_ledger.id` that blocks the Phase 1 modal for that symbol until LADS confirms; add a visible "awaiting broker confirmation" UX.
+- **Resolution (2026-04-18):** Addressed as part of CG #2 resolution. REQ-ORDER-015e defines the awaiting-confirmation state on chart page, positions summary, and the Phase 1 modal block (reuses the existing REQ-ORDER-005 duplicate-in-flight guard with specialised wording). REQ-ORDER-015f defines the Telegram/feed gating. Roadmap Phase 7 build items and contract tests 8–10 cover the implementation.
 
 ### 3. Trading-calendar-change impact on existing `time_stop_date`
 - **Where:** `docs/requirements-spec.md` REQ-STOP-003; `docs/portfolio-risk-guidelines.md` § Stop Loss Types (Time Stop).

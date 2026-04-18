@@ -125,9 +125,11 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - provision the `intent_ledger` MongoDB collection per `docs/data-management.md` with the specified indexes (compound `{ user_id, status, created_at }`, unique `nonce`)
 - implement the pre-widget intent write (REQ-ORDER-014a) using the chosen capture strategy (capture-phase click handler or two-step confirm); exercise the choice in the contract test suite to prove no widget activation path bypasses the intent write
 - on Phase 1 confirm, pre-populate FYERS API Connect widget attributes from the signed payload and invoke the widget; FYERS-hosted pop-up handles auth, exchange checks, and final submission
-- register the global `finished` callback handler (REQ-ORDER-015): on success mark intent `matched` with `match_source = "callback"`, record `request_token` and order ID if returned, surface confirmation, write audit log entry; on failure mark intent `submission_failed`, surface FYERS error, write audit log entry; wrap the handler in a top-level exception boundary
+- register the global `finished` callback handler (REQ-ORDER-015): on success mark intent `matched` with `match_source = "callback"`, record `request_token` and order ID if returned, surface a portal-only "submitted to FYERS" confirmation banner (no Telegram, no feed entry — see REQ-ORDER-015f), write audit log entry; on failure mark intent `submission_failed`, surface FYERS error, write audit log entry; wrap the handler in a top-level exception boundary. **The callback writes only to `intent_ledger`; it must never advance the position lifecycle — `PendingEntry → Open` is driven exclusively by LADS-confirmed fill evidence per REQ-ORDER-015 and the build item below.**
 - extend LADS with the intent-reconciliation safety net (REQ-ORDER-015c): on every cycle match observed FYERS orders against `pending` intents; close callback-matched intents with `reconciled_at`; promote `pending → matched` with `match_source = "lads_reconciliation"` where callback never arrived; transition stale intents to `unresolved`; raise `orphan_ack` advisories for observed orders with no matching intent
-- queue RME state refresh on next portfolio sync following a confirmed fill (PendingEntry → Open is driven by LADS-confirmed fill evidence, not by the callback alone)
+- queue RME state refresh on next portfolio sync following a confirmed fill (PendingEntry → Open is driven by LADS-confirmed fill evidence, not by the callback alone — this is the single authoritative driver of the position lifecycle transition)
+- implement the awaiting-confirmation portal state (REQ-ORDER-015e) on the chart page, positions summary, and Phase 1 modal block: display submission timestamp, most recent LADS poll timestamp, and LADS-cycle-bounded wait context; clear on LADS-driven `PendingEntry → Open` or on the REQ-ORDER-015c `unresolved` / `orphan_ack` advisory replacing it
+- implement LADS-gated "entry filled" and "entry partially filled" user notifications (REQ-ORDER-015f): Telegram dispatch and portal feed entry fire on LADS-confirmed fill evidence only; callback success produces no Telegram and no feed entry
 - emit callback-reliability OpenTelemetry metrics (REQ-ORDER-015d) and wire the admin alert that fires when the LADS-only match ratio exceeds `orders.callback_failure_alert_ratio`
 
 **Contract test suite (run against the FYERS sandbox before release and on every detected SDK URL change):**
@@ -139,6 +141,9 @@ Ship in thin vertical slices that end in something a user or operator can valida
 5. an intentionally-thrown exception inside the callback handler does not prevent reconciliation from completing the intent
 6. `data-product = CNC` is accepted by the widget for a representative Nifty 500 symbol
 7. signed-payload nonce replay is refused; mutated `data-*` values between signing and click are refused
+8. a `finished` callback with a success status does not advance the corresponding position from `PendingEntry` to `Open`, and the position only transitions after the next LADS cycle observes the fill (REQ-ORDER-015 / REQ-ORDER-015e)
+9. a `finished` callback with a success status does not produce a Telegram entry-fill notification or a portal feed entry, and both are produced only on LADS-confirmed fill evidence (REQ-ORDER-015f)
+10. while the intent is `matched` but the position remains `PendingEntry`, the Phase 1 modal for the same symbol and action type is blocked with the awaiting-fill-confirmation wording defined in REQ-ORDER-015e
 
 ## Phase 8: Admin Operations and Hardening
 
