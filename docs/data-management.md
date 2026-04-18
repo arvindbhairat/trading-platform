@@ -26,6 +26,8 @@ All three tables share the same schema: `Date`, `Open`, `High`, `Low`, `Close`, 
 
 Rolling window candles (3-day, 5-day, 7-day) are not stored here; they are derived on demand from the `D_` table.
 
+**Per-symbol table lifecycle.** The three tables for a symbol are materialised by HistoricDataSeed at the moment the symbol joins the symbol master — either via a CSV upload add (REQ-UNIV-014) or a rename-reject resolution (REQ-UNIV-020(b)). Creation is idempotent and per-symbol-atomic (three-table transaction) per REQ-HIST-009a. Fleet-wide schema evolution — adding a column across every existing symbol's three tables, for example — is a separate admin-triggered batched migration governed by REQ-MIGRATION-004. Both paths must use the same shared DDL template so the schema of an existing symbol's tables and a newly-created symbol's tables cannot drift.
+
 Retention: no expiry. Historical data is append-only and must be available for backtesting regardless of age. Archived symbols continue to receive data while they remain in the Nifty 500 universe (see REQ-UNIV-008).
 
 ### Backtest Database

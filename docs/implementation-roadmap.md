@@ -47,7 +47,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - implement FYERS as the initial concrete MDP implementation
 - implement TrueData or Global Data Feeds as a second concrete MDP implementation (stub if not yet contracted)
 - add admin config for active MDP selection
-- build HistoricDataSeed job: operator-triggered, batched, resumable, fetches backward from current date
+- build HistoricDataSeed job: operator-triggered, batched, resumable, fetches backward from current date; implement scoped per-symbol table materialisation per REQ-HIST-009a (create `D_{suffix}`, `W_{suffix}`, `M_{suffix}` idempotently with `IF NOT EXISTS` semantics inside a per-symbol transaction before writing candles; shared DDL template keyed by timeframe prefix; each creation event logged to `job_runs`)
 - build post-market DataSync job: daily, fetches current day minus 10 sessions through current session as recovery buffer
 - build chart-data endpoints and live quote flows routing through provider abstraction
 - define SQL Server historical schema and sync patterns
