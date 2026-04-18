@@ -171,6 +171,10 @@ Use these initial categories:
   - maintenance-mode style toggles, non-secret operational controls
 - `integrations`
   - external API rate limits, back-off settings, retry policies, and timeout defaults for third-party providers such as FYERS and Telegram
+- `orders`
+  - user-initiated order flow thresholds: intent timeout for the reconciliation safety net, callback-reliability alert ratio, signed-payload nonce lifetime
+- `rme`
+  - Risk Management Engine runtime thresholds that are not position-sizing or stop-loss parameters: per-position channel backlog-depth warning thresholds and other RME operational telemetry limits
 - `legal`
   - versioned disclaimer and policy document pointers, user-acknowledgement version identifiers; non-secret values only, audited on change
 
@@ -243,6 +247,11 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `jobs.scan.max_parallel_strategies` | jobs | number | 5 | REQ-STRAT-013 |
 | `jobs.scan.abort_on_missing_success_marker` | jobs | boolean | true | REQ-MARKET-007 |
 | `jobs.live_market_scan.poll_interval_seconds` | jobs | number | 90 | REQ-STOP-006 |
+| `jobs.lmds.capacity_warn_pct` | jobs | number | 80 | REQ-SLO-011 |
+| `jobs.admin_token_check.daily_check_time` | jobs | string | `15:00` | REQ-NOTIFY-022 |
+| `jobs.ledger_lock.ttl_seconds` | jobs | number | 600 | REQ-PORT-031 |
+| `jobs.ledger_lock.renewal_interval_seconds` | jobs | number | 60 | REQ-PORT-031 |
+| `jobs.ledger_lock.skip_warn_threshold` | jobs | number | 3 | REQ-PORT-031 |
 | `market_data.halt.consecutive_stale_polls` | market_data | number | 3 | REQ-HALT-001 |
 | `market_data.halt.stale_symbol_pct` | market_data | number | 80 | REQ-HALT-001 |
 | `jobs.account_sync.intraday_interval_minutes` | jobs | number | 15 | REQ-PORT-019 |
@@ -273,6 +282,10 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `risk.equity_curve_sizing.lookback_sessions` | risk | number | 20 | REQ-DRDN-006 |
 | `risk.concentration.addon_block_heat_threshold_pct` | risk | number | 4 | REQ-HEAT-006 |
 | `risk.concentration.addon_block_sector_exposure_pct` | risk | number | 15 | REQ-HEAT-006 |
+| `risk.corporate_action.avg_cost_delta_threshold_pct` | risk | number | 50 | REQ-PORT-016 |
+| `risk.circuit_limit_stale_minutes` | risk | number | 15 | REQ-ORDER-018a |
+| `risk.equity_override_stale_days` | risk | number | 30 | REQ-RME-006c |
+| `rme.channel.backlog_warn_depth` | rme | number | 20 | REQ-RME-CONC-004 |
 | `position_sizing.default_risk_per_trade_pct` | position_sizing | number | 0.5 | REQ-SIZING-005 |
 | `position_sizing.max_risk_per_trade_pct` | position_sizing | number | 1.0 | REQ-SIZING-005 |
 | `position_sizing.zscore.default_timeframe` | position_sizing | string | `rolling_5d` | REQ-SIZING-007 |
@@ -292,6 +305,9 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `integrations.fyers.rate_limit.backoff_multiplier` | integrations | number | 2 | REQ-RATE-004 |
 | `integrations.fyers.widget_callback_timeout_seconds` | integrations | number | 10 | REQ-ORDER-017a |
 | `integrations.fyers.quote_delay_seconds` | integrations | number | 0 | REQ-STOP-006c |
+| `orders.intent_timeout_minutes` | orders | number | 10 | REQ-ORDER-015c |
+| `orders.callback_failure_alert_ratio` | orders | number | 0.10 | REQ-ORDER-015d |
+| `orders.payload_nonce_ttl_seconds` | orders | number | 300 | REQ-ORDER-009b |
 | `integrations.truedata.rate_limit.per_second` | integrations | number | 10 | REQ-RATE-009 |
 | `integrations.truedata.rate_limit.per_minute` | integrations | number | 200 | REQ-RATE-009 |
 | `integrations.truedata.rate_limit.per_day` | integrations | number | 100000 | REQ-RATE-009 |
@@ -305,6 +321,8 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `integrations.gdf.rate_limit.backoff_max_ms` | integrations | number | 60000 | REQ-RATE-009 |
 | `integrations.gdf.quote_delay_seconds` | integrations | number | 900 | REQ-STOP-006c |
 | `strategies.backtest.low_confidence_skip_threshold_pct` | strategies | number | 5 | REQ-STRAT-023 |
+| `strategies.backtest.survivorship_bias_discount_pct` | strategies | number | 15 | REQ-STRAT-011b |
+| `strategies.backtest.draft_expiry_days` | strategies | number | 7 | REQ-BTSTORE-009a |
 | `market_data.provider.active` | market_data | string | `fyers` | REQ-MKTPROV-005 |
 | `integrations.fyers.price_deviation_warning_pct` | integrations | number | 1 | REQ-ORDER-011 |
 | `risk.default.portfolio_heat_warning_threshold_pct` | risk | number | 4 | REQ-ORDER-012 |

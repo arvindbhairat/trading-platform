@@ -231,6 +231,22 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ---
 
+### `intent_ledger`
+
+**Purpose**: Per-user order intent records written synchronously at the moment a user triggers a FYERS API Connect branded button, before the FYERS widget activates. Each record is the platform's authoritative pre-submission view of what the user attempted to submit. Two downstream paths update the record: the widget `finished` callback (primary success path, REQ-ORDER-015) and the LADS reconciliation safety net (defence-in-depth, REQ-ORDER-015c). Supports idempotent callback handling, orphan-order detection, unresolved-intent advisories, and operational monitoring of widget callback reliability.
+
+**Required fields**: `user_id`, `position_id` (when the intent references an existing platform position), `signal_id` (when the intent originates from a platform signal advisory), `action` (`Entry` / `Add` / `Reduce` / `Exit`), `symbol`, `side` (`BUY` / `SELL`), `quantity`, `order_type`, `price`, `product` (always `CNC` per REQ-ORDER-010), `status` (`pending` / `matched` / `submission_failed` / `unresolved` / `orphan_ack`), `match_source` (`callback` / `lads_reconciliation` / null for non-terminal states), `request_token` (set on callback), `matched_broker_order_id` (set when the observed FYERS order ID is resolved, either from the callback payload if FYERS returns it there or from LADS reconciliation otherwise), `callback_received_at`, `reconciled_at`, `created_at`, `updated_at`, `nonce` (single-use server-issued nonce that bound the signed order payload per REQ-ORDER-009b; persisted to prevent nonce replay), `payload_signature` (HMAC signature of the signed order payload, retained for audit).
+
+**Indexes**: compound `{ user_id: 1, status: 1, created_at: -1 }` for LADS reconciliation queries per user; unique `{ nonce: 1 }` to enforce single-use nonces; TTL helper index on `created_at` for the archive/ttl mechanism described below.
+
+**Lifecycle**: Active for the full order-reconciliation window plus an audit retention window. `pending` records that do not reach a terminal state (`matched`, `submission_failed`, `unresolved`, `orphan_ack`) within `sys_config.orders.intent_timeout_minutes` are transitioned to `unresolved` by LADS, not deleted. Terminal records are retained for 12 months in the active tier for dispute resolution and callback-reliability analysis, then move to archive.
+
+**Mechanism**: Online Archive. Archive condition: `created_at` older than 12 months and `status` in a terminal state. Records still in `pending` status older than 12 months are anomalous and must not be archived — they are surfaced to admin for investigation via the normal operational alert path.
+
+**Default archive threshold**: 12 months.
+
+---
+
 ### `broker_orders`
 
 **Purpose**: Current and recent FYERS order records synced per user: order ID, symbol, side (BUY/SELL), product type, order type, quantity, filled quantity, status (pending, complete, cancelled, rejected), order timestamp, and last updated timestamp. Used by the chart page to display current active orders and by the reconciliation view to cross-reference platform-initiated orders against broker outcomes. This is a short-lived cache of broker state; the `trade_ledger` remains the accounting source of truth.
@@ -353,6 +369,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 | `positions` | Online Archive | Archive 12 months after close |
 | `rme_events` | Online Archive | Archive after 24 months |
 | `trade_ledger` | Online Archive | Archive after 36 months |
+| `intent_ledger` | Online Archive | Archive 12 months after terminal state |
 | `broker_orders` | TTL | Expire 30 days after last update |
 | `equity_curve` | Online Archive | Archive after 36 months |
 | `portfolio_snapshots` | No expiry (updated in place) | One record per user, permanent |

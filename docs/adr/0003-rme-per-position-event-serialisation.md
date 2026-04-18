@@ -12,7 +12,7 @@ The Risk Management Engine (RME) is event-driven. Multiple background workers ge
 
 | Event source | What it produces | RME action on position |
 |---|---|---|
-| Live Market Data Scan (LMDS) | Price breach detected (stop, add, reduce level) | Update advisory flags, transition state (Open → ExitPending via Suspended), write notification |
+| Live Market Data Scan (LMDS) | Price breach detected (stop, add, reduce level) | Update advisory flags on the Open position (set `exit advisory active`, `add advisory active`, or `reduce advisory active` per REQ-PLC-002 flag list); transition to `Suspended` only when a circuit/extreme-gap event warrants it; write notification |
 | Live Account Data Scan (LADS) | Confirmed trade fill detected | PendingEntry → Open, recalculate all levels; or update quantity/avg price after partial fill |
 | EOD Signal Runner (EODSR) | New entry signal for symbol with existing PendingEntry | Supersede old PendingEntry (→ Rejected), create new PendingEntry |
 | EOD stop-level update job | Trailing stop recalculation after session close | Update `trailing_stop_level` and `add_level` / `reduce_level` fields |
@@ -23,7 +23,7 @@ These event sources run in the same .NET Worker Service process but on independe
 
 The risk of uncontrolled concurrency on a position document:
 
-- **Data race on state transition:** LMDS fires `ExitPending` transition while LADS simultaneously processes a confirmed fill for the same position, leaving the position in an indeterminate intermediate state.
+- **Data race on state and flag updates:** LMDS sets an exit advisory flag (and in extreme cases transitions the position to `Suspended`) while LADS simultaneously processes a confirmed fill for the same position, leaving the position record with a coherent state field but incoherent advisory flags, quantity, and average entry price.
 - **Stale-read advisory computation:** A trailing stop update reads the position document at version N; a fill confirmation writes a new average entry price at the same moment; the trailing stop update overwrites it with a value computed from stale entry data.
 - **Duplicate notification writes:** Two concurrent breach evaluations emit two stop-breach notifications for the same event because neither has yet set the advisory flag before the other reads it.
 - **Lost update on advisory flags:** Two concurrent writers each read the same advisory-flag state, each compute their change independently, and each write back — the second write silently discards the first writer's change.
@@ -64,7 +64,7 @@ Add a `_version` (long, monotonic) field to every position document. All RME wri
 **Cons:**
 - Does not prevent two writers from computing their changes against stale state simultaneously — it only detects the conflict at write time. Under high contention, both writers may run expensive RME calculations before one is forced to retry.
 - Retry loops must be bounded; unbounded retries under persistent contention are a liveness hazard.
-- Does not guarantee ordering: if LADS and LMDS both produce events for the same position in the same second, the one that wins the write race does not necessarily correspond to the chronologically earlier event. For state machines with directional transitions (e.g., Open → ExitPending is irreversible), an out-of-order win can apply a later event before an earlier one, leaving the position in a logically inconsistent state.
+- Does not guarantee ordering: if LADS and LMDS both produce events for the same position in the same second, the one that wins the write race does not necessarily correspond to the chronologically earlier event. For state machines with directional transitions (e.g., Open → Suspended is irreversible within the RME — only an admin action can unsuspend), an out-of-order win can apply a later event before an earlier one, leaving the position in a logically inconsistent state.
 
 **Verdict:** Necessary as the universal write guard, but insufficient alone as the serialisation mechanism for state-machine transitions.
 
