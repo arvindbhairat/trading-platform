@@ -73,6 +73,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Never let timeframe logic diverge across charting, backtesting, and the EOD Signal Runner.
 - Never make startup-critical configuration depend only on MongoDB.
 - Never introduce secrets into source control, fixtures, or docs.
+- Never deploy the Worker Service as more than one running instance until the Phase C multi-instance partitioning extension in ADR-0003 is delivered and accepted in a new ADR. Azure App Service scale-out, auto-scale rules, and VM scale-sets must remain disabled for the Worker Service. Scale-out silently breaks the per-position channel invariant and causes concurrent writes on the same position document. The API service is unaffected and may scale horizontally.
 
 ## Working Style
 

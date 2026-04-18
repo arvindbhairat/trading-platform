@@ -342,6 +342,8 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `operations.universe.symbol_probe_batch_size` | operations | number | 50 | REQ-UNIV-021 |
 | `operations.universe.symbol_probe_flag_threshold_days` | operations | number | 2 | REQ-UNIV-021b |
 | `operations.impersonation.idle_timeout_minutes` | operations | number | 15 | REQ-ADMIN-015 |
+| `operations.worker.singleton_lease_ttl_seconds` | operations | number | 60 | REQ-RME-CONC-006 |
+| `rme.channel.backlog_warn_depth` | rme | number | 20 | REQ-RME-CONC-004 |
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 

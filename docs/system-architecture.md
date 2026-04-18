@@ -82,6 +82,32 @@ ASP.NET Core application responsible for:
 - FIFO and gross PnL are computed from internal ledger state
 - manual adjustments are explicit ledger-side corrections tied to a holding context, never silent rewrites of broker history
 
+## Deployment Topology
+
+The platform is hosted on Azure. The API service and the Worker Service have different deployment shapes because they have different concurrency semantics.
+
+### API service
+
+The API service is stateless and holds no per-user in-memory state that must be serialised. It may run on any number of App Service instances and Azure App Service auto-scale is permitted. All inter-instance coordination happens through MongoDB, SQL Server, and Redis.
+
+### Worker Service — single-instance invariant
+
+The Worker Service must run as exactly one instance at any time through Phase A and Phase B. This is load-bearing for RME correctness: ADR-0003 serialises all RME event processing through an in-process `PositionChannelRegistry` — a `ConcurrentDictionary<Guid, Channel<RmeEvent>>` keyed by position ID. A second Worker instance maintains its own channel registry, and events for the same position can then be processed concurrently on different instances. The outcome is silent and catastrophic: lost advisory-flag updates, incoherent state-plus-flag combinations, and duplicate notification writes. The defect cannot be detected by unit tests; it appears only under real market-hours load.
+
+REQ-RME-CONC-006 codifies this invariant as a formal requirement and specifies three enforcement layers.
+
+**Layer 1 — infrastructure as code.** The Worker's App Service plan Bicep or Terraform template sets `workerCount = 1` and declares no auto-scale rule. The deployment pipeline includes a preflight check that fails the release if the target plan's current instance count is not 1 or if any auto-scale rule is attached. This layer prevents accidental scale-out at deploy time.
+
+**Layer 2 — pipeline gate.** The Azure DevOps pipeline asserts the absence of auto-scale configuration against the Worker's App Service plan before releasing. A violation fails the build.
+
+**Layer 3 — runtime self-election.** At startup the Worker attempts to acquire a Redis-backed singleton lease keyed `rme:worker:singleton` with a TTL read from `sys_config.operations.worker.singleton_lease_ttl_seconds` (default 60 s), refreshing every 20 s. If a second Worker instance finds the lease held by another, it logs a `singleton_violation` structured error at Error level, writes a `position_concurrency_alert` admin advisory, and exits with a non-zero status code. App Service will restart the process, producing a visible crash-loop signal for operators rather than a hidden degraded state.
+
+If Redis is unreachable at Worker startup, the Worker proceeds to start — consistent with ADR-0003's stance that Redis is not a correctness dependency at runtime — but logs a `singleton_lease_unavailable` warning so the missing enforcement layer is observable. Redis is therefore a visibility dependency for this layer, not a correctness dependency.
+
+### Phase C exit path
+
+Scaling the Worker Service beyond one instance requires implementing the partitioning extension specified in ADR-0003 § Phase C Scaling Extension — Redis-backed partition claims, per-instance channel registries constrained to claimed positions, and heartbeat-driven redistribution on instance failure. A new ADR must document the Phase C partitioning design and approval before Layer 1 and Layer 2 IaC constraints are relaxed.
+
 ## Main Components
 
 ### Web Portal Layer
