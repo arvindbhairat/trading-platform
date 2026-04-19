@@ -57,7 +57,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ### `users`
 
-**Purpose**: User accounts, profile data, role assignments, approval state, and Telegram chat configuration.
+**Purpose**: User accounts, profile data, role assignments, approval state, and Telegram chat configuration. Each user document additionally carries `equity_base_override` and `equity_base_override_updated_at` per REQ-RME-006c, and a `ledger_snapshot_version` field (long integer, monotonically non-decreasing, initialised to 1 on user creation) per REQ-PORT-031a. The snapshot version is the sole coordination point for RME readers that require a consistent view of ledger-derived state per REQ-RME-006d; it is incremented atomically as the final durable step of every trade-ledger write covered by the REQ-PORT-031 lock.
 
 **Lifecycle**: Permanent. Records are deactivated (soft-delete with status flag), never hard-deleted.
 

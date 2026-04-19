@@ -360,6 +360,8 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `operations.impersonation.idle_timeout_minutes` | operations | number | 15 | REQ-ADMIN-015 |
 | `operations.worker.singleton_lease_ttl_seconds` | operations | number | 60 | REQ-RME-CONC-006 |
 | `rme.channel.backlog_warn_depth` | rme | number | 20 | REQ-RME-CONC-004 |
+| `rme.equity_read.snapshot_retry_max_attempts` | rme | number | 3 | REQ-RME-006d |
+| `rme.equity_read.snapshot_retry_backoff_ms` | rme | number | 50 | REQ-RME-006d |
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `platform.seed.version` | operations | string | *(seeded per deployment — release identifier written by the sys_config seeder, see REQ-CONFIG-011)* | REQ-CONFIG-010 |
