@@ -224,6 +224,22 @@ If `sys_config` is temporarily unavailable:
 - runtime features depending on `sys_config` should degrade safely
 - the platform should log the failure and use safe defaults where possible
 
+### Empty-database Boot Sequence
+
+*Canonical requirements: REQ-CONFIG-010 and REQ-CONFIG-011. See also REQ-ROLE-005.*
+
+On a first deploy the database is empty: no `sys_config` rows exist and no admin user record exists. The platform resolves this deterministically through an explicit pipeline-ordered sequence, not through side-effects of Worker or API startup:
+
+1. **Azure DevOps release pipeline — migrations and seeding step:** runs in this order and all must succeed before API/Worker activation:
+   1. FluentMigrator against the SQL Server market-data and backtest databases.
+   2. Mongo.Migration against MongoDB for schema-shape evolution.
+   3. The `sys_config` seeder console application (REQ-CONFIG-011): reads the manifest mirroring the Required Seed Table below, inserts missing rows only (never overwrites existing rows), resolves per-deployment keys from pipeline parameters, writes the `platform.seed.version` sentinel with the release identifier, and emits a structured report artefact.
+2. **Worker/API startup sentinel check:** both services read the `platform.seed.version` row on startup and fail fast with a clear error if it is absent. This turns a skipped seeder step into a loud, actionable failure instead of silent self-repair or a circular dependency on an unseeded `sys_config`.
+3. **Bootstrap admin creation (REQ-ROLE-005):** the admin user record is *not* pre-seeded. It is created lazily on the admin's first successful OAuth sign-in when the authenticated email matches the bootstrap `SEED_ADMIN_EMAIL`. Before that first sign-in, no approval flows can run (REQ-ROLE-004 blocks all protected features, so no non-admin users can generate approval requests), which is why no placeholder admin row is needed and why `sys_config` seeding is not gated on admin existence.
+4. **Upgrades:** every subsequent deployment re-runs the same pipeline. New manifest keys are inserted by the seeder; existing keys are left untouched so in-portal admin edits (REQ-CONFIG-005) survive redeploys. The sentinel row is upserted with the new release identifier on every run.
+
+Per-deployment keys — those flagged `*(seeded per deployment — see REQ-...)*` in the seed table — must be resolved from pipeline parameters for the target environment; the seeder fails the pipeline with the list of unresolved keys if any is missing, preventing a partial-seed deployment.
+
 ## Admin Management Rules
 
 The admin page should support:
@@ -346,6 +362,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `rme.channel.backlog_warn_depth` | rme | number | 20 | REQ-RME-CONC-004 |
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
+| `platform.seed.version` | operations | string | *(seeded per deployment — release identifier written by the sys_config seeder, see REQ-CONFIG-011)* | REQ-CONFIG-010 |
 
 ## Implementation Guidance
 

@@ -25,10 +25,13 @@ Ship in thin vertical slices that end in something a user or operator can valida
 
 - implement OAuth sign-in
 - create user, account, role, and approval models
-- implement seeded bootstrap admin behavior
+- implement seeded bootstrap admin behavior per REQ-ROLE-005: no pre-seeded admin user record — the admin user record is created lazily on the admin's first successful OAuth sign-in when the authenticated email matches `SEED_ADMIN_EMAIL`, with the admin role assigned in the same transaction
 - add FYERS credential management and token lifecycle handling
 - add dirty-token and re-auth-required UX
-- define and seed the `sys_config` collection schema and initial runtime keys
+- build the `sys_config` seeder console application per REQ-CONFIG-011: dedicated .NET console job that reads a source-controlled manifest mirroring the Required Seed Table in `docs/system-config.md`, inserts missing rows only (never overwrites), resolves per-deployment keys from pipeline parameters (fails fast with a list of unresolved keys), and upserts the `platform.seed.version` sentinel with the release identifier on every run; emits a structured report artefact for operator review
+- wire the Azure DevOps release pipeline to run migrations and seeding in the mandatory order defined by REQ-CONFIG-010: **FluentMigrator (SQL Server) → Mongo.Migration (MongoDB) → `sys_config` seeder → API/Worker activation**; all three migration/seed steps must succeed before API or Worker deployment slots are activated
+- add the sentinel-row startup check to the API and Worker services per REQ-CONFIG-010: on startup, read the `platform.seed.version` row from `sys_config` and fail fast with a clear error if absent — turns a missed seeder step into an actionable deployment failure rather than a silent circular dependency; neither service may self-seed `sys_config` from its startup path
+- define the `sys_config` collection schema (stable document shape per REQ-CONFIG-003) and commit the initial manifest backing the seeder; new requirements that introduce a `sys_config` key must add both the spec row and the manifest row in the same change per REQ-CONFIG-009
 - build admin management UI for shared runtime `sys_config` settings
 - build admin approval flows
 
