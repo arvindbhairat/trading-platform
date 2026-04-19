@@ -34,6 +34,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - define the `sys_config` collection schema (stable document shape per REQ-CONFIG-003) and commit the initial manifest backing the seeder; new requirements that introduce a `sys_config` key must add both the spec row and the manifest row in the same change per REQ-CONFIG-009
 - build admin management UI for shared runtime `sys_config` settings
 - build admin approval flows
+- execute the REQ-ORDER-010b CNC sandbox verification gate at the earliest point in Phase 1 at which a FYERS API Connect sandbox account is available (and the earliest subsequent phase otherwise): host a minimal `<fyers-button>` page with `data-product = CNC` for a representative Nifty 500 equity symbol and confirm the widget accepts the submission. Record the verified outcome as an ADR note. A passing result greenlights Phase 7 as planned; a failing result removes Phase 7 from V1 scope per REQ-ORDER-010a, promotes the fallback-wiring build items listed in Phase 6 into the active backlog, and moves platform-native execution assistance to REQ-NEXT-011 for post-V1 investigation.
 
 ## Phase 2: Universe and Market Data
 
@@ -111,11 +112,19 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - implement per-user and per-strategy enable and disable controls
 - build user dashboard: portfolio summary, XIRR, period performance (today, rolling 5/15/30 sessions, WTD, MTD), sector breakdown, positions summary with RME advisory state, and RME portfolio health strip
 
+**Conditional Phase 6 build items — activated only if REQ-ORDER-010b CNC verification fails and the REQ-ORDER-010a fallback is in effect:**
+
+- wire the FYERS-handoff UX into every surface that would otherwise have invoked the Phase 7 Phase 1 modal: chart page action buttons for Entry, Add, Reduce, and Exit; positions summary action controls; action affordances for externally-opened holdings per REQ-ORDER-019. Each action button must present the REQ-ORDER-017 / 017a handoff message ("execution must be completed in the FYERS app or web platform directly") together with a symbol-contextualised deep link to FYERS where feasible; no Phase 1 modal is opened and no `intent_ledger` record is written
+- ensure the RME advisory, Telegram notification, portfolio analytics, and dashboard flows remain functionally unchanged in fallback mode; the fallback only replaces the in-portal submission path
+- add a visible product-identity note on the chart page and dashboard clarifying that V1 ships without platform-native execution assistance per REQ-ORDER-010a, with execution assistance tracked as REQ-NEXT-011 for a future phase
+
 ## Phase 7: Execution Assistance
+
+**Entry condition:** Phase 7 is entered only if the REQ-ORDER-010b sandbox verification (scheduled in Phase 1) succeeded. If the verification failed, Phase 7 is skipped for V1 per REQ-ORDER-010a, the conditional Phase 6 fallback-wiring build items are delivered instead, and platform-native execution assistance is moved to REQ-NEXT-011.
 
 **Preconditions (must be confirmed against the FYERS sandbox before build starts):**
 
-- `CNC` is an accepted `<fyers-button>` `data-product` value for a representative Nifty 500 equity symbol (REQ-ORDER-010). If FYERS rejects `CNC` on the branded button, raise this as a blocker before any Phase 7 code is written — the platform's swing/position-trading semantics cannot be satisfied by `INTRADAY`.
+- `CNC` is an accepted `<fyers-button>` `data-product` value for a representative Nifty 500 equity symbol (REQ-ORDER-010). This has already been verified in Phase 1 per REQ-ORDER-010b; Phase 7 build proceeds only if that verification passed. The Phase 7 contract test suite re-exercises the check (test 6) as a regression gate against SDK revisions.
 - Exact `status` enum values for the `finished` callback and the payload shape of `request_token` (whether it is the order ID directly or must be exchanged for one).
 - Whether the SDK exposes a per-button correlation or tag attribute the platform can use to disambiguate multiple near-simultaneous orders from the same user.
 
