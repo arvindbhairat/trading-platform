@@ -311,6 +311,8 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `notifications.telegram.retry_backoff_seconds` | notifications | number | 30 | REQ-NOTIFY-008 |
 | `notifications.telegram.linking_token_expiry_minutes` | notifications | number | 15 | REQ-NOTIFY-016 |
 | `notifications.telegram.dirty_link_failure_threshold` | notifications | number | 10 | REQ-NOTIFY-019 |
+| `notifications.telegram.rotation_days` | notifications | number | 90 | REQ-NOTIFY-022a (bot token rotation cadence; admin prompted to rotate when token age exceeds this threshold) |
+| `notifications.telegram.global_disable` | notifications | boolean | false | REQ-NOTIFY-022a (break-glass flag — when true the Notification Delivery Job skips all Telegram dispatch for all users; requires step-up re-auth to change) |
 | `ui.chart.default_timeframe` | ui | string | `daily` | REQ-TIMEFRAME-001 |
 | `ui.session.expiry_warning_minutes` | ui | number | 30 | REQ-SESSION-007 |
 | `integrations.fyers.rate_limit.per_second` | integrations | number | 10 | REQ-RATE-003 |
@@ -324,6 +326,9 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `orders.intent_timeout_minutes` | orders | number | 10 | REQ-ORDER-015c |
 | `orders.callback_failure_alert_ratio` | orders | number | 0.10 | REQ-ORDER-015d |
 | `orders.payload_nonce_ttl_seconds` | orders | number | 300 | REQ-ORDER-009b |
+| `orders.cnc_probe_schedule` | orders | string | `never` | REQ-ORDER-010c (CNC sandbox probe re-run schedule; `never` means manual-only re-probe; a cron expression such as `0 9 * * 1` schedules automatic re-probing) |
+| `orders.execution_assistance_mode` | orders | string | `widget` | REQ-ORDER-010c (current execution-assistance mode — `widget` or `advisory_only`; written only by probe execution, not directly editable via admin UI) |
+| `orders.execution_assistance_mode_updated_at` | orders | string | *(seeded per deployment)* | REQ-ORDER-010c (UTC timestamp of the most recent execution-assistance mode transition; written by probe execution path) |
 | `integrations.truedata.rate_limit.per_second` | integrations | number | 10 | REQ-RATE-009 |
 | `integrations.truedata.rate_limit.per_minute` | integrations | number | 200 | REQ-RATE-009 |
 | `integrations.truedata.rate_limit.per_day` | integrations | number | 100000 | REQ-RATE-009 |
