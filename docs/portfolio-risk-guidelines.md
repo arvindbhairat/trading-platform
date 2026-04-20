@@ -203,9 +203,13 @@ When multiple exit conditions are triggered simultaneously, the following priori
 - Reduce at configured profit targets, when trend weakens per the strategy signal, when volatility increases beyond a threshold, when portfolio heat breaches the maximum, or after a configured time period.
 - Reduce the weakest positions first when a portfolio-level reduction is advised.
 
+### Stop Propagation Across Pyramid Tranches
+
+A new tranche never lowers the effective stop of the combined position. When a pyramid tranche is added, the RME recalculates the combined stop using the updated average entry price and ATR. If the recalculated stop is lower than the highest individual tranche stop currently in effect, the highest existing stop is used as the floor. This rule prevents the common error of inadvertently widening the risk exposure of a winning position by adding at a higher average price that produces a mathematically lower combined stop.
+
 ### After Each Add or Reduce
 
-Recalculate immediately: average entry price, active stop level, current R multiple, and portfolio heat contribution.
+Recalculate immediately: average entry price, active stop level (subject to the never-lower floor above), current R multiple, and portfolio heat contribution.
 
 ## Position Lifecycle States
 

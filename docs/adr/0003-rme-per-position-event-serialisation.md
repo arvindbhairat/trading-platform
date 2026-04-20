@@ -174,7 +174,15 @@ Redis distributed locking (Option B) is **not adopted** as the primary mechanism
 - Each active position (PendingEntry or Open state) has exactly one bounded `Channel<RmeEvent>` in the registry with a configurable capacity (default 50 events; bounded-wait on overflow so producers block rather than drop).
 - All RME event producers call `registry.Enqueue(positionId, rmeEvent)`. They never call the RME processor directly.
 - One `Task` per active position runs a `while await channel.Reader.ReadAsync()` loop, processing events sequentially. This task is started when the channel is created and cancelled when the position closes.
-- **Ordering guarantee:** events for the same position are processed in the order they were enqueued. Cross-position events have no ordering guarantee and need none.
+- **Ordering guarantee:** events for the same position are processed in the order they were enqueued (FIFO). Cross-position events have no ordering guarantee and need none.
+
+#### EOD Stop-Update Event Carve-Out
+
+The FIFO ordering guarantee is correct and sufficient for LMDS tick events, LADS fill events, and EODSR signals. However, the EOD stop-level update job (`TrailingStopUpdateEvent`) presents a priority concern: under a gap-open scenario at market open, LMDS ticks and LADS fills may be enqueued on a position's channel simultaneously with a queued stop-update event from the prior EOD. Processing the stale stop-update **after** a live LMDS tick could overwrite a stop level that the tick computation already advanced.
+
+**Rule:** The EOD stop-update job (`TrailingStopUpdateEvent`) must **not** be routed through the per-position Channel. Instead, the stop-update job applies its recalculation **synchronously** to the position snapshot it reads before the LMDS and LADS pollers start for the new session. The job acquires no separate lock; it relies on the OCC write guard (Layer 2) to detect any concurrent modification. This synchronous application guarantees that by the time the first LMDS tick for the new session is enqueued, the stop level already reflects the prior session's close. No stop-update event type needs to be enqueued to the channel; the `TrailingStopUpdateEvent` record type exists for audit-log purposes only — the channel consumer must reject any `TrailingStopUpdateEvent` that arrives on the channel and log it as an error.
+
+This carve-out must be documented in the EOD job implementation notes in `docs/system-architecture.md` (Worker Service schedule section) so implementers do not inadvertently route stop-updates through the channel.
 - **Channel lifecycle:**
   - Created: when a new PendingEntry position is created (on entry signal) or when the worker restarts and loads active positions from MongoDB.
   - Destroyed: when the position transitions to Closed or Rejected (terminal states). The channel is completed (no new items accepted) and the consumer task drains any remaining events before terminating.
@@ -191,6 +199,15 @@ Every RME write uses a MongoDB filter of the form:
 with `UpdateResult.MatchedCount` checked after the update. If `MatchedCount == 0`, the write was rejected because another writer (in a crash-recovery scenario or a future multi-instance deployment) modified the document concurrently. The processor re-reads the document and retries the RME computation from fresh state.
 
 Maximum retry attempts: 3. After 3 consecutive OCC failures on the same position event, the event is logged as an error, an incident record is written to `rme_incidents` (not `rme_events` — `rme_events` is the immutable event-sourced audit log; `rme_incidents` is the operator-actionable flag collection for records that drive admin-UI alerts and require human resolution) with `incident_type: concurrency_conflict_unresolved` and the full event context, and a `position_concurrency_alert` admin notification is written.
+
+**OCC retry ceiling and retry_reason observability:** The 3-retry ceiling is sufficient for isolated contention (single-writer crash-recovery) but may be exhausted legitimately under a pyramiding user with several open tranches during a fast tick when LADS fills and LMDS price events arrive simultaneously. To distinguish genuine data-race conflicts from retry-exhaustion under normal pyramiding load, every `rme_incidents` record written on OCC exhaustion must include a `retry_reason` field with one of the following values:
+
+| `retry_reason` value | Meaning |
+|---|---|
+| `concurrent_writer_conflict` | Version mismatch caused by a concurrent writer (crash-recovery or future multi-instance path) |
+| `normal_load_exhaustion` | Version mismatch caused by rapid sequential writes on the same position (e.g., LADS fill + LMDS tick within the same retry window) — the channel-based serialisation should prevent this in steady state; its presence in an incident indicates either a channel bypass or an unexpectedly slow consumer |
+
+The admin System Health widget must surface incidents by `retry_reason` so operators can distinguish systemic concurrency bugs from throughput issues that may call for channel capacity tuning rather than code fixes.
 
 The OCC mechanism ensures correctness even if the channel-based serialisation is bypassed (e.g., in crash-recovery code paths that write directly without going through the channel).
 
