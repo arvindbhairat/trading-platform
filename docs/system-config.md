@@ -370,6 +370,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `config.last_known_good.max_age_seconds` | operations | number | 86400 | ADR-0002 (App Config startup-failure policy) — bootstrap-tier only; resolved from LKG cache or env vars, not MongoDB |
+| `config.last_known_good.staleness_alert_threshold_seconds` | operations | number | 21600 | ADR-0002 (LKG staleness alert — when `config.source.last_reached_seconds` exceeds this threshold, fire an admin System Health banner and a one-time Telegram+email admin notification; must be strictly less than `config.last_known_good.max_age_seconds`) |
 | `session.fyers.lease_ttl_seconds` | operations | number | 1800 | REQ-SESSION-014 |
 | `integrations.fyers.rate_limit.reset_boundary` | integrations | string | `utc_midnight` | REQ-RATE-012 (budget projection reset boundary; override per provider) |
 | `dashboard.portfolio_snapshot.ttl_seconds` | dashboard | number | 900 | REQ-DASH-018 |

@@ -50,6 +50,14 @@ Azure App Configuration is a startup dependency for both the API service and the
 
 **OTEL metric name**: `config.source.last_reached_seconds` — a gauge emitted by each service instance at startup and refreshed on each config read cycle. Zero means App Configuration was reached on the last attempt. Positive values indicate seconds since the last successful reach. A value above the LKG max-age threshold is an operational alert signal.
 
+**LKG staleness alert threshold:** The `config.source.last_reached_seconds` gauge alone is insufficient for proactive operations visibility — the LKG cache may keep services running for up to 24 hours with no alert if App Config is unreachable. The following alerting layer is therefore required:
+
+- A `config.last_known_good.staleness_alert_threshold_seconds` key must be seeded in `sys_config` (default 21600 — 6 hours). When any service instance's `config.source.last_reached_seconds` gauge exceeds this threshold on a refresh cycle, the platform must:
+  1. Display a persistent non-dismissible banner in the admin System Health widget stating that Azure App Configuration has not been reached for more than the threshold duration, naming the service instance and the elapsed time.
+  2. Emit a one-time `config.app_config_unreachable_threshold_exceeded` admin notification delivered via both Telegram and email. A repeat notification must not be emitted until the service successfully reaches App Config again and then loses contact a second time (edge-triggered, not level-triggered).
+- The threshold must be strictly less than `config.last_known_good.max_age_seconds` (default 86400). A deployment that seeds a threshold ≥ the max-age is misconfigured; the Worker and API services must log a Warning on startup if this condition is detected.
+- This threshold is a `sys_config` Tier 3 key (admin-managed runtime setting) and does not need to be bootstrap-available. Its absence or a MongoDB read failure must be treated as equivalent to the default (21600 s); the alert machinery must degrade safely rather than failing the service.
+
 **Required sys_config seed key**: `config.last_known_good.max_age_seconds` (default 86400, type integer). This key is bootstrap-tier only — it must be seeded from the LKG cache or environment variables, not read from MongoDB, since MongoDB may also be unavailable at startup.
 
 ## Consequences

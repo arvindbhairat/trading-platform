@@ -497,6 +497,55 @@ Phase 7 selects one strategy and documents the choice here. Either strategy must
 
 **Precondition failure path.** The Phase 7 architecture described above is load-bearing on the CNC-on-`<fyers-button>` precondition confirmed in REQ-ORDER-010b. If that sandbox verification fails, the entire branded-button integration surface is not built for V1 and the platform operates in the REQ-ORDER-010a fallback configuration: every surface that would have invoked the Phase 1 platform modal plus the Phase 2 FYERS widget instead presents the REQ-ORDER-017 / 017a handoff UX (clear message plus a symbol-contextualised FYERS deep link). Two architectural constraints remain absolute in the fallback: the platform backend still must not call the FYERS order-placement REST API directly (REQ-ORDER-006) — a REST bypass is not an alternative to the widget — and `INTRADAY` product type must not be substituted for `CNC` (REQ-ORDER-010) because INTRADAY's EOD auto-square semantic is incompatible with the Signal framework's swing and position trades. Platform-native execution assistance is moved to REQ-NEXT-011 for post-V1 investigation of alternative non-REST, non-widget paths such as a FYERS-hosted deep-link order ticket. The branded-button contract section above applies only to the V1-with-Phase-7 configuration; all other sections of this document (RME, lifecycle, notifications, analytics, LADS, LMDS) apply identically in both configurations because the fallback only replaces the in-portal submission path.
 
+## Worker Service Schedule
+
+The Worker Service hosts multiple components that run on different cadences. Their cohabitation within the single Worker process is governed by the following schedule. All times are IST (UTC+5:30) and refer to NSE trading days per the internal trading calendar.
+
+### Pre-session setup (before 09:15 IST on trading days)
+
+The EOD trailing-stop update job runs **synchronously before the LMDS and LADS pollers start** for the new session. This is the ADR-0003 carve-out: `TrailingStopUpdateEvent` is not routed through the per-position Channel — the job applies its recalculation directly to each position document under OCC write guard, guaranteeing that the first LMDS tick of the new session evaluates against an already-updated stop level. The channel consumer must reject any `TrailingStopUpdateEvent` that arrives on the channel and log it as an error.
+
+The Symbol Validity Probe runs once per trading day, triggered by the first successful admin FYERS token generation of the day. It does not block LMDS or LADS startup.
+
+### Market hours (09:15–15:30 IST, Mon–Fri, trading days only)
+
+| Component | Cadence | Notes |
+|---|---|---|
+| Live Market Data Scan (LMDS) | Continuous; polls at `jobs.live_market_scan.poll_interval_seconds` (default 90 s) | Shared admin token; evaluates stop, add, and reduce levels for all open positions across all users |
+| Live Account Data Scan (LADS) | `jobs.account_sync.intraday_interval_minutes` (default 15 min) | Per-user FYERS token; fetches orders, trades, positions, holdings |
+| Notification Delivery Job | Continuous; polls for pending notification records on a short interval | Sole dispatcher for Telegram delivery; runs throughout the full trading day and beyond |
+| Intent reconciliation (part of LADS) | Every LADS cycle | Matches `intent_ledger` pending records against observed FYERS orders; transitions stale intents to `unresolved` |
+
+LMDS and LADS run simultaneously during market hours. Their poll cycles can overlap; ADR-0003 guarantees that overlapping events for the same position are serialised through the per-position Channel before reaching the RME processor.
+
+### Post-market EOD pipeline (after 15:30 IST)
+
+The EOD pipeline runs in strict sequence. Each step is a precondition for the next.
+
+1. **LMDS stops** at market close.
+2. **LADS runs one final sync cycle** after market close to capture any fills or position changes from the closing auction, then stops for the day.
+3. **DataSync (DS)** runs post-market. The default trigger time is 17:00 IST (configurable via `REQ-CALENDAR-004`). DS fetches the current day's OHLCV bars and writes them to SQL Server. On completion it writes a session success marker.
+4. **EOD Signal Runner (EODSR)** starts only if the DS session success marker exists. EODSR evaluates active, non-excluded universe members against each live Signal Subscription and writes entry signals to MongoDB.
+5. **RME profile optimisation runs** (if scheduled) begin after EODSR completes. These are non-blocking relative to the next session's setup.
+6. **Notification Delivery Job** continues running through EOD and delivers any EODSR-generated signal notifications via Telegram.
+
+**LADS and LMDS must not run during the DataSync and EODSR window.** The EOD pipeline assumes a clean read of the day's final OHLCV data; concurrent intraday polling is not meaningful after market close and would consume shared provider quota.
+
+### Weekends and holidays (non-trading days)
+
+LMDS and LADS are inactive. The Notification Delivery Job continues running to deliver any pending records. DataSync, EODSR, and scheduled RME profile optimisation runs do not execute. Admin-triggered operations (HistoricDataSeed, Universe Sync, manual sys_config changes) are available at any time.
+
+### Serialisation rules within the pipeline
+
+- EOD stop-update job → then LMDS/LADS start (strict pre-session ordering per ADR-0003)
+- DataSync success marker → EODSR start (strict pipeline gate per REQ-MARKET-007)
+- EODSR → RME profile optimisation runs (sequential, not concurrent)
+- Notification Delivery Job runs throughout with no sequencing dependency on the above
+
+The Worker Service must never run LMDS or LADS concurrently with the DataSync or EODSR steps on the same trading day.
+
+---
+
 ## Cross-Cutting Concerns
 
 - auditable admin actions
