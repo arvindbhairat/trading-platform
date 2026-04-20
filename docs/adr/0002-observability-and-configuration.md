@@ -60,6 +60,23 @@ Azure App Configuration is a startup dependency for both the API service and the
 
 **Required sys_config seed key**: `config.last_known_good.max_age_seconds` (default 86400, type integer). This key is bootstrap-tier only — it must be seeded from the LKG cache or environment variables, not read from MongoDB, since MongoDB may also be unavailable at startup.
 
+## OTLP collector saturation policy (tick-spike budget)
+
+During a 50× tick spike (e.g., a gap-open with simultaneous LMDS ticks, LADS fills, and RME events across many positions), the OTLP collector may receive telemetry faster than its downstream ingest endpoint can accept. The following policy is binding:
+
+**Saturation handling — local disk buffer:**
+- The OTLP collector must be configured with a local disk buffer as the first line of defence when downstream ingest is saturated.
+- The buffer must be bounded to a maximum size of **256 MB** on the collector host. This bound is configurable via the collector configuration file (not `sys_config`).
+- The collector must emit an `otel.collector.buffer_spill_total` counter (cumulative) each time a telemetry batch is discarded because the disk buffer ceiling has been reached. This counter is the primary signal that signal fidelity has been compromised during a spike.
+- The admin System Health widget (REQ-ADMIN-014) must surface a non-dismissible warning banner when `otel.collector.buffer_spill_total` has incremented since the last page load, naming the affected collector instance and the incremental spill count.
+- An `otel.collector.buffer_fill_ratio` gauge (0.0–1.0) must also be emitted on each flush cycle. A value at or above **0.8** (80% buffer fill) triggers a one-time `otel.collector.buffer_near_capacity` admin notification via Telegram+email (edge-triggered — fires once on first breach per fill/drain cycle, not on every flush).
+
+**Priority under saturation:**
+- Under sustained saturation, the collector must prioritise metrics and structured error/warning logs over trace spans. Span sampling may be reduced automatically to protect metric and log throughput. This is a collector-tier policy; applications must not implement their own sampling strategy.
+
+**Consequence for engineering:**
+- Applications must not assume 100% telemetry delivery under spike conditions. Alerting rules that depend on the *absence* of a metric (e.g., "no heartbeat for 60 s") must account for the possibility of collector buffer saturation as a benign explanation. Such rules should require absence of the metric *and* absence of an active `otel.collector.buffer_near_capacity` alert before firing a severity-1 incident.
+
 ## Consequences
 
 Positive:

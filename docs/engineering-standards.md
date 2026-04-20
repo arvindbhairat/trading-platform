@@ -25,6 +25,7 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 ## Data Standards
 
 - store timestamps in UTC
+- use IST (Asia/Kolkata, UTC+05:30) as the canonical trading time zone for all scheduling, display, time-stop evaluation, and NSE trading-calendar logic; all components that consume time (EODSR, LMDS, LADS, the Timeframe/Calendar Layer, and the RME) must agree on this zone; stored timestamps are always UTC — conversion to IST happens at the presentation or scheduling layer only
 - use immutable audit and event records for critical actions
 - use explicit enums or status models instead of free-form state strings
 - avoid hard deletes for sensitive operational records when archival semantics are safer
@@ -83,6 +84,7 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 ### Coverage targets
 
 - unit test coverage minimum 70% for the .NET solution measured by line coverage; minimum 60% for the TypeScript portal codebase
+- **RME coverage exception**: the Risk Management Engine (RME) codebase is carved out of the general .NET 70% target and must independently reach a minimum of **95% line coverage** by unit tests; in addition, the RME must meet a dedicated contract-test floor of at least one contract test per documented state-transition (PendingEntry → Open → Suspended → Closed/Rejected and all sub-paths) and per OCC scenario (clean commit, single-retry success, 3-retry exhaustion/freeze); both the 95% unit-test target and the contract-test floor gate Phase 6 acceptance per REQ-NFR-014
 - integration tests must cover every critical workflow end-to-end: OAuth signup, FYERS authentication, Signal Subscription creation and pause/resume, EOD Signal Runner full pass against a seeded universe, RME profile evaluation, order placement Phase 1 modal through to Phase 2 callback handling, account reconciliation, manual adjustment, and admin operations including kill-switch activation
 - end-to-end tests must exercise at least the critical user journeys end-to-end through a real browser harness (Playwright or equivalent)
 - regression tests are mandatory for any defect found in auth, sessions, FYERS integration, market data ingestion, RME, portfolio accounting, permissions, reconciliation, or notification delivery — the regression test must accompany the fix in the same pull request
@@ -96,7 +98,21 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 
 ### Performance and resilience
 
-- a load test must be executed and recorded before the Phase B transition: simulate the Phase A approved-user ceiling at peak concurrent activity (dashboard load, chart navigation, intraday sync, LMDS active) and verify all SLO targets in the requirements spec hold; load-test results gate the Phase B transition per REQ-LEGAL-005 indirectly through REQ-NFR-014
+- a load test must be executed and recorded before the Phase B transition: simulate the Phase A approved-user ceiling (20 concurrent users) at peak concurrent activity (dashboard load, chart navigation, intraday sync, LMDS active) and verify all SLO targets in the table below hold; load-test results gate the Phase B transition per REQ-LEGAL-005 indirectly through REQ-NFR-014
+
+#### Load-test SLO targets (Phase B gate)
+
+All targets are p95 measured under 20 simultaneous active users with LMDS running. Measurements must be taken against a production-equivalent environment (Azure-hosted, real MongoDB + SQL Server, Redis active).
+
+| Surface | Endpoint / operation | p95 target |
+|---|---|---|
+| Dashboard page load | `GET /api/dashboard` (full portfolio snapshot) | ≤ 500 ms |
+| Positions list | `GET /api/positions` (all non-terminal positions) | ≤ 300 ms |
+| Signal advisory | `GET /api/signals/{symbol}` (chart + signal overlay data) | ≤ 200 ms |
+| RME event processing | Time from event enqueue to durable risk-state commit (Channel drain) | ≤ 2 s |
+| WebSocket push | Time from LMDS tick receipt to client WebSocket frame delivery | ≤ 1 s |
+
+Any target miss must be documented as a finding in `audit_events` with scope, p95 measured value, and remediation action before the Phase B transition is unblocked.
 - chaos and failure-injection exercises must be performed and recorded before the Phase C transition: simulate provider outages, MongoDB primary failover, Key Vault transient failures, and FYERS rate-limit responses; the platform must degrade gracefully in each scenario per REQ-NFR-003
 - both load tests and chaos exercises must be recorded in `audit_events` with scope, outcome, and remediation tracking
 
@@ -128,6 +144,19 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 - every incident-prone area should have a runbook or troubleshooting note
 - keep Azure DevOps pipelines reproducible and environment-specific
 - keep Azure secrets and environment configuration out of repository code
+
+### Data Recovery Targets (RTO / RPO)
+
+Recovery targets are differentiated by datastore role and time-of-day. "Market hours" is defined as 09:00–15:30 IST on NSE trading days per the internal trading calendar.
+
+| Datastore | Window | RPO (max data loss) | RTO (max downtime) |
+|---|---|---|---|
+| MongoDB (positions, intent ledger, rme_incidents, trade ledger) | Market hours | ≤ 1 minute | ≤ 15 minutes |
+| MongoDB (positions, intent ledger, rme_incidents, trade ledger) | Off-hours / weekends | ≤ 4 hours | ≤ 1 hour |
+| SQL Server (historical OHLCV) | Any | ≤ 24 hours | ≤ 4 hours |
+| Redis (session cache, singleton lease, throttle state) | Any | No durability requirement — Redis is a rebuildable cache; loss is operationally recoverable | ≤ 15 minutes |
+
+These targets define the Azure backup and geo-replication configuration minimums. The MongoDB market-hours targets require continuous backup or change-stream-based replication to a secondary; a daily snapshot alone is insufficient. SQL Server historical data is fully rebuildable from the MDP via HDS and DS, so a daily Azure Backup snapshot is sufficient. Recovery exercises validating these targets must be included in the Phase C chaos exercises.
 
 ## Documentation Standards
 
