@@ -132,6 +132,18 @@ These calls do not draw from the shared admin pool. Each user has their own 100,
 
 **Both are comfortably inside the per-user limit** at Phase A densities and remain so into Phase C unless any single user opens charts at pathological frequency.
 
+## Budget Projection Method and Reset Boundary
+
+REQ-RATE-012 requires the admin portal to project whether a proposed sys_config change will breach the 80% daily budget threshold. The projection uses the following method:
+
+**Projection = (calls already consumed today) + (projected calls for remainder of day at new settings)**
+
+- "Already consumed today" is read from the rate-management telemetry store, keyed by the current UTC calendar day.
+- "Remainder of day at new settings" is computed from the new config values applied against the remaining market-hours window in the current UTC day.
+- The reset boundary is **UTC midnight** — the daily call counter resets at 00:00 UTC. This is not the same as IST market close (approximately 10:30 UTC) or the FYERS vendor reset time (to be verified and recorded here when confirmed against FYERS documentation). The UTC midnight reset boundary is recorded in `sys_config` under the key `integrations.fyers.rate_limit.reset_boundary` (default `utc_midnight`). Future provider adapters that reset at a different boundary (e.g., IST midnight, IST market open) must override this key so the projection math uses the correct window.
+
+This projection method avoids penalising mid-session saves for consumption that has already occurred and cannot be undone, which a "full day at new settings" projection would do incorrectly.
+
 ## Review Triggers
 
 This document must be reviewed and, if needed, revised when any of the following happens:

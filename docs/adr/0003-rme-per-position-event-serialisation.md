@@ -190,7 +190,7 @@ Every RME write uses a MongoDB filter of the form:
 ```
 with `UpdateResult.MatchedCount` checked after the update. If `MatchedCount == 0`, the write was rejected because another writer (in a crash-recovery scenario or a future multi-instance deployment) modified the document concurrently. The processor re-reads the document and retries the RME computation from fresh state.
 
-Maximum retry attempts: 3. After 3 consecutive OCC failures on the same position event, the event is logged as an error, the position is flagged for admin review in `rme_events` with reason `concurrency_conflict_unresolved`, and a `position_concurrency_alert` admin notification is written.
+Maximum retry attempts: 3. After 3 consecutive OCC failures on the same position event, the event is logged as an error, an incident record is written to `rme_incidents` (not `rme_events` — `rme_events` is the immutable event-sourced audit log; `rme_incidents` is the operator-actionable flag collection for records that drive admin-UI alerts and require human resolution) with `incident_type: concurrency_conflict_unresolved` and the full event context, and a `position_concurrency_alert` admin notification is written.
 
 The OCC mechanism ensures correctness even if the channel-based serialisation is bypassed (e.g., in crash-recovery code paths that write directly without going through the channel).
 
@@ -252,7 +252,7 @@ The following requirements must be added to `docs/requirements-spec.md` in the R
 
 1. **REQ-RME-CONC-001** — All RME event processing for a given position must be serialised through a per-position in-process channel queue in the Worker Service. No event producer may invoke RME business logic directly; all producers must enqueue an `RmeEvent` record to the position's channel. The channel registry must be initialised from MongoDB at worker startup and must create one channel per non-terminal position.
 
-2. **REQ-RME-CONC-002** — Every position document in MongoDB must carry a `_version` field (long integer, starting at 1, incremented on every write). Every RME write must use an OCC filter including the expected version. If the filter matches zero documents, the processor must re-read the current document and retry the computation up to 3 times. A 4th consecutive failure must log an error, flag the position in `rme_events` with reason `concurrency_conflict_unresolved`, write an admin-only notification, and cease further retry for that event.
+2. **REQ-RME-CONC-002** — Every position document in MongoDB must carry a `_version` field (long integer, starting at 1, incremented on every write). Every RME write must use an OCC filter including the expected version. If the filter matches zero documents, the processor must re-read the current document and retry the computation up to 3 times. A 4th consecutive failure must log an error, write an incident record to `rme_incidents` with `incident_type: concurrency_conflict_unresolved` (not to `rme_events` — `rme_events` is the immutable audit log; `rme_incidents` is the operator-actionable incident collection), write an admin-only notification, and cease further retry for that event.
 
 3. **REQ-RME-CONC-003** — The RME event processor must be implemented as a pure function over `(PositionDocument, RmeEvent) → (UpdatedPositionDocument, IReadOnlyList<RmeOutput>)`. The function must have no side effects other than returning its output list. All writes to MongoDB, `rme_events`, and `notifications` are performed by the channel consumer loop after receiving the output list, not inside the pure function.
 

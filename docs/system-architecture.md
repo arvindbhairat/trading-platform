@@ -146,6 +146,9 @@ All three of the above provider concerns — shared MDP ingestion, Portal Live D
 **Provider-selection note — FYERS is a testing/evaluation choice only**
 FYERS was selected as the initial market data provider because its APIs are free of cost during the testing and evaluation phase. The platform is designed to migrate to a commercial third-party data provider (TrueData, Global Data Feeds, or equivalent) ahead of broader rollout. The Market Data Provider abstraction exists precisely to isolate FYERS-specific quirks — rate-limit accounting semantics, daily admin token renewal, bulk-quote batch sizes, per-second pacing — so migration is a configuration and adapter change, not a domain-code change. Reviewers and implementers encountering FYERS-specific assumptions in backend code should treat them as adapter-layer concerns, not platform-level facts. This mirrors REQ-MARKET-002c.
 
+**MDP failure mode — asymmetric degradation on shared-ingestion token loss (REQ-MARKET-016)**
+When the admin FYERS token (the shared-ingestion credential used by LMDS and DataSync) is unavailable or fails to refresh, the platform enters an asymmetric degraded state. Components that rely on the *shared-ingestion token* — LMDS, DataSync, and EODSR — suspend. Components that rely on *individual user tokens* — LADS, Portal Live Data (PLD), user chart quotes, RME exit advisories, and the Notification Delivery Job — continue unaffected. The practical effect: users can see their own live prices, view charts, and initiate exits; but inbound entry-signal generation and shared stop-level monitoring are suspended until the admin re-establishes the shared token. This asymmetry is by design — it preserves user visibility into their positions during a common operational event (admin missed daily token renewal) without silently disabling the entire platform. An admin dashboard banner and a one-time Telegram admin alert fire on first token failure. See REQ-MARKET-016 for the full behavioural specification.
+
 ### Configuration Layer
 
 Resolves configuration from:
@@ -172,6 +175,7 @@ Provides one shared implementation for:
 - rolling 3-day, 5-day, and 7-day bars
 - trading-session-aware boundaries
 - calendar-aware scheduling
+- post-calendar-edit `time_stop_date` recompute: when the admin saves a calendar change (REQ-CALENDAR-002), a post-commit background job immediately recomputes `time_stop_date` for all non-terminal positions carrying a Time Stop, applies a roll-forward rule for dates that land on newly-introduced holidays, writes per-position audit entries, and emits a single admin summary notification. This job runs inside the Worker Service and is triggered by the API endpoint that saves calendar edits; the API endpoint enqueues a typed event to the Worker rather than running the recompute inline in the HTTP handler, so the HTTP response is not delayed by the recompute. See REQ-STOP-003a.
 
 ### Signal Layer
 

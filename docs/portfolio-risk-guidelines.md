@@ -106,7 +106,7 @@ The RME must track account drawdown from the equity high-water mark and apply gr
 | 5% | Reduce recommended new position size proportionally |
 | 10% | Suspend add-on entry recommendations |
 | 15% | Surface advisory to reduce all open positions |
-| 20% | Block new trade signal recommendations |
+| 20% | Block new entries and surface mandatory exit advisory for all open positions |
 | 25% | Surface advisory to close weakest open positions |
 | 30% | Surface advisory to stop all trading |
 
@@ -181,11 +181,12 @@ When multiple exit conditions are triggered simultaneously, the following priori
 2. Hard stop loss
 3. Trailing stop
 4. Portfolio risk reduction (heat limit)
-5. Drawdown control exit
-6. Time stop
-7. Strategy exit signal
-8. Rebalancing exit
-9. Profit target exit
+5. Time stop
+6. Strategy exit signal
+7. Rebalancing exit
+8. Profit target exit
+
+**Note on drawdown thresholds and Exit Priority:** Drawdown response thresholds (see § Drawdown Response Thresholds table above) are graduated advisory responses, not lifecycle-terminating exit signals — even the ≥ 30% "stop all trading" row surfaces an advisory rather than autonomously closing positions. Consequently, "Drawdown control exit" does not appear in this priority list. The RME treats the ≥ 20% threshold row as "block new entries and surface a mandatory exit advisory," which is the most directive drawdown response the RME can emit without violating the platform's non-autonomous-execution guardrail (REQ-BOUNDARY-004). If the platform's drawdown semantics change so that any threshold triggers an automatic lifecycle transition, this list must be updated and the change recorded in an ADR, because it affects the RME's public state-machine semantics.
 
 ## Pyramiding and Scaling Rules
 

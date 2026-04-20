@@ -211,13 +211,29 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ### `rme_events`
 
-**Purpose**: Immutable event log for all RME state transitions: position ID, event type (stop adjustment, add level trigger, reduce level trigger, drawdown state change, exit advisory, etc.), triggering price or market event, resulting state, and timestamp.
+**Purpose**: Immutable audit log for all RME state transitions: position ID, event type (stop adjustment, add level trigger, reduce level trigger, drawdown state change, exit advisory, etc.), triggering price or market event, resulting state, and timestamp. This collection is strictly event-sourced — it holds ordered, time-series records of what happened and why. It must never be used to hold operator-action flags, concurrency incidents, or admin-actionable state; those records belong in `rme_incidents` (see below). TTL policy and query patterns depend on this semantic boundary being respected.
 
 **Lifecycle**: Active for 24 months (covers the active trading history window). Older events move to archive tier.
 
 **Mechanism**: Online Archive. Archive condition: `event_at` older than 24 months.
 
 **Default archive threshold**: 24 months.
+
+---
+
+### `rme_incidents`
+
+**Purpose**: Operator-actionable incident records generated when the RME encounters a state that requires human intervention: OCC retry exhaustion (`concurrency_conflict_unresolved`), corporate-action suspension (`corporate_action_suspension`), and analogous flag-class records that drive admin-UI alerts and incident-resolution workflows. This collection is intentionally separate from `rme_events` because it carries different retention, query, and operational-alert semantics: incident records are mutable (they are resolved or acknowledged by the admin), queryable from the admin incident dashboard, and retained only until resolved plus a short audit window — unlike the immutable, append-only `rme_events` log.
+
+**Required fields**: `position_id`, `user_id`, `incident_type` (enum: `concurrency_conflict_unresolved`, `corporate_action_suspension`, etc.), `severity` (enum: `warning`, `error`), `detail` (structured object — event context, retry count, last conflicting version, etc.), `status` (enum: `open`, `acknowledged`, `resolved`), `created_at`, `updated_at`, `resolved_at` (null until resolved), `resolved_by` (admin user ID, null until resolved).
+
+**Indexes**: compound `{ status: 1, created_at: -1 }` for admin dashboard queries; `{ position_id: 1, incident_type: 1, status: 1 }` for position-scoped lookups; TTL index on `resolved_at` (sparse) for expiring resolved incidents after the audit window.
+
+**Lifecycle**: Open incidents are retained indefinitely until resolved. Resolved incidents are retained for 6 months for post-mortem and audit, then expired.
+
+**Mechanism**: TTL index on `resolved_at` (sparse, so only resolved documents are considered). Expire resolved documents 6 months after `resolved_at`.
+
+**Default archive threshold**: 6 months post-resolution (TTL, not Online Archive — resolved incidents are not valuable cold-tier data).
 
 ---
 
@@ -370,6 +386,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 | `notification_bots` | No expiry | Permanent |
 | `positions` | Online Archive | Archive 12 months after close |
 | `rme_events` | Online Archive | Archive after 24 months |
+| `rme_incidents` | TTL (sparse on `resolved_at`) | Expire 6 months after resolution |
 | `trade_ledger` | Online Archive | Archive after 36 months |
 | `intent_ledger` | Online Archive | Archive 12 months after terminal state |
 | `broker_orders` | TTL | Expire 30 days after last update |

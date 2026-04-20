@@ -53,13 +53,21 @@ Rationale:
 
 **Calibration required before Phase 5 implementation:**
 
+**Owner:** Platform Engineering Lead (or the developer responsible for the portfolio analytics phase). The calibration deliverable is a personal responsibility of this role; it may not be deferred to a later phase or to a third party without the explicit sign-off of the project lead.
+
+**Sample window:** NSE corporate actions over a 24-month period from 2022-01-01 to 2023-12-31 (or the most recent 24 calendar months available at the time calibration begins). The sample must be sourced from NSE's official corporate actions data on nseindia.com, filtered to Nifty 500 constituents during the sample window. This is a concrete, reproducible dataset, not a forward-looking or estimated sample.
+
+**Deliverable:** A calibration note committed to `docs/adr/0004-calibration-note-YYYYMMDD.md` (where YYYYMMDD is the date the calibration analysis was completed). The note must record: the sample source and date range used; the action types analysed and their count; the threshold value recommended by the analysis; the false-positive and false-negative estimates at that value; and the recommended updated `sys_config` seed value for `risk.corporate_action.avg_cost_delta_threshold_pct`. If the analysis confirms 50% is the optimal default, the note must state that explicitly.
+
+**Phase 5 entry precondition:** Phase 5 (portfolio analytics) implementation must not begin until the calibration note is committed to `docs/adr/` and its `docs/implementation-roadmap.md` entry is updated to reflect the calibrated threshold. This is a hard gate — not a "nice to have" — because the threshold governs which positions enter `SuspendedForCorporateAction` (EC-3) and incorrect thresholds produce either missed suspensions or unnecessary suspensions on live user positions.
+
 Before the corporate action detection code is written, the implementer must:
 
-1. Obtain a sample of NSE corporate actions from the past 3 years for Nifty 500 constituents (available from NSE's corporate actions data on nseindia.com or a commercial data provider).
+1. Obtain a sample of NSE corporate actions from the past 24 months for Nifty 500 constituents per the sample window above.
 2. For each action, compute the expected cost-per-unit delta if FYERS's reported holding value reflects the post-action price and the FIFO ledger reflects the pre-action average buy.
 3. Determine: (a) at what threshold all 2:1 splits and 1:1 bonuses are reliably caught; (b) whether 3:2 bonus issues are material enough in Nifty 500 to warrant lowering the threshold; (c) the false-positive rate at various threshold values given historical Nifty 500 daily price moves.
 4. Update the `sys_config` seed value in `docs/system-config.md` with the calibrated threshold.
-5. Update this ADR status to **Accepted** and record the calibrated value, the sample used, and the resulting false-positive and false-negative estimates.
+5. Commit the calibration note and update this ADR status to **Accepted**, recording the calibrated value, the sample used, and the resulting false-positive and false-negative estimates.
 
 ---
 

@@ -364,6 +364,12 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `rme.equity_read.snapshot_retry_backoff_ms` | rme | number | 50 | REQ-RME-006d |
 | `notifications.email.sender_domain` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
 | `notifications.email.sender_address` | notifications | string | *(seeded per deployment — see REQ-NOTIFY-020)* | REQ-NOTIFY-020 |
+| `config.last_known_good.max_age_seconds` | operations | number | 86400 | ADR-0002 (App Config startup-failure policy) — bootstrap-tier only; resolved from LKG cache or env vars, not MongoDB |
+| `session.fyers.lease_ttl_seconds` | operations | number | 1800 | REQ-SESSION-014 |
+| `integrations.fyers.rate_limit.reset_boundary` | integrations | string | `utc_midnight` | REQ-RATE-012 (budget projection reset boundary; override per provider) |
+| `dashboard.portfolio_snapshot.ttl_seconds` | dashboard | number | 900 | REQ-DASH-018 |
+| `eodsr.db_retry.max_seconds` | operations | number | 120 | REQ-STRAT-027 |
+| `orders.widget_timeout_seconds` | operations | number | 120 | REQ-ORDER-018b |
 | `platform.seed.version` | operations | string | *(seeded per deployment — release identifier written by the sys_config seeder, see REQ-CONFIG-011)* | REQ-CONFIG-010 |
 
 ## Implementation Guidance
