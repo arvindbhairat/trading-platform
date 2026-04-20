@@ -265,6 +265,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `jobs.live_market_scan.poll_interval_seconds` | jobs | number | 90 | REQ-STOP-006 |
 | `jobs.lmds.capacity_warn_pct` | jobs | number | 80 | REQ-SLO-011 |
 | `jobs.admin_token_check.daily_check_time` | jobs | string | `15:00` | REQ-NOTIFY-022 |
+| `jobs.admin_token_check.pre_market_check_time` | jobs | string | `08:30` | REQ-NOTIFY-022b (pre-market admin FYERS token validity check; runs before LMDS starts to catch missing daily tokens before they cause silent intraday data ingestion failures) |
 | `jobs.ledger_lock.ttl_seconds` | jobs | number | 600 | REQ-PORT-031 |
 | `jobs.ledger_lock.renewal_interval_seconds` | jobs | number | 60 | REQ-PORT-031 |
 | `jobs.ledger_lock.skip_warn_threshold` | jobs | number | 3 | REQ-PORT-031 |
@@ -327,6 +328,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `orders.callback_failure_alert_ratio` | orders | number | 0.10 | REQ-ORDER-015d |
 | `orders.payload_nonce_ttl_seconds` | orders | number | 300 | REQ-ORDER-009b |
 | `orders.cnc_probe_schedule` | orders | string | `never` | REQ-ORDER-010c (CNC sandbox probe re-run schedule; `never` means manual-only re-probe; a cron expression such as `0 9 * * 1` schedules automatic re-probing) |
+| `orders.intent.hmac_key_name` | orders | string | `orders-intent-hmac-key` | REQ-ORDER-009b (Key Vault secret name for the intent payload HMAC signing key; stores the secret NAME only — the key material itself is never in sys_config; used by the API to look up the correct Key Vault secret for intent signing and rotation) |
 | `orders.execution_assistance_mode` | orders | string | `widget` | REQ-ORDER-010c (current execution-assistance mode — `widget` or `advisory_only`; written only by probe execution, not directly editable via admin UI) |
 | `orders.execution_assistance_mode_updated_at` | orders | string | *(seeded per deployment)* | REQ-ORDER-010c (UTC timestamp of the most recent execution-assistance mode transition; written by probe execution path) |
 | `integrations.truedata.rate_limit.per_second` | integrations | number | 10 | REQ-RATE-009 |
