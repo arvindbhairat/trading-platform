@@ -19,7 +19,7 @@ The platform combines charting, backtesting, live scans, portfolio analytics, ad
 - user-initiated execution assistance only; no autonomous order placement (V1 delivery of in-portal execution assistance is conditional on the FYERS CNC sandbox verification defined in REQ-ORDER-010b; if that verification fails, REQ-ORDER-010a applies and V1 ships advisory-only with a deep-link handoff to the FYERS app or web platform, while the "no autonomous order placement" stance remains absolute in every configuration)
 - FYERS for broker and market-data integration
 - MongoDB for live and user data, SQL Server for shared historical data
-- Azure-hosted delivery with Azure DevOps
+- Azure-hosted delivery with GitHub (GitHub Actions for CI/CD)
 
 ## Primary Users
 

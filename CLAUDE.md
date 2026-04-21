@@ -57,7 +57,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Shared technical configuration: Azure App Configuration
 - Secrets: environment variables and Azure Key Vault
 - Admin-managed runtime settings: MongoDB `sys_config`
-- Source control and CI/CD: Azure DevOps
+- Source control and CI/CD: GitHub + GitHub Actions
 - Hosting: Azure
 
 ## Non-Negotiable Guardrails

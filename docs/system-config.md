@@ -230,7 +230,7 @@ If `sys_config` is temporarily unavailable:
 
 On a first deploy the database is empty: no `sys_config` rows exist and no admin user record exists. The platform resolves this deterministically through an explicit pipeline-ordered sequence, not through side-effects of Worker or API startup:
 
-1. **Azure DevOps release pipeline — migrations and seeding step:** runs in this order and all must succeed before API/Worker activation:
+1. **GitHub Actions deployment workflow — migrations and seeding step:** runs in this order and all must succeed before API/Worker activation:
    1. FluentMigrator against the SQL Server market-data and backtest databases.
    2. Mongo.Migration against MongoDB for schema-shape evolution.
    3. The `sys_config` seeder console application (REQ-CONFIG-011): reads the manifest mirroring the Required Seed Table below, inserts missing rows only (never overwrites existing rows), resolves per-deployment keys from pipeline parameters, writes the `platform.seed.version` sentinel with the release identifier, and emits a structured report artefact.

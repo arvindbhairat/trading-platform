@@ -144,7 +144,7 @@ Any target miss must be documented as a finding in `audit_events` with scope, p9
 - every external integration must have timeouts and retry rules
 - every deployment must preserve migration safety
 - every incident-prone area should have a runbook or troubleshooting note
-- keep Azure DevOps pipelines reproducible and environment-specific
+- keep GitHub Actions workflows reproducible and environment-specific
 - keep Azure secrets and environment configuration out of repository code
 
 ### Data Recovery Targets (RTO / RPO)

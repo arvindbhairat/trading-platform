@@ -62,7 +62,8 @@ Each task in this plan is:
 - **Depends on**: P0-T1
 - **Expected outcomes**:
   - Repo structure matches `docs/repo-structure.md` intent (`apps/web`, `apps/api`, `apps/worker`, `packages/*`, `infra/*`)
-  - Local build/test entrypoints exist for each app (even if minimal)
+  - Local build/test entrypoints exist for each app (even if minimal), including baseline lint/format commands where applicable
+  - Minimal CI scaffolding exists in GitHub Actions (build/test on PR and main) even if deployments are not yet wired
 
 #### P1-T2 (v0.2)
 - **Title**: Local dev environment: containers and bootstrap docs

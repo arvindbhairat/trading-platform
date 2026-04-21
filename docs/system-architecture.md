@@ -98,7 +98,7 @@ REQ-RME-CONC-006 codifies this invariant as a formal requirement and specifies t
 
 **Layer 1 — infrastructure as code.** The Worker's App Service plan Bicep or Terraform template sets `workerCount = 1` and declares no auto-scale rule. The deployment pipeline includes a preflight check that fails the release if the target plan's current instance count is not 1 or if any auto-scale rule is attached. This layer prevents accidental scale-out at deploy time.
 
-**Layer 2 — pipeline gate.** The Azure DevOps pipeline asserts the absence of auto-scale configuration against the Worker's App Service plan before releasing. A violation fails the build.
+**Layer 2 — pipeline gate.** The GitHub Actions deployment workflow asserts the absence of auto-scale configuration against the Worker's App Service plan before releasing. A violation fails the build.
 
 **Layer 3 — runtime self-election.** At startup the Worker attempts to acquire a Redis-backed singleton lease keyed `rme:worker:singleton` with a TTL read from `sys_config.operations.worker.singleton_lease_ttl_seconds` (default 60 s), refreshing every 20 s. If a second Worker instance finds the lease held by another, it logs a `singleton_violation` structured error at Error level, writes a `position_concurrency_alert` admin advisory, and exits with a non-zero status code. App Service will restart the process, producing a visible crash-loop signal for operators rather than a hidden degraded state.
 
