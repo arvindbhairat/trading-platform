@@ -364,6 +364,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `operations.universe.symbol_probe_enabled` | operations | boolean | true | REQ-UNIV-021 |
 | `operations.universe.symbol_probe_batch_size` | operations | number | 50 | REQ-UNIV-021 |
 | `operations.universe.symbol_probe_flag_threshold_days` | operations | number | 2 | REQ-UNIV-021b |
+| `operations.universe.gap_repair_threshold_sessions` | operations | number | 10 | REQ-MARKET-017 (symbols whose most-recent candle lags the latest session by more than this count are highlighted as requiring explicit gap-repair rather than standard 10-session auto-recovery) |
 | `operations.impersonation.idle_timeout_minutes` | operations | number | 15 | REQ-ADMIN-015 |
 | `operations.worker.singleton_lease_ttl_seconds` | operations | number | 60 | REQ-RME-CONC-006 |
 | `rme.channel.backlog_warn_depth` | rme | number | 20 | REQ-RME-CONC-004 |
@@ -378,6 +379,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `dashboard.portfolio_snapshot.ttl_seconds` | dashboard | number | 900 | REQ-DASH-018 |
 | `eodsr.db_retry.max_seconds` | operations | number | 120 | REQ-STRAT-027 |
 | `orders.widget_timeout_seconds` | operations | number | 120 | REQ-ORDER-018b |
+| `operations.bte_rme_parity.enabled` | operations | boolean | true | REQ-NFR-017 (controls whether the nightly BTE-vs-RME parity check pipeline runs; set to false for incident response only — disabling fires an admin notification and must be recorded in audit_events) |
 | `platform.seed.version` | operations | string | *(seeded per deployment — release identifier written by the sys_config seeder, see REQ-CONFIG-011)* | REQ-CONFIG-010 |
 
 ## Implementation Guidance
