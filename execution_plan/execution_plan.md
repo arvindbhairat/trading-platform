@@ -43,6 +43,16 @@ Each task in this plan is:
 - **Done when**:
   - All required files exist and `status.json` lists all remaining tasks in `pending_tasks`
 
+#### P0-T2 (v0.1)
+- **Title**: Add single-line continuation runbook for agents
+- **Depends on**: P0-T1
+- **Steps / outputs**:
+  - Add `execution_plan/agent.md` with deterministic “resume-next-task” procedure
+  - Add root `RUNBOOK.md` as a stable pointer to `execution_plan/agent.md`
+  - Ensure conventions align with “execute exactly one task per run” and “update status + task log”
+- **Done when**:
+  - An agent can be instructed with a single line (“Continue using `execution_plan/agent.md`” or “Continue using `RUNBOOK.md`”) and deterministically resumes from `status.json`
+
 ---
 
 ### Phase P1 — Platform Phase 0: Foundation (v0.2)

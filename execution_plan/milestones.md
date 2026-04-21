@@ -4,7 +4,7 @@ Versions are **delivery checkpoints**. A version is “shippable” when its acc
 
 ## v0.1 — Versioned Execution Plan System
 
-- **Included tasks**: P0-T1
+- **Included tasks**: P0-T1, P0-T2
 - **Acceptance criteria**:
   - `execution_plan/` exists with:
     - `execution_plan.md`
@@ -14,6 +14,7 @@ Versions are **delivery checkpoints**. A version is “shippable” when its acc
     - `task_logs/` directory
   - `status.json` lists every task as either completed or pending (no missing tasks)
   - An agent can deterministically identify the next task using `status.json`
+  - An agent can resume work using a single pointer document (`execution_plan/agent.md` or root `RUNBOOK.md`)
 
 ## v0.2 — Platform Foundation Slice
 

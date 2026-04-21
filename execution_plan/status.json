@@ -2,7 +2,8 @@
   "current_phase": "P1",
   "current_task_id": "P1-T1",
   "completed_tasks": [
-    "P0-T1"
+    "P0-T1",
+    "P0-T2"
   ],
   "pending_tasks": [
     "P1-T1",
@@ -60,6 +61,6 @@
     "P9-T4"
   ],
   "current_version": "v0.2",
-  "last_updated": "2026-04-21T00:00:00Z"
+  "last_updated": "2026-04-21T00:00:01Z"
 }
 
