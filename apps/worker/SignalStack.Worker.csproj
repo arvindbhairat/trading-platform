@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <AssemblyName>SignalStack.Worker</AssemblyName>
+    <RootNamespace>SignalStack.Worker</RootNamespace>
+  </PropertyGroup>
+</Project>
+

@@ -1,0 +1,20 @@
+{
+  "name": "signalstack",
+  "private": true,
+  "version": "0.2.0",
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "web:dev": "npm --workspace @signalstack/web run dev",
+    "web:build": "npm --workspace @signalstack/web run build",
+    "web:lint": "npm --workspace @signalstack/web run lint",
+    "api:run": "dotnet run --project apps/api/SignalStack.Api.csproj",
+    "api:test": "dotnet test SignalStack.sln",
+    "worker:run": "dotnet run --project apps/worker/SignalStack.Worker.csproj",
+    "dotnet:build": "dotnet build SignalStack.sln -c Release",
+    "dotnet:test": "dotnet test SignalStack.sln -c Release"
+  }
+}
+
