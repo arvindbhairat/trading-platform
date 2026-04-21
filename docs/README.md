@@ -28,6 +28,8 @@ Business and product requirements must live in one canonical reference file so t
   - MongoDB collection catalog: purpose, retention mechanism (TTL or Online Archive), active windows, and database setup checklist
 - [repo-structure.md](./repo-structure.md)
   - preferred monorepo layout
+- [project-structure.md](./project-structure.md)
+  - practical map of the workspace folders and where to add code
 - [adr/0001-documentation-structure.md](./adr/0001-documentation-structure.md)
   - decision log entry for this documentation structure
 - [adr/0002-observability-and-configuration.md](./adr/0002-observability-and-configuration.md)
