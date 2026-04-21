@@ -821,10 +821,10 @@ All requirement IDs follow the format `REQ-{DOMAIN}-{NNN}` with three-digit sequ
 - `REQ-RECON-002` When reconciliation is needed, recovery must follow a defined order: first, a user-triggered refresh or resync from FYERS; second, extended backfill or resync for a selected historical period if that is insufficient; third, an audited manual adjustment only when broker sync cannot fully restore accuracy.
 - `REQ-RECON-003` The platform must not silently edit historical trade-ledger records; manual corrections must be recorded as explicit adjustment entries with audit trail.
 - `REQ-RECON-004` Manual adjustment entries must be recorded against the affected holding or position context in MongoDB.
-- `REQ-RECON-005` The holdings page must show a warning indicator when broker-reported quantity and platform-computed quantity do not match, including the quantity difference as `+/- units`.
-- `REQ-RECON-006` The holdings page must let the user create an explicit adjustment for the mismatched holding.
-- `REQ-RECON-007` After a manual adjustment is applied, the holding must remain visibly flagged as adjusted for audit and review purposes.
-- `REQ-RECON-008` If a later sync still leaves the holding quantity mismatched after adjustment, the warning indicator must appear again and prompt the user for further review or another adjustment.
+- `REQ-RECON-005` **[Phase B]** The holdings page must show a warning indicator when broker-reported quantity and platform-computed quantity do not match, including the quantity difference as `+/- units`.
+- `REQ-RECON-006` **[Phase B]** The holdings page must let the user create an explicit adjustment for the mismatched holding.
+- `REQ-RECON-007` **[Phase B]** After a manual adjustment is applied, the holding must remain visibly flagged as adjusted for audit and review purposes.
+- `REQ-RECON-008` **[Phase B]** If a later sync still leaves the holding quantity mismatched after adjustment, the warning indicator must appear again and prompt the user for further review or another adjustment.
 
 ---
 

@@ -49,7 +49,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - implement internal trading calendar and admin management screens
 - implement Market Data Provider (MDP) abstraction layer with common interface
 - implement FYERS as the initial concrete MDP implementation
-- implement TrueData or Global Data Feeds as a second concrete MDP implementation (stub if not yet contracted)
+- define the MDP interface completely so a second concrete adapter can be added without any domain-code changes; **Phase A ships the FYERS adapter only** — authoring a TrueData or Global Data Feeds adapter (even as a stub) is explicitly a non-goal for Phase A; the second adapter is a Phase B deliverable triggered by the MDP migration decision per ADR-0005
 - add admin config for active MDP selection
 - build HistoricDataSeed job: operator-triggered, batched, resumable, fetches backward from current date; implement scoped per-symbol table materialisation per REQ-HIST-009a (create `D_{suffix}`, `W_{suffix}`, `M_{suffix}` idempotently with `IF NOT EXISTS` semantics inside a per-symbol transaction before writing candles; shared DDL template keyed by timeframe prefix; each creation event logged to `job_runs`)
 - build post-market DataSync job: daily, fetches current day minus 10 sessions through current session as recovery buffer
@@ -83,8 +83,8 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - sync trades, holdings, positions, and orders from FYERS
 - build immutable trade ledger
 - support first-time backfill and incremental sync
-- add reconciliation and mismatch detection
-- support audited manual adjustments tied to holdings
+- add reconciliation and mismatch detection (REQ-RECON-001..004 only): auto-sync failure handling, defined recovery order, no-silent-edit rule, and MongoDB adjustment-entry recording; **Phase A does not build the holdings-page warning indicators, user-initiated adjustment creation, adjusted-flag persistence, or re-sync re-prompting** — those UI-facing requirements (REQ-RECON-005..008) are Phase B deliverables deferred to avoid over-investment at private-validation scale
+- support audited manual adjustments tied to holdings (audit trail and MongoDB recording per REQ-RECON-003..004; the user-facing adjustment-creation flow per REQ-RECON-006 is Phase B)
 - deliver holdings, PnL, and reconciliation views
 
 ## Phase 6: Risk Management Engine
