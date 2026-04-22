@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Logo</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@800&display=swap');
+body { margin:0; padding: 20px; background: #151110; color: #f4ede2; font-family: 'Manrope', sans-serif; display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
+.row { display: flex; gap: 32px; align-items: center; padding: 24px 28px; border-radius: 12px; border: 1px solid #2a2521; background: #1d1917; }
+.row.light { background: #f4ede2; color: #0e0b08; border-color: #c4bdb0; }
+.lockup { display: flex; gap: 14px; align-items: center; }
+.lockup .word { font-weight: 800; font-size: 26px; letter-spacing: -0.03em; }
+.amber { color: #e4a030; }
+.tile { width: 56px; height: 56px; border-radius: 13px; background: linear-gradient(135deg, #e4a030, #b66f15); display: flex; align-items: center; justify-content: center; }
+.tile svg { width: 40px; height: 40px; color: #f4ede2; }
+.mono svg { width: 40px; height: 40px; }
+.label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8278; margin-top: 6px; }
+.stack { display: flex; flex-direction: column; align-items: center; }
+</style></head><body>
+<div class="row">
+  <div class="stack"><div class="lockup mono amber">
+    <svg viewBox="0 0 40 40"><rect x="6" y="24" width="6" height="10" rx="1.5" fill="currentColor" opacity=".45"/><rect x="14" y="18" width="6" height="16" rx="1.5" fill="currentColor" opacity=".65"/><rect x="22" y="12" width="6" height="22" rx="1.5" fill="currentColor" opacity=".85"/><rect x="30" y="6" width="6" height="28" rx="1.5" fill="currentColor"/><circle cx="33" cy="6" r="2.6" fill="currentColor"/><circle cx="33" cy="6" r="1.2" fill="#151110"/></svg>
+    <span class="word" style="color:#f4ede2;">Signal Stack</span>
+  </div><div class="label">Primary · dark</div></div>
+  <div class="stack"><div class="tile"><svg viewBox="0 0 40 40"><rect x="6" y="24" width="6" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="14" y="18" width="6" height="16" rx="1.5" fill="currentColor" opacity=".75"/><rect x="22" y="12" width="6" height="22" rx="1.5" fill="currentColor" opacity=".9"/><rect x="30" y="6" width="6" height="28" rx="1.5" fill="currentColor"/><circle cx="33" cy="6" r="2.6" fill="currentColor"/><circle cx="33" cy="6" r="1.2" fill="#0e0b08"/></svg></div><div class="label">App icon</div></div>
+</div>
+<div class="row light">
+  <div class="stack"><div class="lockup mono" style="color:#0e0b08;">
+    <svg viewBox="0 0 40 40"><rect x="6" y="24" width="6" height="10" rx="1.5" fill="currentColor" opacity=".45"/><rect x="14" y="18" width="6" height="16" rx="1.5" fill="currentColor" opacity=".65"/><rect x="22" y="12" width="6" height="22" rx="1.5" fill="currentColor" opacity=".85"/><rect x="30" y="6" width="6" height="28" rx="1.5" fill="currentColor"/><circle cx="33" cy="6" r="2.6" fill="currentColor"/><circle cx="33" cy="6" r="1.2" fill="#f4ede2"/></svg>
+    <span class="word">Signal Stack</span>
+  </div><div class="label" style="color:#5c554d">Primary · light</div></div>
+</div>
+</body></html>

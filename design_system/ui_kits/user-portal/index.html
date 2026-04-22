@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signal Stack · User Portal</title>
+<style>
+/* =============================================================
+   Signal Stack — Colors & Type
+   Dark-first trading platform. Warm-white (2700–3000K) surfaces.
+   =============================================================
+   Philosophy:
+   - Serious, calm, professional. Not a "Web3 app".
+   - Dense financial UI: high contrast, tabular numbers.
+   - Warm blacks (brown-slate, not blue-black) for comfortable long-session reading.
+   - Semantic color reserved for market direction + state.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ---------- Fonts ---------- */
+  --font-display: 'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---------- Neutrals (warm-white dark stack, ~2700K) ---------- */
+  /* Browns with just enough red/yellow to feel like warm-bulb lighting. */
+  --bg-0: #0e0b08;          /* App canvas — deepest warm black */
+  --bg-1: #151110;          /* Primary surface */
+  --bg-2: #1d1917;          /* Raised card / sidebar */
+  --bg-3: #272320;          /* Hover on raised */
+  --bg-4: #332d29;          /* Pressed / selected */
+
+  --line-1: #2a2521;        /* Hairline divider */
+  --line-2: #3a332e;        /* Emphasized border */
+  --line-3: #4d453e;        /* Focus ring base */
+
+  /* ---------- Foreground (warm off-whites) ---------- */
+  --fg-1: #f4ede2;          /* Primary — warm ivory, reads like 2800K paper */
+  --fg-2: #c4bdb0;          /* Body, secondary */
+  --fg-3: #8a8278;          /* Labels, metadata */
+  --fg-4: #5c554d;          /* Disabled, ghost */
+
+  /* ---------- Brand (Signal Stack — warm amber/gold) ---------- */
+  /* Warm accent that harmonises with the surface, feels like candlelight. */
+  --brand-50:  #fdf5e6;
+  --brand-100: #fae6bf;
+  --brand-200: #f5d28a;
+  --brand-300: #eeb955;
+  --brand-400: #e4a030;
+  --brand-500: #d88a1c;     /* Primary brand — warm amber */
+  --brand-600: #b66f15;
+  --brand-700: #8c5410;
+  --brand-800: #66400e;
+  --brand-900: #432a0a;
+
+  /* ---------- Market semantic (green up / red down, warm-tuned) ---------- */
+  /* Greens slightly warmer (less cyan), reds sit comfortably alongside amber. */
+  --up-100: #d9f2dd;
+  --up-300: #5fcc7a;
+  --up-500: #2ba84c;        /* Primary up */
+  --up-600: #1f8a3c;
+  --up-bg:  rgba(43,168,76,0.13);
+
+  --down-100: #fbd9d4;
+  --down-300: #ff7466;
+  --down-500: #ef4a36;      /* Primary down — warm red */
+  --down-600: #c2331f;
+  --down-bg:  rgba(239,74,54,0.13);
+
+  /* ---------- Status ---------- */
+  --warn-500:  #e4a030;     /* Caution, pending (shares brand family) */
+  --warn-bg:   rgba(228,160,48,0.13);
+  --info-500:  #eeb955;
+  --info-bg:   rgba(238,185,85,0.10);
+  --neutral-500: #8a8278;
+  --neutral-bg:  rgba(138,130,120,0.12);
+
+  /* ---------- Chart series ---------- */
+  --series-1: #eeb955;
+  --series-2: #2ba84c;
+  --series-3: #e67a3c;
+  --series-4: #c68fd6;
+  --series-5: #5fb8a8;
+  --series-6: #d88a1c;
+
+  /* ---------- Radii ---------- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  /* ---------- Spacing scale (4px base) ---------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px;
+
+  /* ---------- Shadows ---------- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.4);
+  --shadow-glow-brand: 0 0 0 3px rgba(216,138,28,0.28);
+  --shadow-glow-up:    0 0 0 3px rgba(43,168,76,0.24);
+  --shadow-glow-down:  0 0 0 3px rgba(239,74,54,0.24);
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  /* ---------- Z scale ---------- */
+  --z-sticky: 100; --z-dropdown: 500; --z-overlay: 900; --z-modal: 1000; --z-toast: 1100;
+}
+
+/* =============================================================
+   Type — Manrope throughout. Density: comfortable-financial.
+   ============================================================= */
+
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.t-display-1 { font-family: var(--font-display); font-weight: 800; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em; }
+.t-display-2 { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+
+h1, .t-h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; color: var(--fg-1); margin: 0; }
+h2, .t-h2 { font-weight: 700; font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; color: var(--fg-1); margin: 0; }
+h3, .t-h3 { font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--fg-1); margin: 0; }
+h4, .t-h4 { font-weight: 600; font-size: 14px; line-height: 1.4; color: var(--fg-1); margin: 0; }
+
+.t-body    { font-size: 14px; line-height: 1.55; color: var(--fg-2); }
+.t-body-lg { font-size: 16px; line-height: 1.55; color: var(--fg-2); }
+.t-body-sm { font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+
+.t-label    { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+.t-label-sm { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+
+.t-num, .num {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.t-num-xl { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 32px; letter-spacing: -0.02em; }
+.t-num-lg { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 22px; letter-spacing: -0.01em; }
+.t-num-md { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 16px; }
+.t-num-sm { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 13px; }
+
+code, .t-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-1);
+}
+
+.is-up   { color: var(--up-500); }
+.is-down { color: var(--down-500); }
+.is-flat { color: var(--fg-3); }
+
+:focus-visible {
+  outline: 2px solid var(--brand-400);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+</style>
+<style>
+  html, body, #root { margin: 0; height: 100%; background: var(--bg-0); color: var(--fg-1); }
+  * { box-sizing: border-box; }
+  input, select, button { font-family: inherit; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+// === ui_kits/user-portal/Primitives.jsx ===
+// Shared primitive UI components for the User Portal
+// Exports to window for cross-file sharing.
+
+const Icon = ({ name, size = 18, color = 'currentColor', stroke = 1.75 }) => {
+  // Minimal inline icon set (Lucide-style). Not exhaustive.
+  const paths = {
+    'bar-chart': <><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>,
+    'bell': <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></>,
+    'chart-line': <><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></>,
+    'target': <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></>,
+    'layers': <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+    'shield': <><path d="M12 2l9 4v6c0 5-4 9-9 10-5-1-9-5-9-10V6z"/></>,
+    'settings': <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
+    'plus': <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+    'search': <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    'menu': <><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>,
+    'x': <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    'check': <><polyline points="20 6 9 17 4 12"/></>,
+    'arrow-up-right': <><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></>,
+    'arrow-down': <><polyline points="6 9 12 15 18 9"/></>,
+    'activity': <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
+    'home': <><path d="M3 12l9-9 9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></>,
+    'users': <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    'clock': <><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></>,
+    'alert-triangle': <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    'external': <><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>,
+    'trending-up': <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+    'trending-down': <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+      {paths[name] || null}
+    </svg>
+  );
+};
+
+const Logo = ({ size = 28, color = 'var(--brand-400)' }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ color }}>
+    <rect x="6"  y="24" width="6" height="10" rx="1.5" fill="currentColor" opacity="0.45"/>
+    <rect x="14" y="18" width="6" height="16" rx="1.5" fill="currentColor" opacity="0.65"/>
+    <rect x="22" y="12" width="6" height="22" rx="1.5" fill="currentColor" opacity="0.85"/>
+    <rect x="30" y="6"  width="6" height="28" rx="1.5" fill="currentColor"/>
+    <circle cx="33" cy="6" r="2.6" fill="currentColor"/>
+    <circle cx="33" cy="6" r="1.2" fill="var(--bg-1)"/>
+  </svg>
+);
+
+const Pill = ({ tone = 'neutral', children, dot }) => {
+  const tones = {
+    up: { bg: 'var(--up-bg)', fg: 'var(--up-500)' },
+    down: { bg: 'var(--down-bg)', fg: 'var(--down-500)' },
+    warn: { bg: 'var(--warn-bg)', fg: 'var(--warn-500)' },
+    info: { bg: 'var(--info-bg)', fg: 'var(--brand-300)' },
+    neutral: { bg: 'var(--neutral-bg)', fg: 'var(--fg-2)' },
+    outline: { bg: 'transparent', fg: 'var(--fg-2)', border: '1px solid var(--line-2)' },
+  };
+  const t = tones[tone];
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: t.bg, color: t.fg, border: t.border || '1px solid transparent', letterSpacing: '0.02em' }}>
+      {dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }}/>}
+      {children}
+    </span>
+  );
+};
+
+const Btn = ({ variant = 'primary', size = 'md', children, onClick, icon, disabled }) => {
+  const variants = {
+    primary: { bg: 'var(--brand-500)', fg: 'white', hover: 'var(--brand-400)', border: 'transparent' },
+    secondary: { bg: 'var(--bg-3)', fg: 'var(--fg-1)', hover: 'var(--bg-4)', border: 'var(--line-2)' },
+    ghost: { bg: 'transparent', fg: 'var(--fg-2)', hover: 'var(--bg-3)', border: 'transparent' },
+    danger: { bg: 'var(--down-bg)', fg: 'var(--down-500)', hover: 'rgba(239,59,59,0.2)', border: 'rgba(239,59,59,0.3)' },
+  };
+  const v = variants[variant];
+  const sizes = { sm: { p: '5px 10px', fs: 12 }, md: { p: '8px 14px', fs: 13 }, lg: { p: '11px 18px', fs: 14 } };
+  const s = sizes[size];
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: hover && !disabled ? v.hover : v.bg,
+        color: v.fg, border: `1px solid ${v.border}`, padding: s.p,
+        fontSize: s.fs, fontWeight: 500, borderRadius: 6, cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'var(--font-sans)', opacity: disabled ? 0.4 : 1,
+        transition: 'background var(--dur-fast) var(--ease-out)'
+      }}>
+      {icon && <Icon name={icon} size={14}/>}
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, accent, style }) => (
+  <div style={{
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-1)',
+    borderLeft: accent ? `2px solid var(--${accent}-500)` : '1px solid var(--line-1)',
+    borderRadius: 12,
+    ...style
+  }}>{children}</div>
+);
+
+const Num = ({ value, delta, size = 'md', color }) => {
+  const sizes = { sm: 13, md: 16, lg: 22, xl: 32 };
+  return <span style={{
+    fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums',
+    fontWeight: 500, fontSize: sizes[size], color: color || 'var(--fg-1)', letterSpacing: '-0.01em'
+  }}>{value}</span>;
+};
+
+const LegalFooter = () => (
+  <div style={{
+    padding: '10px 20px', fontSize: 11, color: 'var(--fg-3)',
+    borderTop: '1px solid var(--line-1)', background: 'var(--bg-1)',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12
+  }}>
+    <span>
+      Signal Stack is in private evaluation and is not registered with SEBI.
+      All outputs are tools-generated from your own configured scans.
+      You are the sole decision-maker.
+    </span>
+    <a href="#" style={{ color: 'var(--brand-300)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+      Full disclaimer →
+    </a>
+  </div>
+);
+
+Object.assign(window, { Icon, Logo, Pill, Btn, Card, Num, LegalFooter });
+
+
+// === ui_kits/user-portal/AppShell.jsx ===
+// AppShell.jsx — 3-zone layout for the user portal.
+
+const AppShell = ({ current, setCurrent, children }) => {
+  const nav = [
+    { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+    { id: 'chart', label: 'Chart', icon: 'chart-line' },
+    { id: 'signals', label: 'Signal Builder', icon: 'layers' },
+    { id: 'notifications', label: 'Notifications', icon: 'bell', badge: 3 },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-0)' }}>
+      {/* Top bar */}
+      <header style={{
+        height: 56, flexShrink: 0, display: 'flex', alignItems: 'center',
+        padding: '0 20px', borderBottom: '1px solid var(--line-1)', background: 'var(--bg-1)', gap: 16
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Logo size={26}/>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}>Signal Stack</span>
+        </div>
+        <div style={{
+          flex: 1, maxWidth: 420, margin: '0 auto', position: 'relative'
+        }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }}>
+            <Icon name="search" size={14}/>
+          </span>
+          <input placeholder="Search symbol · NSE:RELIANCE" style={{
+            width: '100%', background: 'var(--bg-2)', border: '1px solid var(--line-1)',
+            color: 'var(--fg-1)', padding: '7px 12px 7px 32px', borderRadius: 6, fontFamily: 'var(--font-sans)', fontSize: 13
+          }}/>
+        </div>
+        <Pill tone="outline">Phase A · Tester</Pill>
+        <Pill tone="up" dot>FYERS connected</Pill>
+        <div style={{
+          width: 30, height: 30, borderRadius: '50%', background: 'var(--brand-700)',
+          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 600
+        }}>AR</div>
+      </header>
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* Sidebar */}
+        <nav style={{
+          width: 220, flexShrink: 0, background: 'var(--bg-1)', borderRight: '1px solid var(--line-1)',
+          padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 2
+        }}>
+          {nav.map(item => (
+            <button key={item.id} onClick={() => setCurrent(item.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+              background: current === item.id ? 'var(--bg-4)' : 'transparent',
+              borderLeft: current === item.id ? '2px solid var(--brand-500)' : '2px solid transparent',
+              border: 'none', color: current === item.id ? 'var(--fg-1)' : 'var(--fg-2)',
+              borderRadius: 0, cursor: 'pointer', fontFamily: 'var(--font-sans)',
+              fontSize: 13, fontWeight: 500, textAlign: 'left', justifyContent: 'flex-start',
+              marginLeft: 0, paddingLeft: current === item.id ? 10 : 12
+            }}>
+              <Icon name={item.icon} size={16}/>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge && <Pill tone="info">{item.badge}</Pill>}
+            </button>
+          ))}
+          <div style={{ marginTop: 'auto', padding: '8px 12px', fontSize: 10, color: 'var(--fg-4)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>System</div>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+            background: 'transparent', border: 'none', color: 'var(--fg-2)', cursor: 'pointer',
+            fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500, textAlign: 'left'
+          }}>
+            <Icon name="settings" size={16}/>Settings
+          </button>
+        </nav>
+
+        {/* Content */}
+        <main style={{ flex: 1, overflow: 'auto', background: 'var(--bg-0)' }}>
+          {children}
+        </main>
+      </div>
+
+      <LegalFooter/>
+    </div>
+  );
+};
+
+window.AppShell = AppShell;
+
+
+// === ui_kits/user-portal/Dashboard.jsx ===
+// Dashboard.jsx — Portfolio overview with KPI strip, open positions, notifications.
+
+const Dashboard = () => {
+  const positions = [
+    { sym: 'RELIANCE', entry: 2840, ltp: 2894.2, qty: 50, r: 1.1, stop: 2760, status: 'up' },
+    { sym: 'TCS', entry: 3670, ltp: 3724.5, qty: 25, r: 0.8, stop: 3580, status: 'up' },
+    { sym: 'ICICIBANK', entry: 1082, ltp: 1042.15, qty: 80, r: -0.7, stop: 1048, status: 'down' },
+    { sym: 'INFY', entry: 1785, ltp: 1812.3, qty: 40, r: 0.4, stop: 1720, status: 'up' },
+    { sym: 'HDFCBANK', entry: 1526, ltp: 1526.0, qty: 60, r: 0.0, stop: 1480, status: 'flat' },
+    { sym: 'LT', entry: 3450, ltp: 3512.8, qty: 20, r: 0.9, stop: 3380, status: 'up' },
+    { sym: 'AXISBANK', entry: 1124, ltp: 1098.4, qty: 70, r: -0.5, stop: 1092, status: 'down' },
+  ];
+  const notifs = [
+    { icon: '▲', tone: 'up', title: 'Entry signal · Volume Spike', msg: <>Your scan matched <b>RELIANCE</b> at your configured entry ₹2,840.</>, time: '3:31 PM', unread: true },
+    { icon: '▼', tone: 'down', title: 'Stop level breached', msg: <><b>ICICIBANK</b> breached your stop at ₹1,042.</>, time: '2:47 PM', unread: true },
+    { icon: 'i', tone: 'info', title: 'DataSync completed', msg: <>499/500 symbols synced.</>, time: '3:35 PM' },
+    { icon: '▲', tone: 'up', title: 'Add level reached', msg: <><b>LT</b> reached your first add level — +0.5R.</>, time: '12:14 PM' },
+  ];
+
+  return (
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 4 }}>Portfolio · 20 Apr 2026</div>
+          <h1 style={{ margin: 0 }}>Your overview</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant="secondary" icon="activity">Reconcile</Btn>
+          <Btn variant="primary" icon="plus">New subscription</Btn>
+        </div>
+      </div>
+
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <Card accent="brand" style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            Portfolio value <span style={{ color: 'var(--brand-300)' }}>live</span>
+          </div>
+          <Num value="₹24,81,520" size="xl"/>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginTop: 4, color: 'var(--up-500)' }}>+₹42,180 · +1.73% today</div>
+        </Card>
+        <Card accent="up" style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 8 }}>XIRR · 90d</div>
+          <Num value="+18.4%" size="xl" color="var(--up-500)"/>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginTop: 4, color: 'var(--fg-3)' }}>Nifty 500 +5.1%</div>
+        </Card>
+        <Card accent="down" style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 8 }}>Max drawdown</div>
+          <Num value="−4.8%" size="xl" color="var(--down-500)"/>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginTop: 4, color: 'var(--fg-3)' }}>within your profile limit</div>
+        </Card>
+        <Card style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 8 }}>Open positions</div>
+          <Num value="7" size="xl"/>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginTop: 4, color: 'var(--fg-3)' }}>2 at trailing stop</div>
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 14 }}>
+        {/* Positions table */}
+        <Card>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line-1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>Open positions</h2>
+            <Pill tone="neutral">7 positions</Pill>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr>{['Symbol','Entry','LTP','P&L','R','Stop','Status'].map((h,i) => (
+              <th key={i} style={{ textAlign: i < 1 ? 'left' : 'right', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', padding: '10px 16px', borderBottom: '1px solid var(--line-1)' }}>{h}</th>
+            ))}</tr></thead>
+            <tbody>
+              {positions.map(p => {
+                const pnl = (p.ltp - p.entry) * p.qty;
+                const tone = p.status === 'up' ? 'up' : p.status === 'down' ? 'down' : 'flat';
+                return (
+                  <tr key={p.sym} style={{ borderBottom: '1px solid var(--line-1)' }}>
+                    <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{p.sym}</td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Num value={p.entry.toFixed(2)} size="sm"/></td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Num value={p.ltp.toFixed(2)} size="sm"/></td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Num value={(pnl >= 0 ? '+' : '') + pnl.toFixed(0)} size="sm" color={pnl > 0 ? 'var(--up-500)' : pnl < 0 ? 'var(--down-500)' : 'var(--fg-3)'}/></td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Num value={(p.r >= 0 ? '+' : '') + p.r.toFixed(1) + 'R'} size="sm" color={p.r > 0 ? 'var(--up-500)' : p.r < 0 ? 'var(--down-500)' : 'var(--fg-3)'}/></td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Num value={p.stop.toFixed(0)} size="sm" color="var(--fg-3)"/></td>
+                    <td style={{ padding: '11px 16px', textAlign: 'right' }}><Pill tone={tone === 'flat' ? 'neutral' : tone} dot>{tone === 'up' ? 'On' : tone === 'down' ? 'At stop' : 'Flat'}</Pill></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+
+        {/* Notifications feed */}
+        <Card>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line-1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>Alerts</h2>
+            <Btn variant="ghost" size="sm">View all</Btn>
+          </div>
+          <div>
+            {notifs.map((n, i) => (
+              <div key={i} style={{ padding: '13px 16px', borderBottom: i < notifs.length - 1 ? '1px solid var(--line-1)' : 'none', display: 'flex', gap: 11, background: n.unread ? 'rgba(58,125,255,0.04)' : 'transparent' }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: `var(--${n.tone}-bg)`, color: `var(--${n.tone === 'info' ? 'brand-300' : n.tone + '-500'})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{n.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{n.title}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>{n.time}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>{n.msg}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+window.Dashboard = Dashboard;
+
+
+// === ui_kits/user-portal/ChartPage.jsx ===
+// ChartPage.jsx — Chart pane with RME advisory panel.
+
+const ChartPage = ({ setShowOrderModal }) => {
+  // Stubbed chart — real app uses TradingView lightweight-charts
+  const candles = Array.from({length: 60}, (_, i) => {
+    const base = 2750 + Math.sin(i * 0.3) * 40 + i * 2.2;
+    const o = base + (Math.random() - 0.5) * 10;
+    const c = base + (Math.random() - 0.5) * 10;
+    const h = Math.max(o, c) + Math.random() * 8;
+    const l = Math.min(o, c) - Math.random() * 8;
+    return { o, h, l, c };
+  });
+  const min = Math.min(...candles.map(k => k.l)), max = Math.max(...candles.map(k => k.h));
+  const range = max - min;
+  const w = 900, h = 340, cw = w / candles.length;
+  const y = v => h - ((v - min) / range) * h;
+
+  return (
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700 }}>NSE:RELIANCE</span>
+        <span style={{ color: 'var(--fg-3)', fontSize: 14 }}>Reliance Industries Ltd</span>
+        <Num value="₹2,894.20" size="lg" color="var(--up-500)"/>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--up-500)' }}>+54.20 · +1.91%</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {['1D', '1W', '1M', '3M', '1Y', 'All'].map(tf => (
+            <button key={tf} style={{ padding: '5px 12px', background: tf === '3M' ? 'var(--bg-4)' : 'transparent', border: '1px solid var(--line-1)', color: 'var(--fg-2)', fontSize: 12, borderRadius: 4, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{tf}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14 }}>
+        {/* Chart */}
+        <Card style={{ padding: 16 }}>
+          <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 340, display: 'block' }}>
+            <defs>
+              <pattern id="grid" width={w/6} height={h/5} patternUnits="userSpaceOnUse">
+                <path d={`M ${w/6} 0 L 0 0 0 ${h/5}`} fill="none" stroke="var(--line-1)" strokeWidth="1"/>
+              </pattern>
+            </defs>
+            <rect width={w} height={h} fill="url(#grid)"/>
+            {candles.map((k, i) => {
+              const up = k.c >= k.o;
+              const color = up ? 'var(--up-500)' : 'var(--down-500)';
+              const x = i * cw + cw/2;
+              return (
+                <g key={i}>
+                  <line x1={x} y1={y(k.h)} x2={x} y2={y(k.l)} stroke={color} strokeWidth="1"/>
+                  <rect x={x - cw * 0.35} y={y(Math.max(k.o, k.c))} width={cw * 0.7} height={Math.max(1, Math.abs(y(k.o) - y(k.c)))} fill={color}/>
+                </g>
+              );
+            })}
+            {/* Entry / stop / add lines */}
+            <line x1="0" x2={w} y1={y(2840)} y2={y(2840)} stroke="var(--brand-400)" strokeWidth="1" strokeDasharray="4 4"/>
+            <text x={w-60} y={y(2840)-4} fill="var(--brand-400)" fontSize="10" fontFamily="var(--font-mono)">Entry 2840</text>
+            <line x1="0" x2={w} y1={y(2760)} y2={y(2760)} stroke="var(--down-500)" strokeWidth="1" strokeDasharray="4 4"/>
+            <text x={w-60} y={y(2760)-4} fill="var(--down-500)" fontSize="10" fontFamily="var(--font-mono)">Stop 2760</text>
+            <line x1="0" x2={w} y1={y(2920)} y2={y(2920)} stroke="var(--up-500)" strokeWidth="1" strokeDasharray="4 4"/>
+            <text x={w-60} y={y(2920)-4} fill="var(--up-500)" fontSize="10" fontFamily="var(--font-mono)">Add 2920</text>
+          </svg>
+        </Card>
+
+        {/* RME advisory panel */}
+        <Card>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line-1)' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>RME advisory · your profile</div>
+            <h3 style={{ margin: '4px 0 0 0' }}>Volume Spike match</h3>
+          </div>
+          <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>Your configured entry</div>
+              <Num value="₹2,840.00" size="lg" color="var(--brand-300)"/>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>Stop (per risk profile)</div>
+                <Num value="₹2,760" size="md" color="var(--down-500)"/>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>First add level</div>
+                <Num value="₹2,920" size="md" color="var(--up-500)"/>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>Position size</div>
+                <Num value="52 shrs" size="md"/>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 4 }}>Risk amount</div>
+                <Num value="₹4,160" size="md"/>
+              </div>
+            </div>
+            <div style={{ padding: 10, background: 'var(--bg-1)', border: '1px solid var(--line-1)', borderRadius: 6, fontSize: 12, color: 'var(--fg-2)' }}>
+              <div style={{ fontSize: 10, color: 'var(--fg-3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Portfolio impact</div>
+              Open risk will move from <b style={{ color: 'var(--fg-1)' }}>2.1%</b> to <b style={{ color: 'var(--fg-1)' }}>2.9%</b> of equity. Sector Energy exposure <b style={{ color: 'var(--fg-1)' }}>14% → 18%</b>.
+            </div>
+            <div style={{ padding: 8, background: 'rgba(245,165,36,0.08)', border: '1px solid rgba(245,165,36,0.2)', borderRadius: 6, fontSize: 11, color: 'var(--warn-500)' }}>
+              You are the sole decision-maker. This is decision support based on your own configuration.
+            </div>
+            <Btn variant="primary" size="lg" icon="external" onClick={() => setShowOrderModal(true)}>Review on FYERS</Btn>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+window.ChartPage = ChartPage;
+
+
+// === ui_kits/user-portal/SignalBuilder.jsx ===
+// SignalBuilder.jsx — create/edit a Signal Subscription.
+
+const SignalBuilder = () => {
+  const [name, setName] = React.useState('Volume Spike · Large Cap');
+  const [tf, setTf] = React.useState('Daily');
+  const [risk, setRisk] = React.useState('0.75');
+
+  const field = (lbl, ...kids) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--fg-3)', fontWeight: 500 }}>
+      <span style={{ letterSpacing: '0.04em' }}>{lbl}</span>
+      {kids}
+    </label>
+  );
+
+  const input = (v, set) => (
+    <input value={v} onChange={e => set(e.target.value)} style={{
+      background: 'var(--bg-1)', border: '1px solid var(--line-2)', color: 'var(--fg-1)',
+      padding: '9px 12px', borderRadius: 6, fontFamily: 'var(--font-sans)', fontSize: 13
+    }}/>
+  );
+
+  return (
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1000, margin: '0 auto' }}>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 4 }}>Signal Builder</div>
+        <h1 style={{ margin: 0 }}>Edit subscription</h1>
+        <p style={{ color: 'var(--fg-2)', fontSize: 14, marginTop: 6, maxWidth: 540 }}>
+          You select the scan parameters; the EOD Signal Runner evaluates them after market close and emits matches to your alerts.
+        </p>
+      </div>
+
+      <Card style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h2 style={{ margin: 0 }}>1 · Scan type & parameters</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {field('Subscription name', input(name, setName))}
+          {field('Signal type',
+            <select style={{
+              background: 'var(--bg-1)', border: '1px solid var(--line-2)', color: 'var(--fg-1)',
+              padding: '9px 12px', borderRadius: 6, fontFamily: 'var(--font-sans)', fontSize: 13
+            }}>
+              <option>Volume Spike Signal</option>
+              <option>Price Volatility Signal</option>
+              <option>Breakout Signal</option>
+            </select>
+          )}
+          {field('Timeframe',
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['Daily','Weekly','Monthly'].map(t => (
+                <button key={t} onClick={() => setTf(t)} style={{
+                  flex:1, padding: '8px 0', background: tf === t ? 'var(--brand-500)' : 'var(--bg-1)',
+                  color: tf === t ? 'white' : 'var(--fg-2)', border: `1px solid ${tf === t ? 'var(--brand-500)' : 'var(--line-2)'}`,
+                  borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 500
+                }}>{t}</button>
+              ))}
+            </div>
+          )}
+          {field('Volume multiplier', input('2.5', () => {}))}
+          {field('Lookback (days)', input('20', () => {}))}
+          {field('Min market cap (Cr)', input('10,000', () => {}))}
+        </div>
+      </Card>
+
+      <Card style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h2 style={{ margin: 0 }}>2 · RME profile</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {field('Position sizing',
+            <select style={{
+              background: 'var(--bg-1)', border: '1px solid var(--line-2)', color: 'var(--fg-1)',
+              padding: '9px 12px', borderRadius: 6, fontSize: 13
+            }}><option>Fixed fractional · ATR</option><option>Volatility target</option></select>
+          )}
+          {field('Risk per trade (%)', input(risk, setRisk))}
+          {field('Max concurrent positions', input('10', () => {}))}
+          {field('Stop type',
+            <select style={{
+              background: 'var(--bg-1)', border: '1px solid var(--line-2)', color: 'var(--fg-1)',
+              padding: '9px 12px', borderRadius: 6, fontSize: 13
+            }}><option>ATR trailing · 2.5x</option><option>Percent trailing</option><option>Chandelier exit</option></select>
+          )}
+          {field('Pyramiding', input('2 adds', () => {}))}
+          {field('Max portfolio heat (%)', input('6', () => {}))}
+        </div>
+      </Card>
+
+      <Card style={{ padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ margin: 0 }}>3 · Backtest</h2>
+            <p style={{ color: 'var(--fg-2)', fontSize: 13, margin: '4px 0 0 0' }}>Last run: 12 Apr · 7y, Nifty 500</p>
+          </div>
+          <Btn variant="secondary" icon="activity">Run optimisation</Btn>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginTop: 18 }}>
+          {[['CAGR', '+24.7%', 'up'], ['Sharpe', '1.42', null], ['Max DD', '−12.3%', 'down'], ['Trades', '184', null]].map(([l, v, tone], i) => (
+            <div key={i} style={{ padding: '12px 14px', background: 'var(--bg-1)', border: '1px solid var(--line-1)', borderRadius: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 6 }}>{l}</div>
+              <Num value={v} size="lg" color={tone === 'up' ? 'var(--up-500)' : tone === 'down' ? 'var(--down-500)' : 'var(--fg-1)'}/>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn variant="ghost">Cancel</Btn>
+        <Btn variant="secondary">Save as draft</Btn>
+        <Btn variant="primary" icon="check">Activate subscription</Btn>
+      </div>
+    </div>
+  );
+};
+
+window.SignalBuilder = SignalBuilder;
+
+
+// === ui_kits/user-portal/OrderModal.jsx ===
+// OrderModal.jsx — FYERS handoff confirmation.
+
+const OrderModal = ({ onClose }) => (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+  }} onClick={onClose}>
+    <div onClick={e => e.stopPropagation()} style={{
+      background: 'var(--bg-2)', border: '1px solid var(--line-2)', borderRadius: 12,
+      width: 480, boxShadow: 'var(--shadow-lg)', overflow: 'hidden'
+    }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line-1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Order handoff · FYERS</div>
+          <h3 style={{ margin: '2px 0 0 0' }}>Review order on FYERS</h3>
+        </div>
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--fg-3)', cursor: 'pointer' }}><Icon name="x" size={18}/></button>
+      </div>
+
+      <div style={{ padding: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, background: 'var(--bg-1)', border: '1px solid var(--line-1)', borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--fg-3)', fontSize: 12 }}>Symbol</span><span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>NSE:RELIANCE</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--fg-3)', fontSize: 12 }}>Side · product</span><span><Pill tone="up">BUY</Pill> <Pill tone="outline">CNC</Pill></span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--fg-3)', fontSize: 12 }}>Quantity</span><Num value="52" size="sm"/></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--fg-3)', fontSize: 12 }}>Limit price</span><Num value="₹2,840.00" size="sm"/></div>
+          <div style={{ borderTop: '1px solid var(--line-1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}><span style={{ fontWeight: 600 }}>Total</span><Num value="₹1,47,680" size="md"/></div>
+        </div>
+
+        <div style={{ marginTop: 14, padding: 12, background: 'rgba(245,165,36,0.08)', border: '1px solid rgba(245,165,36,0.25)', borderRadius: 6, fontSize: 12, color: 'var(--warn-500)' }}>
+          Signal Stack does not place this order. Parameters will pre-populate the FYERS window; final submission, pricing, and execution are handled by FYERS. You are the sole decision-maker.
+        </div>
+      </div>
+
+      <div style={{ padding: 16, borderTop: '1px solid var(--line-1)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn variant="primary" icon="external">Continue to FYERS</Btn>
+      </div>
+    </div>
+  </div>
+);
+
+window.OrderModal = OrderModal;
+
+
+
+const App = () => {
+  const [current, setCurrent] = React.useState('dashboard');
+  const [showOrderModal, setShowOrderModal] = React.useState(false);
+  return (
+    <>
+      <AppShell current={current} setCurrent={setCurrent}>
+        {current === 'dashboard' && <Dashboard/>}
+        {current === 'chart' && <ChartPage setShowOrderModal={setShowOrderModal}/>}
+        {current === 'signals' && <SignalBuilder/>}
+        {current === 'notifications' && <Dashboard/>}
+      </AppShell>
+      {showOrderModal && <OrderModal onClose={() => setShowOrderModal(false)}/>}
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

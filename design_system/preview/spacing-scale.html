@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+/* =============================================================
+   Signal Stack — Colors & Type
+   Dark-first trading platform. Warm-white (2700–3000K) surfaces.
+   =============================================================
+   Philosophy:
+   - Serious, calm, professional. Not a "Web3 app".
+   - Dense financial UI: high contrast, tabular numbers.
+   - Warm blacks (brown-slate, not blue-black) for comfortable long-session reading.
+   - Semantic color reserved for market direction + state.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ---------- Fonts ---------- */
+  --font-display: 'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---------- Neutrals (warm-white dark stack, ~2700K) ---------- */
+  /* Browns with just enough red/yellow to feel like warm-bulb lighting. */
+  --bg-0: #0e0b08;          /* App canvas — deepest warm black */
+  --bg-1: #151110;          /* Primary surface */
+  --bg-2: #1d1917;          /* Raised card / sidebar */
+  --bg-3: #272320;          /* Hover on raised */
+  --bg-4: #332d29;          /* Pressed / selected */
+
+  --line-1: #2a2521;        /* Hairline divider */
+  --line-2: #3a332e;        /* Emphasized border */
+  --line-3: #4d453e;        /* Focus ring base */
+
+  /* ---------- Foreground (warm off-whites) ---------- */
+  --fg-1: #f4ede2;          /* Primary — warm ivory, reads like 2800K paper */
+  --fg-2: #c4bdb0;          /* Body, secondary */
+  --fg-3: #8a8278;          /* Labels, metadata */
+  --fg-4: #5c554d;          /* Disabled, ghost */
+
+  /* ---------- Brand (Signal Stack — warm amber/gold) ---------- */
+  /* Warm accent that harmonises with the surface, feels like candlelight. */
+  --brand-50:  #fdf5e6;
+  --brand-100: #fae6bf;
+  --brand-200: #f5d28a;
+  --brand-300: #eeb955;
+  --brand-400: #e4a030;
+  --brand-500: #d88a1c;     /* Primary brand — warm amber */
+  --brand-600: #b66f15;
+  --brand-700: #8c5410;
+  --brand-800: #66400e;
+  --brand-900: #432a0a;
+
+  /* ---------- Market semantic (green up / red down, warm-tuned) ---------- */
+  /* Greens slightly warmer (less cyan), reds sit comfortably alongside amber. */
+  --up-100: #d9f2dd;
+  --up-300: #5fcc7a;
+  --up-500: #2ba84c;        /* Primary up */
+  --up-600: #1f8a3c;
+  --up-bg:  rgba(43,168,76,0.13);
+
+  --down-100: #fbd9d4;
+  --down-300: #ff7466;
+  --down-500: #ef4a36;      /* Primary down — warm red */
+  --down-600: #c2331f;
+  --down-bg:  rgba(239,74,54,0.13);
+
+  /* ---------- Status ---------- */
+  --warn-500:  #e4a030;     /* Caution, pending (shares brand family) */
+  --warn-bg:   rgba(228,160,48,0.13);
+  --info-500:  #eeb955;
+  --info-bg:   rgba(238,185,85,0.10);
+  --neutral-500: #8a8278;
+  --neutral-bg:  rgba(138,130,120,0.12);
+
+  /* ---------- Chart series ---------- */
+  --series-1: #eeb955;
+  --series-2: #2ba84c;
+  --series-3: #e67a3c;
+  --series-4: #c68fd6;
+  --series-5: #5fb8a8;
+  --series-6: #d88a1c;
+
+  /* ---------- Radii ---------- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  /* ---------- Spacing scale (4px base) ---------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px;
+
+  /* ---------- Shadows ---------- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.4);
+  --shadow-glow-brand: 0 0 0 3px rgba(216,138,28,0.28);
+  --shadow-glow-up:    0 0 0 3px rgba(43,168,76,0.24);
+  --shadow-glow-down:  0 0 0 3px rgba(239,74,54,0.24);
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  /* ---------- Z scale ---------- */
+  --z-sticky: 100; --z-dropdown: 500; --z-overlay: 900; --z-modal: 1000; --z-toast: 1100;
+}
+
+/* =============================================================
+   Type — Manrope throughout. Density: comfortable-financial.
+   ============================================================= */
+
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.t-display-1 { font-family: var(--font-display); font-weight: 800; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em; }
+.t-display-2 { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+
+h1, .t-h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; color: var(--fg-1); margin: 0; }
+h2, .t-h2 { font-weight: 700; font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; color: var(--fg-1); margin: 0; }
+h3, .t-h3 { font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--fg-1); margin: 0; }
+h4, .t-h4 { font-weight: 600; font-size: 14px; line-height: 1.4; color: var(--fg-1); margin: 0; }
+
+.t-body    { font-size: 14px; line-height: 1.55; color: var(--fg-2); }
+.t-body-lg { font-size: 16px; line-height: 1.55; color: var(--fg-2); }
+.t-body-sm { font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+
+.t-label    { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+.t-label-sm { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+
+.t-num, .num {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.t-num-xl { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 32px; letter-spacing: -0.02em; }
+.t-num-lg { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 22px; letter-spacing: -0.01em; }
+.t-num-md { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 16px; }
+.t-num-sm { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 13px; }
+
+code, .t-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-1);
+}
+
+.is-up   { color: var(--up-500); }
+.is-down { color: var(--down-500); }
+.is-flat { color: var(--fg-3); }
+
+:focus-visible {
+  outline: 2px solid var(--brand-400);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+</style>
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg-1); }
+  .card { background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 12px; padding: 22px; display:flex; gap: 16px; align-items:flex-end; }
+  .tok { display:flex; flex-direction: column; align-items: center; gap: 6px; }
+  .box { background: var(--brand-500); border-radius: 4px; width: var(--w); height: var(--w); }
+  .n { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
+  .v { font-family: var(--font-mono); font-size: 11px; color: var(--fg-1); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="tok"><div class="box" style="--w:4px"></div><span class="n">s-1</span><span class="v">4</span></div>
+  <div class="tok"><div class="box" style="--w:8px"></div><span class="n">s-2</span><span class="v">8</span></div>
+  <div class="tok"><div class="box" style="--w:12px"></div><span class="n">s-3</span><span class="v">12</span></div>
+  <div class="tok"><div class="box" style="--w:16px"></div><span class="n">s-4</span><span class="v">16</span></div>
+  <div class="tok"><div class="box" style="--w:20px"></div><span class="n">s-5</span><span class="v">20</span></div>
+  <div class="tok"><div class="box" style="--w:24px"></div><span class="n">s-6</span><span class="v">24</span></div>
+  <div class="tok"><div class="box" style="--w:32px"></div><span class="n">s-8</span><span class="v">32</span></div>
+  <div class="tok"><div class="box" style="--w:40px"></div><span class="n">s-10</span><span class="v">40</span></div>
+  <div class="tok"><div class="box" style="--w:48px"></div><span class="n">s-12</span><span class="v">48</span></div>
+  <div class="tok"><div class="box" style="--w:64px"></div><span class="n">s-16</span><span class="v">64</span></div>
+</div>
+</body>
+</html>
