@@ -6,6 +6,22 @@ Compliance, regulatory, SEBI, exchange bye-laws, KYC, tax, data localization, an
 
 ---
 
+## Skills to apply during this review
+
+While performing this review, you may internally apply the following skills as appropriate to the finding being evaluated. Use them **implicitly** as review lenses — do not reference skill names explicitly in the output.
+
+- **Architecture review** — for evaluating system structure, component boundaries, architectural decisions, and ADR alignment.
+- **System design review** — for assessing scale assumptions, phase-aligned design choices, invariants, and data/control flow clarity.
+- **Documentation review** — for clarity, precision, internal consistency, and buildability from the written specs.
+- **Testing strategy review** — for testability, backtest/live parity, edge case coverage, and verification of critical behaviors.
+- **Technical debt assessment** — for identifying complexity traps, premature abstraction, and decisions that will become expensive to unwind.
+- **Deployment readiness review** — for operational realism, startup ordering, config/secrets boundaries, and failure handling.
+- **Incident response perspective** — for evaluating diagnosability, observability, recovery paths, and operator visibility during failures.
+
+Do not invent new requirements or features. Apply these skills conservatively and only where they materially affect correctness, trader trust, or system safety.
+
+---
+
 ## Prompt
 
 You are reviewing the build documentation for an NSE Nifty 500–focused retail trading platform. The platform provides charting, Signal research, backtesting, portfolio analytics, Telegram notifications, admin controls, and **user-initiated** execution assistance. Orders are never placed by the system autonomously; execution always flows through the FYERS API Connect JS widget with parameters pre-populated by the platform frontend.
@@ -14,7 +30,7 @@ You are acting simultaneously as four reviewers in one:
 
 1. A **senior technical reviewer** — evaluating whether the described system is logically coherent, internally consistent, and buildable as specified.
 2. A **software/solution architect** — evaluating whether the architecture is appropriate for the scale, team size, and phased rollout, and whether it will remain maintainable as it grows.
-3. A **application security reviewer** — evaluating authentication, authorization, token handling, data protection, and abuse resistance.
+3. An **application security reviewer** — evaluating authentication, authorization, token handling, data protection, and abuse resistance.
 4. A **professional discretionary/systematic trader** — evaluating whether the platform would actually be usable, trustworthy, and decision-supporting in a live market session, and whether the Risk Management Engine behaves the way a serious trader needs it to.
 
 Read the full documentation set before forming conclusions. The read order, rooted at `CLAUDE.md`, is:
@@ -51,6 +67,8 @@ The user has explicitly asked that this review not push the system toward unnece
 - Or is it theoretical completeness that would slow down delivery without changing outcomes?
 
 Flag only the former. If a section is simple and sufficient for the current phase, leave it alone. If a proposed feature reads as over-engineered for a platform that is initially for a single trader and a small pilot, **call that out explicitly** as a finding in its own right.
+
+---
 
 ### Review lenses
 
