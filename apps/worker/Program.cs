@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Observability;
