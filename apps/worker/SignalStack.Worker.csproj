@@ -3,5 +3,9 @@
     <AssemblyName>SignalStack.Worker</AssemblyName>
     <RootNamespace>SignalStack.Worker</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+  </ItemGroup>
 </Project>
 

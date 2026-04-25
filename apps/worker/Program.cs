@@ -1,31 +1,21 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using SignalStack.Worker.Configuration;
+using SignalStack.Worker.Hosting;
+using SignalStack.Worker.Singleton;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddHostedService<Worker>();
+builder.Services
+  .AddOptions<WorkerSingletonOptions>()
+  .BindConfiguration(WorkerSingletonOptions.SectionName)
+  .ValidateDataAnnotations()
+  .ValidateOnStart();
+
+builder.Services.AddSingleton<IWorkerInstanceIdentityProvider, WorkerInstanceIdentityProvider>();
+builder.Services.AddSingleton<IWorkerSingletonLeaseBackend, RedisWorkerSingletonLeaseBackend>();
+builder.Services.AddSingleton<IWorkerSingletonCoordinator, WorkerSingletonCoordinator>();
+builder.Services.AddHostedService<WorkerHeartbeatService>();
 
 var host = builder.Build();
 await host.RunAsync();
 
-internal sealed class Worker : BackgroundService
-{
-  private readonly ILogger<Worker> _logger;
-
-  public Worker(ILogger<Worker> logger)
-  {
-    _logger = logger;
-  }
-
-  protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-  {
-    _logger.LogInformation("SignalStack.Worker started.");
-
-    while (!stoppingToken.IsCancellationRequested)
-    {
-      await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-      _logger.LogInformation("SignalStack.Worker heartbeat.");
-    }
-  }
-}
-
+public partial class Program;

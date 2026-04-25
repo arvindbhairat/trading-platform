@@ -1,0 +1,36 @@
+name: worker-release-preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      resource_group:
+        description: Azure resource group containing the Worker App Service plan
+        required: true
+        type: string
+      worker_plan_name:
+        description: Worker App Service plan name
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      resource_group:
+        required: true
+        type: string
+      worker_plan_name:
+        required: true
+        type: string
+
+jobs:
+  singleton-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Verify Worker singleton plan invariants
+        shell: pwsh
+        run: >
+          ./infra/azure/scripts/Test-WorkerSingletonPreflight.ps1
+          -ResourceGroup "${{ inputs.resource_group || github.event.inputs.resource_group }}"
+          -PlanName "${{ inputs.worker_plan_name || github.event.inputs.worker_plan_name }}"
