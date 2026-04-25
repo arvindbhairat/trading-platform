@@ -1,4 +1,4 @@
-# Risk Management Engine (RME) – Full Functional Specification
+# Risk Management Engine (RME) ï¿½ Full Functional Specification
 
 ## 1. Overview
 The RME is a modular, abstract framework to manage the lifecycle of long positions using technical methodologies. It evaluates multiple techniques, parameters, and timeframes to identify robust configurations.
@@ -45,22 +45,22 @@ For every candle:
 ### 4.1 Composite Score
 
 Score =
-(0.20 × Normalized CAGR)
-+ (0.15 × Sharpe Ratio)
-+ (0.15 × Expectancy)
-+ (0.10 × Profit Factor)
-+ (0.10 × Stability Score)
-+ (0.10 × Regime Consistency)
-+ (0.10 × Capital Efficiency)
-+ (0.10 × Trade Quality)
-- (0.10 × Max Drawdown Penalty)
+(0.20 x Normalized CAGR)
++ (0.15 x Sharpe Ratio)
++ (0.15 x Expectancy)
++ (0.10 x Profit Factor)
++ (0.10 x Stability Score)
++ (0.10 x Regime Consistency)
++ (0.10 x Capital Efficiency)
++ (0.10 x Trade Quality)
++ (0.10 x Max Drawdown Penalty)
 
 ---
 
 ### 4.2 Detailed Components
 
 **Expectancy**
-Expectancy = (Win% × Avg Win) - (Loss% × Avg Loss)
+Expectancy = (Win% x Avg Win) - (Loss% x Avg Loss)
 
 **Stability Score**
 Stability = 1 - (StdDev(Returns across windows) / Mean Return)
@@ -90,7 +90,7 @@ Penalty = MaxDD / Threshold
 
 ### 4.3 Robustness Factor
 
-Final Score = Composite Score × Robustness Factor
+Final Score = Composite Score x Robustness Factor
 
 Robustness Factor includes:
 
@@ -125,7 +125,7 @@ Engine evaluates:
 - Daily
 - Weekly
 - Monthly
-- Rolling N-day (3,5,7,10,15…)
+- Rolling N-day (3,5,7,10,15)
 
 And combinations:
 - Weekly trend + Daily execution

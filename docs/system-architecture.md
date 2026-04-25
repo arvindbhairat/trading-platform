@@ -544,6 +544,15 @@ LMDS and LADS are inactive. The Notification Delivery Job continues running to d
 
 The Worker Service must never run LMDS or LADS concurrently with the DataSync or EODSR steps on the same trading day.
 
+### Maintenance window (A-14)
+
+Admin-triggered operations — Universe Sync (CSV upload), HistoricDataSeed (HDS), sys_config changes, and manual trade-ledger operations — are available at any time through the admin portal, but they carry interference risk if run during active scheduled jobs. The preferred maintenance windows are:
+
+- **Pre-market (07:00–08:30 IST)** for Universe Sync and small HDS seeds. This window closes before LMDS starts at pre-session setup (08:45 IST) and avoids interfering with live data flows.
+- **Post-EODSR (20:00+ IST)** for large HDS seeds and any operations that produce high SQL Server write load. EODSR typically completes by 19:30 IST; running large seeds after 20:00 IST avoids contending with the EOD pipeline.
+
+These windows are informational recommendations for the operator, not platform-enforced scheduling constraints. The admin portal must display these preferred windows in the operational status widget alongside any queued or in-progress admin jobs.
+
 ---
 
 ## Cross-Cutting Concerns

@@ -100,7 +100,7 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 
 ### Performance and resilience
 
-- a load test must be executed and recorded before the Phase B transition: simulate the Phase A approved-user ceiling (20 concurrent users) at peak concurrent activity (dashboard load, chart navigation, intraday sync, LMDS active) and verify all SLO targets in the table below hold; load-test results gate the Phase B transition per REQ-LEGAL-005 indirectly through REQ-NFR-014
+- a load test must be executed and recorded before the Phase B transition: simulate the Phase A approved-user ceiling at peak concurrent activity (dashboard load, chart navigation, intraday sync, LMDS active) and verify all SLO targets in the table below hold; the concurrent user count for the load test must equal the current value of `sys_config.operations.phase_a.tester_ceiling` at the time the test is run (currently 30 — do not hard-code a fixed number in the test script); load-test results gate the Phase B transition per REQ-LEGAL-005 indirectly through REQ-NFR-014
 
 #### Load-test SLO targets (Phase B gate)
 
@@ -159,6 +159,17 @@ Recovery targets are differentiated by datastore role and time-of-day. "Market h
 | Redis (session cache, singleton lease, throttle state) | Any | No durability requirement — Redis is a rebuildable cache; loss is operationally recoverable | ≤ 15 minutes |
 
 These targets define the Azure backup and geo-replication configuration minimums. The MongoDB market-hours targets require continuous backup or change-stream-based replication to a secondary; a daily snapshot alone is insufficient. SQL Server historical data is fully rebuildable from the MDP via HDS and DS, so a daily Azure Backup snapshot is sufficient. Recovery exercises validating these targets must be included in the Phase C chaos exercises.
+
+## Caching Conventions
+
+### Shared read-model cache keys
+
+When a single server-side computation is used as the source of truth for multiple UI surfaces, a single shared cache key must be used — not one key per surface. Divergent keys produce stale-vs-fresh inconsistencies visible to the user within the same page load.
+
+**Canonical example — watchlist/chart signal parity (REQ-WATCH-002a):**
+The watchlist signal-summary panel and the chart signal overlay both derive their signal state from the same position snapshot. The Worker Service writes the snapshot and stamps it with `ledger_snapshot_version`. Both the watchlist API endpoint and the chart-data endpoint must read from a single Redis cache key keyed on `ledger_snapshot_version`. Neither endpoint may maintain its own separate cache entry for the same underlying data. On each Worker write, the old key is invalidated and the new key is written atomically.
+
+**Rule:** when two or more read paths share a common upstream write, identify the authoritative version stamp on that write (e.g., `ledger_snapshot_version`, `signal_subscription_version_id`) and use it as the shared cache key discriminator. Cache invalidation must occur at write time in the producing service — consumer services must not manage their own TTL-based invalidation for shared data.
 
 ## Documentation Standards
 

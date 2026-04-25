@@ -11,21 +11,27 @@ Status per runbook reflects whether it must exist at the current phase (per `REQ
 | 1 | DataSync failure recovery | `datasync-failure-recovery.md` | A | Stub in place, pending field-test refinement |
 | 2 | Admin FYERS token re-auth | `admin-fyers-token-reauth.md` | A | Stub in place, pending field-test refinement |
 | 3 | Data breach response (DPDP 72-hour notification) | `data-breach-response.md` | A | Stub in place, pending field-test refinement |
-| 4 | EOD Signal Runner failure or abort | *not yet drafted* | B | Missing |
-| 5 | HistoricDataSeed stuck or resume-from-failure | *not yet drafted* | B | Missing |
-| 6 | Telegram bot token replacement | *not yet drafted* | B | Missing |
-| 7 | Key Vault access failure | *not yet drafted* | B | Missing |
-| 8 | MongoDB restore from point-in-time | *not yet drafted* | B | Missing |
-| 9 | SQL Server restore (market data) | *not yet drafted* | B | Missing |
-| 10 | SQL Server restore (backtest) | *not yet drafted* | B | Missing |
-| 11 | sys_config rollback after a bad change | *not yet drafted* | B | Missing |
-| 12 | Market halt manual override | *not yet drafted* | B | Missing |
-| 13 | Global kill switch activation and deactivation | *not yet drafted* | B | Missing |
-| 14 | Phase transition (A→B or B→C) | *not yet drafted* | B | Missing |
-| 15 | User deactivation and reactivation | *not yet drafted* | B | Missing |
-| 16 | FYERS app credential rotation | *not yet drafted* | B | Missing |
+| 4 | RME concurrency-freeze admin resolution | `rme-concurrency-freeze-resolution.md` | A | Missing — must be drafted before Phase 6 build starts |
+| 5 | MongoDB replica-set failover during LADS polling | `mongodb-failover-lads-recovery.md` | A | Missing — must be drafted before Phase 6 build starts |
+| 6 | EOD Signal Runner failure or abort | *not yet drafted* | B | Missing |
+| 7 | HistoricDataSeed stuck or resume-from-failure | *not yet drafted* | B | Missing |
+| 8 | Telegram bot token replacement | *not yet drafted* | B | Missing |
+| 9 | Key Vault access failure | *not yet drafted* | B | Missing |
+| 10 | MongoDB restore from point-in-time | *not yet drafted* | B | Missing |
+| 11 | SQL Server restore (market data) | *not yet drafted* | B | Missing |
+| 12 | SQL Server restore (backtest) | *not yet drafted* | B | Missing |
+| 13 | sys_config rollback after a bad change | *not yet drafted* | B | Missing |
+| 14 | Market halt manual override | *not yet drafted* | B | Missing |
+| 15 | Global kill switch activation and deactivation | *not yet drafted* | B | Missing |
+| 16 | Phase transition (A→B or B→C) | *not yet drafted* | B | Missing |
+| 17 | User deactivation and reactivation | *not yet drafted* | B | Missing |
+| 18 | FYERS app credential rotation | *not yet drafted* | B | Missing |
 
-The three Phase A runbooks are mandatory before onboarding the first tester, per REQ-LEGAL-005 gating logic as surfaced through REQ-LEGAL-010's Legal Posture widget. The remaining entries are mandatory before the Phase B transition.
+**Phase A mandatory runbooks (5 total):** Runbooks 1–5 are mandatory before onboarding the first tester, per REQ-LEGAL-005 gating logic as surfaced through REQ-LEGAL-010's Legal Posture widget. Runbooks 4 and 5 were added as Phase A mandatory in the 2026-04-25 review (findings RME-L2 and A-12): the OCC-exhaustion concurrency-freeze path (REQ-RME-CONC-007) and the MongoDB replica-set failover / sustained LADS abort window (REQ-PORT-021a) are both realistic Phase A production scenarios that must have deterministic resolution procedures before the RME is in production. The remaining entries are mandatory before the Phase B transition.
+
+**Runbook #4 (RME concurrency-freeze resolution) must cover:** (a) detecting the frozen-with-visibility state in the admin System Health panel and OTLP traces; (b) verifying position document consistency in MongoDB before clearing the RME incident flag; (c) the specific admin action sequence to release the freeze without data loss; (d) post-incident verification steps confirming the affected position channel has resumed normal event processing.
+
+**Runbook #5 (MongoDB failover / LADS recovery) must cover:** (a) detecting that MongoDB replica-set failover has produced a sustained LADS abort window (three consecutive aborts per REQ-PORT-021a); (b) expected Worker behaviour during failover (retryWrites in flight, channel consumer retry exhaustion → admin advisory); (c) verifying replica-set primary election is complete before clearing the admin advisory; (d) confirming LADS resumes normal polling and the sustained-failure flag clears.
 
 ## Convention
 

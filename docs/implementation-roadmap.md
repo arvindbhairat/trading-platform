@@ -21,6 +21,8 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - establish Azure App Configuration, Key Vault integration, and configuration bootstrap patterns
 - wire structured logging and health checks
 
+**One-time scaffolding (author once, freeze until phase gate):** The following Phase 0 items are authored once and treated as frozen scaffolding between Phase 0 and their respective phase-gate reviews — they are not active engineering concerns during the Phase 1–7 build and must not be revisited or "improved" unless a specific phase-gate decision explicitly authorises a change: (1) Worker Service three-layer singleton enforcement (IaC template, pipeline gate, Redis lease — already called out above with the same freeze language); (2) OpenTelemetry, OTLP, and Serilog collector wiring — configure the collector pipeline, OTLP export target, and saturation policy (head-based sampling rate, export backpressure, queue depth) once and leave it unchanged; the saturation policy is not an active engineering concern after Phase 0; (3) Azure App Configuration and Key Vault bootstrap patterns — the integration code, startup validation, and fallback hierarchy are authored once and not modified until a requirement explicitly changes the configuration topology. The sys_config seeder console app, sentinel-row startup check, and LKG cache wiring authored in Phase 1 follow the same pattern: author once, freeze until phase gate, do not re-open during Phase 2–7.
+
 ## Phase 1: Identity and Access
 
 - implement OAuth sign-in
@@ -113,6 +115,8 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - implement admin global kill switch for platform-wide signal suspension
 - implement per-user and per-strategy enable and disable controls
 - build user dashboard: portfolio summary, XIRR, period performance (today, rolling 5/15/30 sessions, WTD, MTD), sector breakdown, positions summary with RME advisory state, and RME portfolio health strip
+
+**Phase B deferred (not a Phase 6 deliverable):** REQ-DRDN-006 (equity-curve-based position sizing modulation — reduce sizing on a declining equity curve, `risk.equity_curve_sizing.lookback_sessions`, enabled flag defaulting to `false`) is explicitly deferred to Phase B. The spec keeps the requirement and the sys_config seed key exists; the implementation is not built in Phase A. Phase A ships with `risk.equity_curve_sizing.enabled = false` and no equity-curve sizing code path. The feature flag means the deferral is transparent at runtime. Do not implement or stub REQ-DRDN-006 sizing logic during Phase 6.
 
 **Conditional Phase 6 build items — activated only if REQ-ORDER-010b CNC verification fails and the REQ-ORDER-010a fallback is in effect:**
 
