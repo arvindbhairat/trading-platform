@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using SignalStack.Api.Observability;
 
 const string ApiServiceName = "SignalStack.Api";
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddSignalStackTelemetry(ApiServiceName);
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();

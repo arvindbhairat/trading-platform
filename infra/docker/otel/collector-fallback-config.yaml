@@ -1,0 +1,51 @@
+extensions:
+  file_storage:
+    directory: /var/lib/otelcol/file-storage
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  extensions:
+    - file_storage
+  pipelines:
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - debug
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - debug
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - debug

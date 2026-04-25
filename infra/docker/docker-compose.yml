@@ -1,6 +1,30 @@
 name: signalstack-local
 
 services:
+  otel-collector-primary:
+    image: otel/opentelemetry-collector-contrib:0.102.1
+    container_name: signalstack-otel-primary
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "${OTEL_PRIMARY_GRPC_PORT:-4317}:4317"
+      - "${OTEL_PRIMARY_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./otel/collector-primary-config.yaml:/etc/otelcol/config.yaml:ro
+      - otel_primary_data:/var/lib/otelcol
+
+  otel-collector-fallback:
+    image: otel/opentelemetry-collector-contrib:0.102.1
+    container_name: signalstack-otel-fallback
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "${OTEL_FALLBACK_GRPC_PORT:-14317}:4317"
+      - "${OTEL_FALLBACK_HTTP_PORT:-14318}:4318"
+    volumes:
+      - ./otel/collector-fallback-config.yaml:/etc/otelcol/config.yaml:ro
+      - otel_fallback_data:/var/lib/otelcol
+
   mongo:
     image: mongo:7
     container_name: signalstack-mongo
@@ -39,6 +63,8 @@ services:
       start_period: 20s
 
 volumes:
+  otel_primary_data:
+  otel_fallback_data:
   mongo_data:
   redis_data:
   mssql_data:

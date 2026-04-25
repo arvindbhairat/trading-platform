@@ -1,7 +1,7 @@
 {
   "current_phase": "P1",
   "current_version": "v0.2",
-  "current_task_id": "P1-T5",
+  "current_task_id": "P1-T6",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -9,10 +9,10 @@
     "P1-T1",
     "P1-T2",
     "P1-T3",
-    "P1-T4"
+    "P1-T4",
+    "P1-T5"
   ],
   "pending_tasks": [
-    "P1-T5",
     "P1-T6",
     "P1-T7",
     "P1-T8",
@@ -150,7 +150,10 @@
       "REQ-TECH-002",
       "REQ-TECH-003",
       "REQ-NFR-015",
-      "REQ-RME-CONC-006"
+      "REQ-RME-CONC-006",
+      "REQ-NFR-008",
+      "REQ-NFR-009",
+      "REQ-NFR-009a"
     ],
     "P2": [],
     "P3": [],
@@ -162,5 +165,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-25T11:22:59Z"
+  "last_updated": "2026-04-25T17:49:24Z"
 }

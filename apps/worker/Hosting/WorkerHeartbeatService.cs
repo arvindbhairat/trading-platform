@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using SignalStack.Worker.Configuration;
+using SignalStack.Worker.Observability;
 using SignalStack.Worker.Singleton;
 
 namespace SignalStack.Worker.Hosting;
@@ -25,6 +27,7 @@ internal sealed class WorkerHeartbeatService : BackgroundService
 
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
   {
+    using var startupActivity = WorkerTelemetry.ActivitySource.StartActivity("worker.startup");
     var startupDecision = await _singletonCoordinator.AcquireStartupLeaseAsync(stoppingToken);
 
     if (startupDecision.ShouldExitWithFailure)
@@ -43,10 +46,13 @@ internal sealed class WorkerHeartbeatService : BackgroundService
 
       if (DateTimeOffset.UtcNow - lastLeaseRefreshUtc >= TimeSpan.FromSeconds(_options.RefreshIntervalSeconds))
       {
+        var leaseRefreshStartedAt = Stopwatch.GetTimestamp();
         await _singletonCoordinator.TryRefreshLeaseAsync(stoppingToken);
+        WorkerTelemetry.LeaseRefreshDurationMilliseconds.Record(Stopwatch.GetElapsedTime(leaseRefreshStartedAt).TotalMilliseconds);
         lastLeaseRefreshUtc = DateTimeOffset.UtcNow;
       }
 
+      WorkerTelemetry.HeartbeatCounter.Add(1);
       _logger.LogInformation("SignalStack.Worker heartbeat.");
     }
   }

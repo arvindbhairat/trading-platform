@@ -1,8 +1,11 @@
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
+using SignalStack.Worker.Observability;
 using SignalStack.Worker.Singleton;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddSignalStackTelemetry(WorkerTelemetry.ServiceName);
 
 builder.Services
   .AddOptions<WorkerSingletonOptions>()
