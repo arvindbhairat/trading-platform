@@ -1,16 +1,16 @@
 {
   "current_phase": "P1",
   "current_version": "v0.2",
-  "current_task_id": "P1-T3",
+  "current_task_id": "P1-T4",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
     "P0-T3",
     "P1-T1",
-    "P1-T2"
+    "P1-T2",
+    "P1-T3"
   ],
   "pending_tasks": [
-    "P1-T3",
     "P1-T4",
     "P1-T5",
     "P1-T6",
@@ -146,7 +146,11 @@
   "deactivated_tasks": [],
   "phase_coverage": {
     "P0": [],
-    "P1": [],
+    "P1": [
+      "REQ-TECH-002",
+      "REQ-TECH-003",
+      "REQ-NFR-015"
+    ],
     "P2": [],
     "P3": [],
     "P4": [],
@@ -157,5 +161,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-25T10:30:00Z"
+  "last_updated": "2026-04-25T11:10:49Z"
 }
