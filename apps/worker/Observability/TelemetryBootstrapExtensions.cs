@@ -8,7 +8,7 @@ namespace SignalStack.Worker.Observability;
 
 internal static class TelemetryBootstrapExtensions
 {
-  public static void AddSignalStackTelemetry(this HostApplicationBuilder builder, string serviceName)
+  public static void AddSignalStackTelemetry(this IHostApplicationBuilder builder, string serviceName)
   {
     var telemetryOptions = builder.Configuration
       .GetSection(OtlpTelemetryOptions.SectionName)
