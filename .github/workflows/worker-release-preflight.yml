@@ -1,36 +1,34 @@
-name: worker-release-preflight
+# Worker singleton pre-flight check.
+# Runs before every Worker deployment to ensure no autoscale rule or extra instance
+# exists in the target App Service Plan. Fails the release if either is detected.
+
+name: Worker Release Pre-flight
 
 on:
-  workflow_dispatch:
-    inputs:
-      resource_group:
-        description: Azure resource group containing the Worker App Service plan
-        required: true
-        type: string
-      worker_plan_name:
-        description: Worker App Service plan name
-        required: true
-        type: string
   workflow_call:
     inputs:
       resource_group:
         required: true
         type: string
-      worker_plan_name:
+      app_service_plan:
         required: true
         type: string
 
 jobs:
   singleton-preflight:
+    name: Verify Worker Singleton Invariant
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Verify Worker singleton plan invariants
+
+      - name: Run singleton pre-flight script
         shell: pwsh
-        run: >
-          ./infra/azure/scripts/Test-WorkerSingletonPreflight.ps1
-          -ResourceGroup "${{ inputs.resource_group || github.event.inputs.resource_group }}"
-          -PlanName "${{ inputs.worker_plan_name || github.event.inputs.worker_plan_name }}"
+        run: |
+          infra/azure/scripts/Test-WorkerSingletonPreflight.ps1 \
+            -ResourceGroup "${{ inputs.resource_group }}" \
+            -AppServicePlan "${{ inputs.app_service_plan }}"

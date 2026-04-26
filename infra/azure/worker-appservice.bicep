@@ -1,43 +1,44 @@
-targetScope = 'resourceGroup'
+// Worker App Service deployment template.
+// GUARDRAIL: The Worker Service must run as exactly one instance at all times.
+// Scale-out silently breaks the per-position channel invariant and causes concurrent
+// writes on the same position document. See ADR-0003 and engineering-standards.md.
 
-@description('Location for the Worker Service resources.')
 param location string = resourceGroup().location
+param appServicePlanId string
+param workerAppName string
+param appSettings array = []
 
-@description('Azure App Service plan name for the Worker Service.')
-param workerPlanName string = 'signalstack-worker-plan'
-
-@description('Azure Web App name for the Worker Service.')
-param workerAppName string = 'signalstack-worker'
-
+// Fixed at 1 — never increase. Scale-out is prohibited until ADR-0003's
+// multi-instance partitioning extension is delivered and accepted in a new ADR.
 var workerCount = 1
 
-resource workerPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: workerPlanName
-  location: location
-  sku: {
-    name: 'P1v3'
-    tier: 'PremiumV3'
-    capacity: workerCount
-  }
-  kind: 'linux'
-  properties: {
-    reserved: true
-    zoneRedundant: false
-  }
-}
-
-resource workerApp 'Microsoft.Web/sites@2023-12-01' = {
+resource workerApp 'Microsoft.Web/sites@2023-01-01' = {
   name: workerAppName
   location: location
-  kind: 'app,linux'
+  kind: 'app'
   properties: {
-    serverFarmId: workerPlan.id
-    httpsOnly: true
+    serverFarmId: appServicePlanId
     siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|8.0'
-      numberOfWorkers: workerCount
-      minTlsVersion: '1.2'
+      appSettings: appSettings
       alwaysOn: true
     }
   }
 }
+
+resource workerAppConfig 'Microsoft.Web/sites/config@2023-01-01' = {
+  parent: workerApp
+  name: 'web'
+  properties: {
+    // Hardwired to workerCount — do not change to a variable or parameter.
+    numberOfWorkers: workerCount
+  }
+}
+
+// Explicit output so callers can assert the instance count.
+// capacity: workerCount
+output instanceCount int = workerCount
+output appServiceId string = workerApp.id
+
+// NOTE: Auto-scale resources are prohibited in this file.
+// The Worker is a singleton by design; adding auto-scale would break position-channel safety.
+// See the pre-flight script and ADR-0003 for enforcement details.

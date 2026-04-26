@@ -1,37 +1,65 @@
-param(
-  [Parameter(Mandatory = $true)]
-  [string]$ResourceGroup,
+<#
+.SYNOPSIS
+    Pre-flight guard: asserts the Worker App Service is running as a singleton
+    with no autoscale rules attached to its hosting plan.
 
-  [Parameter(Mandatory = $true)]
-  [string]$PlanName
+.DESCRIPTION
+    Called by the worker-release-preflight.yml GitHub Actions workflow before
+    every Worker deployment. Exits non-zero (failing the pipeline) if:
+      - The App Service Plan has an instance count > 1, OR
+      - An autoscale setting targets the App Service Plan.
+
+    This enforces the non-negotiable guardrail from engineering-standards.md and
+    ADR-0003: the Worker must run as exactly one instance until multi-instance
+    partitioning is designed and accepted in a successor ADR.
+
+.PARAMETER ResourceGroup
+    The Azure resource group containing the App Service Plan.
+
+.PARAMETER AppServicePlan
+    The name of the App Service Plan to inspect.
+
+.EXAMPLE
+    ./Test-WorkerSingletonPreflight.ps1 -ResourceGroup rg-signalstack-prod -AppServicePlan asp-worker-prod
+#>
+param(
+    [Parameter(Mandatory)]
+    [string]$ResourceGroup,
+
+    [Parameter(Mandatory)]
+    [string]$AppServicePlan
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Write-Host "==> Checking Worker singleton invariant for plan '$AppServicePlan' in '$ResourceGroup'..."
+
+# ── 1. Verify instance count ──────────────────────────────────────────────────
 $plan = az appservice plan show `
-  --resource-group $ResourceGroup `
-  --name $PlanName `
-  --output json | ConvertFrom-Json
+    --resource-group $ResourceGroup `
+    --name $AppServicePlan `
+    --output json | ConvertFrom-Json
 
-if (-not $plan) {
-  throw "Worker App Service plan '$PlanName' was not found in resource group '$ResourceGroup'."
+$currentCapacity = $plan.sku.capacity
+if ($currentCapacity -ne 1) {
+    Write-Error "FAIL: App Service Plan '$AppServicePlan' has $currentCapacity instance(s). Expected exactly 1."
+    exit 1
 }
+Write-Host "  [OK] Instance count = $currentCapacity"
 
-$workerCount = if ($plan.sku -and $plan.sku.capacity -ne $null) { [int]$plan.sku.capacity } else { -1 }
-if ($workerCount -ne 1) {
-  throw "Worker singleton preflight failed: expected App Service plan capacity 1, found $workerCount."
+# ── 2. Check for autoscale settings targeting this plan ───────────────────────
+$planId = $plan.id
+$autoscaleRules = az monitor autoscale list `
+    --resource-group $ResourceGroup `
+    --output json | ConvertFrom-Json |
+    Where-Object { $_.targetResourceUri -ieq $planId }
+
+if ($autoscaleRules.Count -gt 0) {
+    Write-Error "FAIL: Found $($autoscaleRules.Count) autoscale setting(s) targeting '$AppServicePlan'. Remove them before deploying."
+    exit 1
 }
+Write-Host "  [OK] No autoscale settings found"
 
-$autoscale = az monitor autoscale list `
-  --resource-group $ResourceGroup `
-  --output json | ConvertFrom-Json
-
-$attachedAutoscaleRules = @($autoscale | Where-Object {
-  $_.enabled -eq $true -and $_.targetResourceUri -like "*serverfarms/$PlanName"
-})
-
-if ($attachedAutoscaleRules.Count -gt 0) {
-  throw "Worker singleton preflight failed: autoscale is attached to App Service plan '$PlanName'."
-}
-
-Write-Host "Worker singleton preflight passed for App Service plan '$PlanName'."
+Write-Host "==> Pre-flight passed. Worker singleton invariant is intact."
+exit 0

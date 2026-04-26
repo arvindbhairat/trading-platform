@@ -29,6 +29,6 @@ public sealed class WorkerSingletonInfrastructureLintTests
 
   private static string GetRepoRoot()
   {
-    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
   }
 }
