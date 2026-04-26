@@ -301,6 +301,13 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# Next.js
+.next/
+out/
+
+# Next.js local env files (never commit secrets)
+.env*.local
+
 # Visual Studio 6 build log
 *.plg
 

@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
       - name: Build
         run: dotnet build SignalStack.sln -c Release
       - name: Test
@@ -26,8 +26,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install
-        working-directory: apps/web
-        run: npm install
+        run: npm ci
       - name: Lint
         working-directory: apps/web
         run: npm run lint
