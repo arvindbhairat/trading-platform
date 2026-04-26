@@ -6,6 +6,10 @@
     "apps/web",
     "packages/*"
   ],
+  "engines": {
+    "node": ">=24",
+    "npm": ">=10"
+  },
   "scripts": {
     "web:dev": "npm --workspace @signalstack/web run dev",
     "web:build": "npm --workspace @signalstack/web run build",
@@ -17,4 +21,3 @@
     "dotnet:test": "dotnet test SignalStack.sln -c Release"
   }
 }
-
