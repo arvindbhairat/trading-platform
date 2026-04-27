@@ -31,19 +31,25 @@ IF ERRORLEVEL 1 (
 
 cd apps\web || exit /b 1
 
-npm ci
+echo.
+echo Installing dependencies
+call npm ci
 IF ERRORLEVEL 1 exit /b 1
 
-npm run lint
+echo.
+echo Running lint
+call npm run lint
 IF ERRORLEVEL 1 exit /b 1
 
-npm run build
+echo.
+echo Building web app
+call npm run build
 IF ERRORLEVEL 1 exit /b 1
 
-cd..\..
+cd ..\..
 
 echo.
 echo ===============================
-echo BUILD SUCCESSFUL ✅
+echo BUILD SUCCESSFUL
 echo ===============================
 exit /b 0
