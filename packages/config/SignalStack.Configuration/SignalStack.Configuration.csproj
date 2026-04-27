@@ -14,17 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="OpenTelemetry">
-      <HintPath>$(USERPROFILE)\.nuget\packages\opentelemetry\1.15.3\lib\net10.0\OpenTelemetry.dll</HintPath>
-    </Reference>
-    <Reference Include="Serilog">
-      <HintPath>$(USERPROFILE)\.nuget\packages\serilog\4.2.0\lib\net8.0\Serilog.dll</HintPath>
-    </Reference>
-    <Reference Include="Serilog.Extensions.Logging">
-      <HintPath>$(USERPROFILE)\.nuget\packages\serilog.extensions.logging\8.0.0\lib\net8.0\Serilog.Extensions.Logging.dll</HintPath>
-    </Reference>
-    <Reference Include="Serilog.Sinks.Console">
-      <HintPath>$(USERPROFILE)\.nuget\packages\serilog.sinks.console\6.0.0\lib\net8.0\Serilog.Sinks.Console.dll</HintPath>
-    </Reference>
+    <PackageReference Include="OpenTelemetry" Version="1.15.3" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
 </Project>
