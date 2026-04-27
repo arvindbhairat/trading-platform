@@ -7,13 +7,7 @@ echo Building SignalStack locally
 echo ===============================
 
 echo.
-echo === .NET: Restore & Build ===
-
-where dotnet >nul 2>&1
-IF ERRORLEVEL 1 (
-  echo ERROR: dotnet SDK not found in PATH
-  exit /b 1
-)
+echo === .NET: Restore and Build ===
 
 dotnet.exe restore SignalStack.sln
 IF ERRORLEVEL 1 exit /b 1
@@ -46,7 +40,7 @@ IF ERRORLEVEL 1 exit /b 1
 npm run build
 IF ERRORLEVEL 1 exit /b 1
 
-cd ..\..
+cd..\..
 
 echo.
 echo ===============================
