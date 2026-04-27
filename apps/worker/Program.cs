@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using SignalStack.Configuration.Bootstrap;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Observability;
@@ -6,6 +7,7 @@ using SignalStack.Worker.Singleton;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.AddSignalStackBootstrapConfiguration(WorkerTelemetry.ServiceName);
 builder.AddSignalStackTelemetry(WorkerTelemetry.ServiceName);
 
 builder.Services

@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\apps\worker\SignalStack.Worker.csproj" />
+    <ProjectReference Include="..\..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
   </ItemGroup>
 </Project>

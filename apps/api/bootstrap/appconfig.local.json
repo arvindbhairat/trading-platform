@@ -1,0 +1,8 @@
+{
+  "Values": {
+    "Telemetry:Otlp:PrimaryEndpoint": "@kv:observability--otlp-primary-endpoint",
+    "Telemetry:Otlp:FallbackEndpoint": "http://localhost:14317",
+    "Telemetry:Otlp:UseFallbackEndpoint": "false",
+    "Telemetry:Otlp:ExportTimeoutMilliseconds": "5000"
+  }
+}

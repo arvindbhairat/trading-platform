@@ -13,5 +13,15 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="bootstrap\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
 

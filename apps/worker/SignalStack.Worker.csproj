@@ -15,5 +15,15 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="bootstrap\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
 

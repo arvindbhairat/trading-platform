@@ -3,6 +3,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using SignalStack.Configuration.Bootstrap;
 
 namespace SignalStack.Worker.Observability;
 
@@ -55,6 +56,7 @@ internal static class TelemetryBootstrapExtensions
         .AddRuntimeInstrumentation()
         .AddHttpClientInstrumentation()
         .AddMeter(WorkerTelemetry.Meter.Name)
+        .AddMeter(ConfigurationBootstrapTelemetry.MeterName)
         .AddOtlpExporter(exporter =>
         {
           exporter.Endpoint = telemetryOptions.GetActiveEndpoint();

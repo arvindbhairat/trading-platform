@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalStack.Api.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalStack.Worker.Tests", "tests\\worker\\SignalStack.Worker.Tests\\SignalStack.Worker.Tests.csproj", "{A6EEA2C5-EF55-4A31-8D93-3E59CC2E893B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalStack.Configuration", "packages\\config\\SignalStack.Configuration\\SignalStack.Configuration.csproj", "{482F4D44-99EE-4D75-8DC8-6F6B12AF0D4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{A6EEA2C5-EF55-4A31-8D93-3E59CC2E893B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6EEA2C5-EF55-4A31-8D93-3E59CC2E893B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6EEA2C5-EF55-4A31-8D93-3E59CC2E893B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{482F4D44-99EE-4D75-8DC8-6F6B12AF0D4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{482F4D44-99EE-4D75-8DC8-6F6B12AF0D4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{482F4D44-99EE-4D75-8DC8-6F6B12AF0D4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{482F4D44-99EE-4D75-8DC8-6F6B12AF0D4A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

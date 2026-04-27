@@ -1,0 +1,3 @@
+{
+  "observability--otlp-primary-endpoint": "http://localhost:4317"
+}
