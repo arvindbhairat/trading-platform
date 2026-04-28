@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,41 @@ public sealed class HealthEndpointsTests : IClassFixture<WebApplicationFactory<P
     using var resp = await client.GetAsync("/api/v1");
 
     Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+  }
+
+  [Fact]
+  public async Task Api_responses_include_security_headers()
+  {
+    using var client = _factory.CreateClient();
+
+    using var resp = await client.GetAsync("/api/v1");
+
+    Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+    Assert.Equal("DENY", resp.Headers.GetValues("X-Frame-Options").Single());
+    Assert.Equal("nosniff", resp.Headers.GetValues("X-Content-Type-Options").Single());
+    Assert.Equal("strict-origin-when-cross-origin", resp.Headers.GetValues("Referrer-Policy").Single());
+    Assert.Equal("camera=(), microphone=(), geolocation=()", resp.Headers.GetValues("Permissions-Policy").Single());
+
+    var csp = resp.Headers.GetValues("Content-Security-Policy").Single();
+    Assert.Contains("default-src 'none'", csp);
+    Assert.Contains("frame-ancestors 'none'", csp);
+  }
+
+  [Fact]
+  public async Task Auth_probe_rate_limits_after_threshold()
+  {
+    using var client = _factory.CreateClient();
+
+    for (var attempt = 0; attempt < 10; attempt++)
+    {
+      using var okResponse = await client.PostAsJsonAsync("/api/v1/auth/probe", new { });
+      Assert.Equal(HttpStatusCode.OK, okResponse.StatusCode);
+    }
+
+    using var rateLimitedResponse = await client.PostAsJsonAsync("/api/v1/auth/probe", new { });
+
+    Assert.Equal((HttpStatusCode)429, rateLimitedResponse.StatusCode);
+    Assert.Equal("60", rateLimitedResponse.Headers.GetValues("Retry-After").Single());
   }
 
   [Fact]
