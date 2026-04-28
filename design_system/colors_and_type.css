@@ -9,12 +9,24 @@
    - Semantic color reserved for market direction + state.
    ============================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Local brand font — Roboto variable (wdth + wght axes). */
+@font-face {
+  font-family: 'Roboto';
+  src: url('fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype-variations'),
+       url('fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   /* ---------- Fonts ---------- */
-  --font-display: 'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
-  --font-sans:    'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  /* Brand font is Roboto (uploaded variable file). JetBrains Mono for numerics. */
+  --font-display: 'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* ---------- Neutrals (warm-white dark stack, ~2700K) ---------- */
@@ -111,7 +123,7 @@
 }
 
 /* =============================================================
-   Type — Manrope throughout. Density: comfortable-financial.
+   Type — Roboto throughout (brand). Density: comfortable-financial.
    ============================================================= */
 
 html, body {

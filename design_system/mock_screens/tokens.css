@@ -1,8 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
 /* =============================================================
    Signal Stack — Colors & Type
    Dark-first trading platform. Warm-white (2700–3000K) surfaces.
@@ -17,8 +12,8 @@
 /* Local brand font — Roboto variable (wdth + wght axes). */
 @font-face {
   font-family: 'Roboto';
-  src: url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype-variations'),
-       url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype');
+  src: url('fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype-variations'),
+       url('fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype');
   font-weight: 100 900;
   font-stretch: 75% 125%;
   font-style: normal;
@@ -29,6 +24,7 @@
 
 :root {
   /* ---------- Fonts ---------- */
+  /* Brand font is Roboto (local variable file). JetBrains Mono for numerics. */
   --font-display: 'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
   --font-sans:    'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -127,7 +123,7 @@
 }
 
 /* =============================================================
-   Type — Roboto throughout (brand). Density: comfortable-financial.
+   Type — Manrope throughout. Density: comfortable-financial.
    ============================================================= */
 
 html, body {
@@ -185,46 +181,3 @@ code, .t-code {
   outline-offset: 2px;
   border-radius: 3px;
 }
-
-</style>
-<style>
-  body { margin:0; padding: 20px; background: var(--bg-1); }
-  .card { background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 12px; padding: 22px; display:flex; flex-direction: column; gap: 12px; }
-  .row { display:flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .lbl { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); width: 80px; }
-  button { font-family: var(--font-sans); font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items:center; gap: 6px; }
-  .b-primary { background: var(--brand-500); color: white; }
-  .b-primary:hover { background: var(--brand-400); }
-  .b-secondary { background: var(--bg-3); color: var(--fg-1); border-color: var(--line-2); }
-  .b-ghost { background: transparent; color: var(--fg-2); }
-  .b-ghost:hover { background: var(--bg-3); color: var(--fg-1); }
-  .b-up { background: var(--up-500); color: white; }
-  .b-down { background: var(--down-bg); color: var(--down-500); border-color: rgba(239,59,59,0.3); }
-  .b-sm { padding: 5px 10px; font-size: 12px; }
-  .b-lg { padding: 11px 18px; font-size: 14px; }
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="row"><span class="lbl">Primary</span>
-    <button class="b-primary b-sm">Save</button>
-    <button class="b-primary">Create subscription</button>
-    <button class="b-primary b-lg">Confirm order</button>
-  </div>
-  <div class="row"><span class="lbl">Secondary</span>
-    <button class="b-secondary b-sm">Cancel</button>
-    <button class="b-secondary">Back</button>
-    <button class="b-secondary">Run backtest</button>
-  </div>
-  <div class="row"><span class="lbl">Ghost</span>
-    <button class="b-ghost">Dismiss</button>
-    <button class="b-ghost">Filter</button>
-  </div>
-  <div class="row"><span class="lbl">Semantic</span>
-    <button class="b-up">Mark as entered</button>
-    <button class="b-down">Close position</button>
-    <button class="b-primary" disabled style="opacity:0.4; cursor:not-allowed">Disabled</button>
-  </div>
-</div>
-</body>
-</html>

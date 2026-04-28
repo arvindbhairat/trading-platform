@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signal Stack · Screen mocks</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #f0eee9; }
+  * { box-sizing: border-box; }
+  input, select, button, textarea { font-family: inherit; }
+  /* Each artboard renders a portion of the dark app on a white canvas;
+     scope the dark body bg back inside each card. */
+  .ss-frame { background: var(--bg-0); color: var(--fg-1); width: 100%; height: 100%; overflow: hidden; font-family: var(--font-sans); }
+  .ss-frame * { box-sizing: border-box; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="primitives.jsx"></script>
+<script type="text/babel" src="auth-screens.jsx"></script>
+<script type="text/babel" src="user-screens.jsx"></script>
+<script type="text/babel" src="admin-screens.jsx"></script>
+
+<script type="text/babel">
+// Each artboard is the dark Signal Stack chrome. Wrap in .ss-frame so the
+// warm-black bg + ivory text are scoped to the card, not the canvas.
+const Frame = ({ children, w, h }) => (
+  <div className="ss-frame" style={{ width: w, height: h }}>{children}</div>
+);
+
+const App = () => (
+  <DesignCanvas>
+
+    <DCSection id="auth" title="Auth & onboarding"
+      subtitle="Sign-in → 3 separate consents → FYERS handoff → waitlist (REQ-LEGAL / REQ-PRIVACY / REQ-ROLE)">
+      <DCArtboard id="signin"   label="Sign-in"             width={1280} height={800}><Frame w={1280} h={800}><SignIn/></Frame></DCArtboard>
+      <DCArtboard id="consents" label="Three consents (step 2/4)" width={1280} height={800}><Frame w={1280} h={800}><Onboarding/></Frame></DCArtboard>
+      <DCArtboard id="fyers"    label="FYERS connect (step 3/4)"  width={1280} height={800}><Frame w={1280} h={800}><FyersConnect/></Frame></DCArtboard>
+      <DCArtboard id="waitlist" label="Awaiting approval"    width={1280} height={800}><Frame w={1280} h={800}><AwaitingApproval/></Frame></DCArtboard>
+      <DCPostIt top={20} left={1280 + 100} rotate={-3} width={220}>
+        Three independent acceptances per the spec — ToS v1.0, Privacy v1.0, Tester acknowledgement v1.2. Versions + timestamps captured.
+      </DCPostIt>
+    </DCSection>
+
+    <DCSection id="user" title="User portal — alerts & analytics"
+      subtitle="The two big surfaces missing from the original kit: full notification feed and the backtest results / RME profile optimisation page.">
+      <DCArtboard id="notifs"   label="Notifications"         width={1280} height={900}><Frame w={1280} h={900}><NotificationsFeed/></Frame></DCArtboard>
+      <DCArtboard id="backtest" label="Backtest results"      width={1280} height={1140}><Frame w={1280} h={1140}><BacktestResults/></Frame></DCArtboard>
+      <DCArtboard id="telegram" label="Telegram dispatch"     width={380} height={900}><Frame w={380} h={900}><TelegramPreview/></Frame></DCArtboard>
+      <DCPostIt top={-30} right={-220} rotate={2} width={200}>
+        Telegram payload enforces "decision support, not advice" disclaimer per REQ-LEGAL-002.
+      </DCPostIt>
+    </DCSection>
+
+    <DCSection id="admin" title="Admin portal"
+      subtitle="Operator-side screens: hard-cap of 30 testers, Nifty 500 sync state, scheduled jobs, NSE trading calendar.">
+      <DCArtboard id="approvals" label="User approvals"      width={1280} height={1000}><Frame w={1280} h={1000}><AdminApprovals/></Frame></DCArtboard>
+      <DCArtboard id="universe"  label="Universe & corp actions" width={1280} height={1000}><Frame w={1280} h={1000}><AdminUniverse/></Frame></DCArtboard>
+      <DCArtboard id="jobs"      label="Job runs"            width={1280} height={900}><Frame w={1280} h={900}><AdminJobs/></Frame></DCArtboard>
+      <DCArtboard id="calendar"  label="Trading calendar"    width={1280} height={900}><Frame w={1280} h={900}><AdminCalendar/></Frame></DCArtboard>
+    </DCSection>
+
+  </DesignCanvas>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

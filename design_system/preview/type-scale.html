@@ -14,12 +14,23 @@
    - Semantic color reserved for market direction + state.
    ============================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Local brand font — Roboto variable (wdth + wght axes). */
+@font-face {
+  font-family: 'Roboto';
+  src: url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype-variations'),
+       url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   /* ---------- Fonts ---------- */
-  --font-display: 'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
-  --font-sans:    'Manrope', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* ---------- Neutrals (warm-white dark stack, ~2700K) ---------- */
@@ -116,7 +127,7 @@
 }
 
 /* =============================================================
-   Type — Manrope throughout. Density: comfortable-financial.
+   Type — Roboto throughout (brand). Density: comfortable-financial.
    ============================================================= */
 
 html, body {
@@ -187,13 +198,13 @@ code, .t-code {
 </head>
 <body>
 <div class="card">
-  <div class="row"><span class="label">Display 1</span><span class="t-display-2" style="font-size:40px">Trade on your own terms</span><span class="spec">Space Grotesk · 700 · 40</span></div>
-  <div class="row"><span class="label">H1</span><span class="t-h1">Portfolio overview</span><span class="spec">Space Grotesk · 600 · 28</span></div>
-  <div class="row"><span class="label">H2</span><span class="t-h2">Open positions</span><span class="spec">Inter · 600 · 20</span></div>
-  <div class="row"><span class="label">H3</span><span class="t-h3">Volume Spike Signal</span><span class="spec">Inter · 600 · 16</span></div>
-  <div class="row"><span class="label">Body</span><span class="t-body">5 symbols matched your active subscriptions today.</span><span class="spec">Inter · 400 · 14</span></div>
-  <div class="row"><span class="label">Body sm</span><span class="t-body-sm">Stop per your risk profile: ₹2,760</span><span class="spec">Inter · 400 · 13</span></div>
-  <div class="row"><span class="label">Label</span><span class="t-label">Last sync · 3:35 PM</span><span class="spec">Inter · 600 · 11 · 0.06em</span></div>
+  <div class="row"><span class="label">Display 1</span><span class="t-display-2" style="font-size:40px">Trade on your own terms</span><span class="spec">Roboto · 700 · 40</span></div>
+  <div class="row"><span class="label">H1</span><span class="t-h1">Portfolio overview</span><span class="spec">Roboto · 700 · 28</span></div>
+  <div class="row"><span class="label">H2</span><span class="t-h2">Open positions</span><span class="spec">Roboto · 700 · 20</span></div>
+  <div class="row"><span class="label">H3</span><span class="t-h3">Volume Spike Signal</span><span class="spec">Roboto · 600 · 16</span></div>
+  <div class="row"><span class="label">Body</span><span class="t-body">5 symbols matched your active subscriptions today.</span><span class="spec">Roboto · 400 · 14</span></div>
+  <div class="row"><span class="label">Body sm</span><span class="t-body-sm">Stop per your risk profile: ₹2,760</span><span class="spec">Roboto · 400 · 13</span></div>
+  <div class="row"><span class="label">Label</span><span class="t-label">Last sync · 3:35 PM</span><span class="spec">Roboto · 600 · 11 · 0.06em</span></div>
 </div>
 </body>
 </html>

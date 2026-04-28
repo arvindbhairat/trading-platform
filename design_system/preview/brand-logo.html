@@ -1,8 +1,16 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Logo</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@800&display=swap');
-body { margin:0; padding: 20px; background: #151110; color: #f4ede2; font-family: 'Manrope', sans-serif; display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
+@font-face {
+  font-family: 'Roboto';
+  src: url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype-variations'),
+       url('../fonts/Roboto-VariableFont_wdth_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+body { margin:0; padding: 20px; background: #151110; color: #f4ede2; font-family: 'Roboto', sans-serif; display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
 .row { display: flex; gap: 32px; align-items: center; padding: 24px 28px; border-radius: 12px; border: 1px solid #2a2521; background: #1d1917; }
 .row.light { background: #f4ede2; color: #0e0b08; border-color: #c4bdb0; }
 .lockup { display: flex; gap: 14px; align-items: center; }
