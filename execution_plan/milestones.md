@@ -24,7 +24,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
   - Serilog redaction policy is unit-tested (engineering-standards § Security Standards).
   - Security baseline (CSRF, CSP, headers, WAF, rate limiting) is active on every portal response (REQ-SEC-001..006).
   - CI gates for dep scan, SAST, secret scan, axe-core, contract-diff scaffolding, coverage thresholds are enforcing (REQ-SEC-007/008/009, REQ-NFR-014/016, REQ-ACCESS-001).
-  - BCP / backup configuration is provisioned and verifiable per RPO/RTO (REQ-BCP-001..009, REQ-LEGAL-009).
+  - BCP / backup configuration is provisioned and verifiable per RPO/RTO (REQ-BCP-001..008, REQ-LEGAL-009).
   - Every collection in `data-management.md` is provisioned with prescribed indexes, TTL, and Online Archive policies (REQ-DATA-001..006a).
   - ADR-0003 per-position channel registry skeleton exists with serialised-write unit test.
   - Per-user trade-ledger lock primitives exist with fencing token and snapshot-version helper (REQ-PORT-031 primitives only).
