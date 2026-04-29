@@ -1,0 +1,46 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace SignalStack.Api.Tests;
+
+/// <summary>
+/// Custom <see cref="WebApplicationFactory{TProgram}"/> that:
+/// <list type="bullet">
+///   <item>Runs in the "Testing" environment.</item>
+///   <item>Supplies a stub MongoDB connection string so the Tier-1 bootstrap check passes.</item>
+///   <item>Removes the <c>MongoMigrationHostedService</c> so tests do not require a live MongoDB.</item>
+/// </list>
+/// The IMongoClient/IMongoDatabase singletons remain registered (MongoDB.Driver is lazy
+/// and will not attempt a connection until the first call); the hosted service is the only
+/// component that makes an actual connection at startup.
+/// </summary>
+public sealed class TestApiFactory : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:MongoDb"] = "mongodb://test-stub:27017/signalstack-test",
+            });
+        });
+
+        builder.ConfigureServices(services =>
+        {
+            // Remove the migration hosted service so no live MongoDB is needed.
+            var migrationHosted = services
+                .Where(d => d.ServiceType == typeof(IHostedService)
+                             && d.ImplementationType?.Name == "MongoMigrationHostedService")
+                .ToList();
+
+            foreach (var descriptor in migrationHosted)
+                services.Remove(descriptor);
+        });
+    }
+}

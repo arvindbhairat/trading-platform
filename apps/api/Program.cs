@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using SignalStack.Api.Observability;
 using SignalStack.Configuration.Bootstrap;
+using SignalStack.Migrations;
 
 const string ApiServiceName = "SignalStack.Api";
 const string AuthRateLimitPolicy = "auth-fixed-window";
@@ -11,6 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddSignalStackBootstrapConfiguration(ApiServiceName);
 builder.AddSignalStackTelemetry(ApiServiceName);
+
+var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
+var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
+builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
+
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
 {

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using SignalStack.Configuration.Bootstrap;
+using SignalStack.Migrations;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Observability;
@@ -9,6 +10,10 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddSignalStackBootstrapConfiguration(WorkerTelemetry.ServiceName);
 builder.AddSignalStackTelemetry(WorkerTelemetry.ServiceName);
+
+var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
+var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
+builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
 
 builder.Services
   .AddOptions<WorkerSingletonOptions>()

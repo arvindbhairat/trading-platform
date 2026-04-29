@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
+    <ProjectReference Include="..\..\packages\migrations\SignalStack.Migrations\SignalStack.Migrations.csproj" />
   </ItemGroup>
 
   <ItemGroup>
