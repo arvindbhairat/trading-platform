@@ -292,6 +292,21 @@ Use Redis where useful for:
 - short-lived caches
 - queues and coordination locks
 
+#### Redis logical database separation (REQ-PORT-031b(c))
+
+Two logical database indexes are required:
+
+| Index | Key pattern | maxmemory-policy | Purpose |
+|---|---|---|---|
+| `LOCK_DB_INDEX` (default 1) | `ledger:write:lock:*`, `ledger:write:fence:*`, `rme:worker:singleton` | **noeviction** | Coordination locks and fencing-token counters — must never be silently evicted |
+| `CACHE_DB_INDEX` (default 0) | all other keys | `allkeys-lru` or similar | Short-lived caches and fan-out — eviction is acceptable |
+
+This separation ensures Redis memory pressure cannot silently evict a held lock or invalidate a fencing-token counter, which would allow concurrent writers to bypass the mutual-exclusion guarantee.  Azure Cache for Redis must enforce these policies in infrastructure-as-code; the separation is documented here as the authoritative reference.
+
+#### Redlock trade-off (REQ-PORT-031b(a))
+
+The initial deployment uses a single Redis node.  Single-node Redlock degrades to a simple `SET NX` with TTL — not safe against Redis node failure while a lock is held (a failover can cause two processes to believe they each hold the lock simultaneously).  This is an accepted trade-off for the Phase A / Phase B testing period.  A three-node Redlock deployment is required before broader rollout.
+
 ## Observability Model
 
 - Next.js uses OpenTelemetry instrumentation directly

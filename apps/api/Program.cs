@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using SignalStack.Api.Observability;
 using SignalStack.Configuration.Bootstrap;
+using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
 
 const string ApiServiceName = "SignalStack.Api";
@@ -16,6 +17,9 @@ builder.AddSignalStackTelemetry(ApiServiceName);
 var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
 var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
 builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
+
+// Trade-ledger write lock primitives (REQ-PORT-031/031a/031b — writers wired in P5-T8)
+builder.Services.AddLedgerWriteLock();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
