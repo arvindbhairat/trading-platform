@@ -6,32 +6,170 @@ on:
   push:
     branches: ["main"]
 
+# Minimal permissions; jobs that need more declare them explicitly.
+permissions:
+  contents: read
+
 jobs:
+  # ── .NET build + test + coverage (REQ-NFR-014: 70% line threshold) ──────────
   dotnet:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+
       - name: Build
         run: dotnet build SignalStack.sln -c Release
-      - name: Test
-        run: dotnet test SignalStack.sln -c Release --no-build
 
+      - name: Test with coverage (threshold 70%)
+        run: |
+          dotnet test SignalStack.sln -c Release --no-build \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:Threshold=70 \
+            /p:ThresholdType=line \
+            /p:ThresholdStat=Total \
+            /p:CoverletOutput=./coverage/
+
+      - name: Upload .NET coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dotnet-coverage
+          path: "**/coverage/*.xml"
+
+  # ── Next.js lint + test + coverage (REQ-NFR-014: 60% TS threshold) ──────────
   web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+
       - name: Install
         run: npm ci
+
       - name: Lint
         working-directory: apps/web
         run: npm run lint
+
+      - name: Test with coverage (threshold 60%)
+        working-directory: apps/web
+        run: npm run test:coverage
+
       - name: Build
         working-directory: apps/web
         run: npm run build
 
+  # ── Dependency vulnerability scan (REQ-SEC-007) ─────────────────────────────
+  # High + Critical severity findings block merge.
+  dep-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Restore .NET packages
+        run: dotnet restore SignalStack.sln
+
+      - name: .NET NuGet vulnerability audit
+        run: |
+          VULN=$(dotnet list package --vulnerable --include-transitive 2>&1)
+          echo "$VULN"
+          # Fail on Critical or High severity lines (output format: "> PkgName  ver  Severity  URL")
+          if echo "$VULN" | grep -qE "^\s*>\s+\S+.*\s+(Critical|High)\s+https://"; then
+            echo "::error::Critical or High-severity NuGet vulnerabilities detected — merge blocked (REQ-SEC-007)."
+            exit 1
+          fi
+
+      - name: Node.js npm audit (high+)
+        run: npm audit --audit-level=high
+
+  # ── SAST via CodeQL (REQ-SEC-008) ───────────────────────────────────────────
+  sast:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: csharp, javascript-typescript
+          queries: security-and-quality
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: github/codeql-action/autobuild@v3
+
+      - uses: github/codeql-action/analyze@v3
+
+  # ── Secret scanning (REQ-SEC-009) ────────────────────────────────────────────
+  # Scans for verified secrets committed to the branch under review.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          head: ${{ github.sha }}
+          extra_args: --only-verified
+
+  # ── Axe-core WCAG 2.1 AA accessibility gate (REQ-ACCESS-001) ────────────────
+  axe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        run: npm ci
+
+      - name: Axe WCAG 2.1 AA gate
+        working-directory: apps/web
+        run: npm run test:axe
+
+  # ── Contract-diff scaffolding (REQ-NFR-016) ──────────────────────────────────
+  # Gate is wired; no contracts are registered yet (scaffolding pass).
+  # When the first contract snapshot is added to packages/testing/contracts/
+  # this job will automatically begin enforcing the API↔portal contract.
+  contract-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        run: npm ci
+
+      - name: API ↔ portal contract diff
+        run: npm --workspace @signalstack/testing run contract-diff

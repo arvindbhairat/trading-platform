@@ -1,0 +1,49 @@
+# Weekly dependency vulnerability scan against main (REQ-SEC-007).
+# Surfaces regressions caused by newly published CVEs between regular PRs.
+
+name: Scheduled Dependency Scan
+
+on:
+  schedule:
+    # Every Monday at 02:30 UTC
+    - cron: "30 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dep-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Restore .NET packages
+        run: dotnet restore SignalStack.sln
+
+      - name: .NET NuGet vulnerability audit (all severities logged)
+        id: nuget-audit
+        run: |
+          VULN=$(dotnet list package --vulnerable --include-transitive 2>&1)
+          echo "$VULN"
+          echo "vuln_output<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$VULN" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          # Block on Critical or High; warn on Medium/Low (already visible in log).
+          if echo "$VULN" | grep -qE "^\s*>\s+\S+.*\s+(Critical|High)\s+https://"; then
+            echo "::error::Critical or High-severity NuGet vulnerabilities found on main (REQ-SEC-007)."
+            exit 1
+          fi
+
+      - name: Node.js npm audit (all severities logged)
+        run: npm audit --audit-level=high
