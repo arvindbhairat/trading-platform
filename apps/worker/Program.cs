@@ -4,6 +4,7 @@ using SignalStack.Migrations;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Observability;
+using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -25,6 +26,15 @@ builder.Services.AddSingleton<IWorkerInstanceIdentityProvider, WorkerInstanceIde
 builder.Services.AddSingleton<IWorkerSingletonLeaseBackend, RedisWorkerSingletonLeaseBackend>();
 builder.Services.AddSingleton<IWorkerSingletonCoordinator, WorkerSingletonCoordinator>();
 builder.Services.AddHostedService<WorkerHeartbeatService>();
+
+// RME per-position channel registry (ADR-0003, REQ-RME-CONC-001/004/005)
+builder.Services
+    .AddOptions<PositionChannelOptions>()
+    .BindConfiguration(PositionChannelOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton<IRmeEventConsumer, NoOpRmeEventConsumer>();
+builder.Services.AddSingleton<IPositionChannelRegistry, PositionChannelRegistry>();
 
 var host = builder.Build();
 await host.RunAsync();

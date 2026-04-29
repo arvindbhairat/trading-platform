@@ -1,7 +1,7 @@
 {
   "current_phase": "P1",
   "current_version": "v0.2",
-  "current_task_id": "P1-T12",
+  "current_task_id": "P1-T13",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -16,10 +16,10 @@
     "P1-T8",
     "P1-T9",
     "P1-T10",
-    "P1-T11"
+    "P1-T11",
+    "P1-T12"
   ],
   "pending_tasks": [
-    "P1-T12",
     "P1-T13",
     "P1-T14",
     "P2-T1",
@@ -187,7 +187,12 @@
       "REQ-DATA-003",
       "REQ-DATA-004",
       "REQ-DATA-005",
-      "REQ-DATA-006a"
+      "REQ-DATA-006a",
+      "REQ-RME-CONC-001",
+      "REQ-RME-CONC-002",
+      "REQ-RME-CONC-003",
+      "REQ-RME-CONC-004",
+      "REQ-RME-CONC-005"
     ],
     "P2": [],
     "P3": [],
@@ -199,5 +204,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-29T11:30:50Z"
+  "last_updated": "2026-04-29T11:48:36Z"
 }
