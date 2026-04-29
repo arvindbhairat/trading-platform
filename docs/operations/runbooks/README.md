@@ -16,10 +16,10 @@ Status per runbook reflects whether it must exist at the current phase (per `REQ
 | 6 | EOD Signal Runner failure or abort | *not yet drafted* | B | Missing |
 | 7 | HistoricDataSeed stuck or resume-from-failure | *not yet drafted* | B | Missing |
 | 8 | Telegram bot token replacement | *not yet drafted* | B | Missing |
-| 9 | Key Vault access failure | *not yet drafted* | B | Missing |
-| 10 | MongoDB restore from point-in-time | *not yet drafted* | B | Missing |
-| 11 | SQL Server restore (market data) | *not yet drafted* | B | Missing |
-| 12 | SQL Server restore (backtest) | *not yet drafted* | B | Missing |
+| 9 | Key Vault access failure and secret recovery | `keyvault-secret-recovery.md` | B | Authored in P1-T10 (REQ-BCP-004/006/008) |
+| 10 | MongoDB restore from point-in-time | `mongodb-pitr-restore.md` | B | Authored in P1-T10 (REQ-BCP-001/006) |
+| 11 | SQL Server restore (market data) | `sqlserver-restore-market-data.md` | B | Authored in P1-T10 (REQ-BCP-002/006) |
+| 12 | SQL Server restore (backtest) | `sqlserver-restore-backtest.md` | B | Authored in P1-T10 (REQ-BCP-003/006) |
 | 13 | sys_config rollback after a bad change | *not yet drafted* | B | Missing |
 | 14 | Market halt manual override | *not yet drafted* | B | Missing |
 | 15 | Global kill switch activation and deactivation | *not yet drafted* | B | Missing |
