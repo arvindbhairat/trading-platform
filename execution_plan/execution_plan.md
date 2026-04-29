@@ -155,8 +155,16 @@ Each task carries:
 - **Frozen-after-author.**
 
 ### P1-T14 — Phase-gate verification for Phase 1
-- **Depends on:** P1-T1..T13.
+- **Depends on:** P1-T1..T13, P1-T15.
 - **Vertical slice:** every REQ-ID scoped to Phase 1 appears in `status.json.phase_coverage["P1"]`; no Phase 1 task has been re-opened by a later run; `milestones.md` § v0.2 acceptance criteria hold.
+
+### P1-T15 — Conflict resolution: correct milestones.md v0.2 REQ-BCP scope
+- **Depends on:** P1-T1..T13.
+- **REQ:** none direct (plan-doc correction only).
+- **Touches:** `execution_plan/milestones.md`.
+- **Vertical slice:** `milestones.md` v0.2 acceptance criterion for BCP says "REQ-BCP-001..008" (not ..009); REQ-BCP-009 appears under v0.3 (where P2-T4 is assigned it); no other phase's acceptance criteria are changed.
+- **Verification:** grep confirms "REQ-BCP-009" does not appear in the v0.2 section of milestones.md; it appears in the v0.3 section.
+- **Conflict resolved:** REQ-BCP-009 (admin MFA enforcement) is an identity-layer requirement implemented in P2-T4. The v0.2 milestone text incorrectly grouped it with backup-configuration requirements (BCP-001..008). This task corrects the milestones.md authoring error so P1-T14 phase-gate can complete.
 
 ---
 
