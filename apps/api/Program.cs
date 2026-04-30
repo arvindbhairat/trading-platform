@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Auth;
+using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
@@ -36,6 +37,9 @@ builder.Services.AddUserManagement();
 
 // Immutable audit event collection — REQ-SEC-011, REQ-CONFIG-005a
 builder.Services.AddAuditEventManagement();
+
+// FYERS credential management + token lifecycle — REQ-AUTH-003..010, 014, REQ-SESSION-009
+builder.Services.AddFyersTokenManagement();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
@@ -151,6 +155,9 @@ app.MapGroup("/api/v1/auth")
 
 // Auth endpoints: providers, login, callback, csrf, me — P2-T1
 app.MapAuthEndpoints(app.Environment);
+
+// FYERS credential management + token lifecycle endpoints — P2-T7
+app.MapFyersEndpoints();
 
 app.Run();
 

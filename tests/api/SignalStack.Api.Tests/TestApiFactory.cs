@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Fyers;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
@@ -71,6 +72,10 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             ReplaceService<ISysConfigRepository>(services,
                 new ServiceDescriptor(typeof(ISysConfigRepository),
                     typeof(InMemorySysConfigRepository), ServiceLifetime.Singleton));
+
+            ReplaceService<IFyersTokenRepository>(services,
+                new ServiceDescriptor(typeof(IFyersTokenRepository),
+                    typeof(InMemoryFyersTokenRepository), ServiceLifetime.Singleton));
         });
     }
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Fyers;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
@@ -69,6 +70,12 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
             ReplaceService<ISysConfigRepository>(services,
                 new ServiceDescriptor(typeof(ISysConfigRepository),
                     typeof(InMemorySysConfigRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed FYERS token repository with an in-memory
+            // implementation so the session/status FYERS token check works in tests.
+            ReplaceService<IFyersTokenRepository>(services,
+                new ServiceDescriptor(typeof(IFyersTokenRepository),
+                    typeof(InMemoryFyersTokenRepository), ServiceLifetime.Singleton));
         });
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { storeToken } from "@/lib/auth";
 import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
@@ -8,8 +8,16 @@ import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
 // Receives the JWT from the API OAuth callback redirect and stores it in
 // sessionStorage, then checks the server-side session state to route the user
 // to the correct lifecycle screen.
-// REQ-SESSION-010/011/012/013.
+// REQ-SESSION-010/011/012/013.  P2-T7 adds fyers_dirty routing.
 export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<main><p>Completing sign-in…</p></main>}>
+      <AuthCallbackContent />
+    </Suspense>
+  );
+}
+
+function AuthCallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -38,6 +46,14 @@ export default function AuthCallbackPage() {
           break;
         case "fyers_required":
           router.replace("/fyers-required");
+          break;
+        case "fyers_dirty":
+          // REQ-AUTH-009: dirty token — user must reauthenticate with FYERS.
+          router.replace("/fyers-auth?status=dirty");
+          break;
+        case "fyers_dirty_admin":
+          // REQ-SESSION-009: admin sees non-blocking warning, routed to home.
+          router.replace("/");
           break;
         case "deactivated":
           router.replace("/login?error=account_deactivated");

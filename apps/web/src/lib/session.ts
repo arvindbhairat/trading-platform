@@ -1,11 +1,14 @@
 // Session lifecycle helpers.
 // REQ-SESSION-007/008/010/011/012/013.
+// P2-T7 adds fyers_dirty / fyers_dirty_admin states.
 
 import { getToken, apiFetch } from "./auth";
 
 export type SessionState =
   | "active"
   | "fyers_required"
+  | "fyers_dirty"
+  | "fyers_dirty_admin"
   | "pending_approval"
   | "deactivated"
   | "pending_acknowledgement";
@@ -13,6 +16,11 @@ export type SessionState =
 export interface SessionStatus {
   state: SessionState;
   expires_at: string; // ISO-8601
+  step_up?: {
+    valid: boolean;
+    authenticated_at?: string;
+    expires_at?: string;
+  };
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
