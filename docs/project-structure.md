@@ -8,15 +8,34 @@ The **canonical layout rules** live in [`repo-structure.md`](./repo-structure.md
 
 ---
 
+## Navigation Quick Reference
+
+This map shows which document to consult for each concern during task execution:
+
+| Concern | Document |
+|---|---|
+| **Current task to execute** | `execution_plan/status.json` → `current_task_id` |
+| **Task definition (REQ, dependencies)** | `execution_plan/execution_plan.md` |
+| **Guardrails (must never violate)** | `CLAUDE.md` / `AGENTS.md` |
+| **Canonical names** | `docs/terminology.md` |
+| **Product requirements (REQ-IDs)** | `docs/requirements-spec.md` |
+| **Delivery sequence** | `docs/implementation-roadmap.md` |
+| **Architecture + flows** | `docs/system-architecture.md` |
+| **Where files go in this repo** | THIS FILE (`docs/project-structure.md`) |
+| **Canonical layout rules** | `docs/repo-structure.md` |
+| **Task log output** | `execution_plan/task_logs/{TIMESTAMP}__{TASK_ID}.md` |
+
 ## How to read this document
 
 **If you are an AI agent executing a task from `execution_plan/agent.md`:**
 
 1. Read `CLAUDE.md` (or `AGENTS.md`) at the root for non-negotiable guardrails.
 2. Read `execution_plan/status.json` to identify the next task.
-3. Use this file to locate the exact folders where your changes belong.
-4. Use `docs/terminology.md` before naming anything new.
-5. Write your task log to `execution_plan/task_logs/`.
+3. Read the task's **Touches** field in `execution_plan/execution_plan.md` to know which components to change.
+4. Use this file to locate the exact folders where your changes belong.
+5. Use `docs/terminology.md` before naming anything new.
+6. Read the matching skill file at `.claude/skills/{domain}.md` before writing code.
+7. Write your task log to `execution_plan/task_logs/`.
 
 **If you are a human developer starting a new feature:**
 
@@ -24,6 +43,23 @@ The **canonical layout rules** live in [`repo-structure.md`](./repo-structure.md
 2. Read `docs/requirements-spec.md` for product requirements.
 3. Check `docs/implementation-roadmap.md` for which phase owns the feature.
 4. Return here to find where to put the code.
+
+## Execution Plan Integration
+
+The execution plan (`execution_plan/`) drives incremental delivery. Each task has a **Touches** field that maps to folders in this repo:
+
+| Touches value | Maps to folder(s) |
+|---|---|
+| `apps/api` | `apps/api/` |
+| `apps/web` | `apps/web/` |
+| `apps/worker` | `apps/worker/` |
+| `packages/*` | `packages/` |
+| `infra/` | `infra/` |
+| `docs/` | `docs/` |
+| `.github/workflows/` | `.github/workflows/` |
+| `tests/` | `tests/` |
+
+When your task's **Touches** includes any of these, use the "Where to put new code" table below to locate the exact subfolder.
 
 ---
 

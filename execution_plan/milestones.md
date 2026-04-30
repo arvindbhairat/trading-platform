@@ -32,7 +32,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
 
 ## v0.3 — Identity, Sessions, Legal/Privacy, Admin Bootstrap, sys_config
 
-- **Tasks:** P2-T1..T18.
+- **Tasks:** P2-T1..T22.
 - **Acceptance:**
   - OAuth + Bearer-JWT auth boundary works end-to-end with all three providers (REQ-AUTH-001/002/011).
   - Server-side `sessions` collection enforces 24h TTL + single-active-session + FYERS-required redirect + expiry warning (REQ-SESSION-001..013).
@@ -48,11 +48,14 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
   - Privacy notice + RoPA + grievance officer page exist (REQ-PRIVACY-001/002/005/008/009/010/011/012).
   - Operating phase recording in `sys_config` + transition workflow gating (REQ-LEGAL-001).
   - REQ-ORDER-010b CNC sandbox verification outcome recorded; P7 vs P7-FALLBACK selected.
+  - Phase A constraints enforced at the service layer: billing blocked, registration invite-only, SEO noindex, no advice framing (REQ-LEGAL-002).
+  - Data subject rights workflow (access, correction, erasure, grievance) implemented with admin-portal ticket queue (REQ-PRIVACY-004).
+  - Data breach procedure and runbook documented; breach recording in `audit_events` verified (REQ-PRIVACY-006).
   - Phase 2 phase-gate verification has run.
 
 ## v0.4 — Universe, Calendar, Market Data Provider
 
-- **Tasks:** P3-T1..T15.
+- **Tasks:** P3-T1..T16.
 - **Acceptance:**
   - FYERS bulk-quotes accounting verified and recorded; `jobs.live_market_scan.poll_interval_seconds` adjusted if needed (REQ-MARKET-002c, ADR-0005).
   - Symbol master + suffix generation + collision check at boot work; `lot_size` field present (REQ-UNIV-001..010, REQ-HIST-005..008a).
@@ -67,6 +70,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
   - HistoricDataSeed scoped per-symbol table materialisation + idempotent + resumable (REQ-HIST-009/009a).
   - DataSync 10-session recovery + weekly/monthly upserts + success marker + token re-check (REQ-MARKET-005/005a/006/007).
   - Browser-tier FYERS WebSocket for live quotes + PLD lease + REST fallback (REQ-MARKET-002b, REQ-DASH-013, REQ-STOP-006c).
+  - Migration standards enforced: idempotent-or-paired-rollback pattern, dual-read window sys_config flag, batched background migration template (REQ-MIGRATION-003/005).
   - Phase 3 phase-gate verification has run.
 
 ## v0.5 — Strategy Research and Backtesting
@@ -137,7 +141,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
 
 ## v0.9 — Admin Operations, Hardening, Corporate Actions
 
-- **Tasks:** P8-T1..T14.
+- **Tasks:** P8-T1..T16.
 - **Acceptance:**
   - `audit_events` collection + helpers + retention live.
   - Admin job monitoring + retry controls + Symbol Validity Probe banner + maintenance window display (REQ-ADMIN-014, A-14).
@@ -152,6 +156,8 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
   - Load test at current tester ceiling executed (REQ-NFR-014, engineering-standards Load-test SLO targets) — Phase B gate.
   - Chaos / failure-injection exercises (REQ-NFR-014) — Phase C gate.
   - Corporate actions + symbol continuity behaviour applied to charts / backtests / holdings.
+  - Self-directed language review workflow active; CI lint detects prohibited terms in user-facing strings (REQ-LEGAL-006).
+  - SLO breach alert routing live with Telegram/email dispatch and per-SLO per-session cooldown (REQ-SLO-008).
   - Phase 8 phase-gate verification has run.
 
 ## v1.0 — V1 Hardening Pass

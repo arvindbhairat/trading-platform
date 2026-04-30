@@ -273,8 +273,29 @@ Each task carries:
 - **Vertical slice:** admin home page displays transfer recovery summary card with job-run status, transfer window detection, one-click retry actions, and FYERS token status notice. Implicitly requires Phase P5 job_runs infrastructure (P5-T2) and notification delivery (P5-T4) to be fully operational.
 - **Verification:** admin home page renders transfer recovery summary with live data; REQ-ROLE-007a acceptance criteria met.
 
+### P2-T20 — Phase A constraint enforcement layer
+- **Depends on:** P2-T16.
+- **REQ:** REQ-LEGAL-002.
+- **Touches:** `apps/api`, `apps/web`, `apps/worker`.
+- **Vertical slice:** With `operations.phase.current` set to `A`, the platform enforces: HTTP 403 on any billing/payment endpoint; invite-only or admin-pre-approval required for registration (no open signup); `X-Robots-Tag: noindex` on all portal pages; no user-facing content framed as investment advice. Bypassing via direct DB edit surfaces as a Legal Posture widget violation. Phase B or C lifts all enforcement.
+- **Verification:** Integration tests assert each Phase A constraint is enforced at the service layer when phase is A; same tests pass (no-op) when phase is B.
+
+### P2-T21 — Data subject rights workflow (access, correction, erasure, grievance)
+- **Depends on:** P2-T15.
+- **REQ:** REQ-PRIVACY-004.
+- **Touches:** `apps/api`, `apps/web`, `apps/worker`.
+- **Vertical slice:** Admin portal ticket queue ingests email-submitted DSARs; admin processes access (machine-readable data export), correction (editable profile fields), erasure (soft-deactivation + personal-identifier redaction while preserving consent/ToS acceptance facts, audit events, and trade ledger records), and grievance redressal through an audited flow. Acknowledgment within 7 days, completion within 30 days.
+- **Verification:** Integration test creates a user, submits an erasure request, processes it through the admin flow, and verifies personal identifiers are redacted while audit/trade records are preserved.
+
+### P2-T22 — Data breach procedure and runbook
+- **Depends on:** P2-T15.
+- **REQ:** REQ-PRIVACY-006.
+- **Touches:** `apps/api`, `docs/operations/runbooks/`.
+- **Vertical slice:** Detected or suspected breach is recorded in `audit_events` with scope (data categories, affected count, systems), detection time, discovery actor, and containment steps. Runbook at `docs/operations/runbooks/data-breach-response.md` covers detection, triage, 72-hour notification, and post-incident review. Annual test exercise recorded in `audit_events`.
+- **Verification:** Unit test records a breach event and verifies `audit_events` shape matches REQ-PRIVACY-006. Runbook file exists with required sections.
+
 ### P2-T18 — Phase-gate verification for Phase 2
-- **Depends on:** P2-T1..T17, P2-T4-CR.
+- **Depends on:** P2-T1..T17, P2-T4-CR, P2-T20, P2-T21, P2-T22.
 
 ---
 
@@ -352,8 +373,15 @@ Each task carries:
 - **REQ:** REQ-MARKET-002b, REQ-DASH-013, REQ-STOP-006c.
 - **Vertical slice:** chart page subscribes via browser WebSocket using user FYERS token; lease enforced; REST fallback works on disconnect; quote-as-of timestamp visible.
 
-### P3-T15 — Phase-gate verification for Phase 3
-- **Depends on:** P3-T1..T14.
+### P3-T15 — Migration standards: idempotent migrations + rollback + dual-read window
+- **Depends on:** P3-T11.
+- **REQ:** REQ-MIGRATION-003/005.
+- **Touches:** `apps/api`, `apps/worker`, `docs/`.
+- **Vertical slice:** Migration template enforces idempotent-or-paired-rollback pattern (one-way migrations require admin confirmation at deploy time). Dual-read window `sys_config` flag (`migrations.dual_read_window.active`) available for per-symbol DDL changes. Batched background migration job template exists for fleet-wide per-symbol schema evolution.
+- **Verification:** Unit test asserts a non-idempotent migration without rollback is rejected by the linter. Integration test verifies dual-read window allows both old and new schema read paths to coexist.
+
+### P3-T16 — Phase-gate verification for Phase 3
+- **Depends on:** P3-T1..T15.
 
 ---
 
@@ -748,7 +776,21 @@ Each task carries:
 - **REQ:** REQ-NEXT-* corporate-action subset (per legacy roadmap Phase 9).
 
 ### P8-T14 — Phase-gate verification for Phase 8
-- **Depends on:** P8-T1..T13.
+- **Depends on:** P8-T1..T13, P8-T15, P8-T16.
+
+### P8-T15 — Self-directed language review workflow
+- **Depends on:** P8-T7.
+- **REQ:** REQ-LEGAL-006.
+- **Touches:** `apps/web`, `apps/api`, `docs/`.
+- **Vertical slice:** Language review checklist committed at `docs/legal/language-review-checklist.md`. CI lint detects prohibited terms ("buy", "sell", "recommended", "advised", "top pick", "signal to buy/sell") in user-facing strings (Telegram templates, portal labels, notification text, modal copy) and fails the build. Each UI component and notification template has an associated review record before release.
+- **Verification:** CI lint check catches a prohibited term in a test fixture and fails the build. Checklist file exists with required sections.
+
+### P8-T16 — SLO breach alert routing with Telegram and cooldown
+- **Depends on:** P8-T2.
+- **REQ:** REQ-SLO-008.
+- **Touches:** `apps/api`, `apps/worker`, `apps/web`.
+- **Vertical slice:** On first SLO breach per calendar day, admin Telegram + email notification fires naming the breached SLO, observed p95, target, and detection time. Cooldown of `slos.breach_notification_cooldown_minutes` (default 60) applies per SLO per session. Metric `slo.breach_notification_fired` emitted.
+- **Verification:** Unit test simulates SLO breach and verifies notification fires; second breach within cooldown is suppressed.
 
 ---
 
