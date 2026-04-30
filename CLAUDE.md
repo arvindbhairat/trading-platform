@@ -20,8 +20,9 @@ Start with these files in order:
 9. [docs/portfolio-risk-guidelines.md](docs/portfolio-risk-guidelines.md)
 10. [docs/data-management.md](docs/data-management.md)
 11. [docs/repo-structure.md](docs/repo-structure.md)
+12. [docs/project-structure.md](docs/project-structure.md)
 
-Then load only the skill file relevant to the task.
+Then, when implementing a task, load only the skill file relevant to the task. Use `docs/project-structure.md` as the practical map to locate where code belongs.
 
 ## Documentation Rules
 

@@ -381,11 +381,16 @@ docs/
 ├── repo-structure.md                ← Preferred monorepo layout rules (source for this file)
 ├── project-structure.md             ← THIS FILE: practical map of what exists and where to add code
 ├── review-prompt.md                 ← Prompt template used to request doc / code reviews
+├── fyers_api_integration_guide.md   ← Reference copy of FYERS API v3 docs (REST + WebSocket)
 ├── adr/                             ← Architecture Decision Records
 │   ├── 0001-documentation-structure.md
 │   ├── 0002-observability-and-configuration.md
-│   └── (further ADRs added as decisions are made)
+│   ├── 0003-rme-per-position-event-serialisation.md
+│   ├── 0004-corporate-action-detection-threshold.md
+│   └── 0005-mdp-server-side-websocket-migration-path.md
 ├── build_docs_reviews/              ← Accumulated review notes on documentation quality
+│   ├── prompt.md                    ← Full review prompt used for doc-quality passes
+│   └── review_*.md                  ← Review output reports
 ├── legal/                           ← Versioned user-facing legal content
 │   └── README.md                    ← Index of tester acknowledgement, disclaimers, ToS, Privacy Policy
 ├── privacy/

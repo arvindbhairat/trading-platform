@@ -34,6 +34,12 @@ Business and product requirements must live in one canonical reference file so t
   - decision log entry for this documentation structure
 - [adr/0002-observability-and-configuration.md](./adr/0002-observability-and-configuration.md)
   - decision log entry for OTLP, Serilog, and centralized configuration strategy
+- [adr/0003-rme-per-position-event-serialisation.md](./adr/0003-rme-per-position-event-serialisation.md)
+  - per-position Channel-based event serialisation for RME correctness under concurrent LMDS/LADS events
+- [adr/0004-corporate-action-detection-threshold.md](./adr/0004-corporate-action-detection-threshold.md)
+  - corporate-action detection calibration threshold governing SuspendedForCorporateAction state
+- [adr/0005-mdp-server-side-websocket-migration-path.md](./adr/0005-mdp-server-side-websocket-migration-path.md)
+  - migration path for server-side MDP WebSocket consumption and the conditions that trigger it
 - [legal/](./legal/README.md)
   - versioned user-facing legal content: tester acknowledgement, short and long disclaimers, Terms of Service, and Privacy Policy. Referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
 - [privacy/ropa.md](./privacy/ropa.md)
@@ -42,6 +48,10 @@ Business and product requirements must live in one canonical reference file so t
   - quantified daily FYERS API call budget model required by `REQ-RATE-011` and used by `REQ-RATE-012` to warn on config changes that would breach the 80% threshold
 - [operations/runbooks/](./operations/runbooks/README.md)
   - operational runbook catalog required by `REQ-LEGAL-005`; three runbooks are mandatory in Phase A (DataSync recovery, admin FYERS token re-auth, data-breach response), the remainder are required before Phase B
+- [fyers_api_integration_guide.md](./fyers_api_integration_guide.md)
+  - reference copy of FYERS API v3 documentation: REST endpoints, WebSocket, rate limits, and SDK availability
+- [build_docs_reviews/](./build_docs_reviews/)
+  - accumulated review notes on build-documentation quality; also stores the full-documentation review prompt used during doc-quality passes
 
 ## Editing Rules
 

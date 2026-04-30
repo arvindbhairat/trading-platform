@@ -50,17 +50,18 @@ C:\poc\
 ├── RUNBOOK.md                    ◄— YOU ARE HERE (agent entry point)
 ├── CLAUDE.md                     ◄— Guardrails (Claude Code)
 ├── AGENTS.md                     ◄— Guardrails (Codex/OpenAI)
-├── execution_plan/               ◄— Task pipeline (status, plan, logs)
+├── execution_plan/               ◄— Task pipeline (status, plan, milestones, task_logs)
 ├── apps/
 │   ├── api/                      ◄— ASP.NET Core backend (C#)
 │   ├── web/                      ◄— Next.js portal (TypeScript)
-│   └── worker/                   ◄— .NET background worker (C#)
-├── tests/                        ◄— Automated tests (mirrors apps/)
-├── packages/                     ◄— Shared packages (planned)
-├── infra/                        ◄— Docker + Azure IaC
-├── docs/                         ◄— Requirements, architecture, ADRs
-├── design_system/                ◄— Brand tokens, UI kit, CSS
-└── .claude/skills/               ◄— Domain-specific build instructions
+│   ├── worker/                   ◄— .NET background worker (C#)
+│   └── seed/                     ◄— sys_config seeder console app (C#)
+├── tests/                        ◄— Automated tests (mirrors apps/ and packages/)
+├── packages/                     ◄— Shared libraries (config, migrations, testing)
+├── infra/                        ◄— Docker (local dev) + Azure IaC
+├── docs/                         ◄— Canonical docs: requirements, architecture, ADRs, legal, operations
+├── design_system/                ◄— Brand tokens, UI kit, CSS, preview pages
+└── .claude/skills/               ◄— Domain-specific build instructions for AI agents
 ```
 
 See `docs/project-structure.md` for a detailed map with current implementation status and planned layouts.
