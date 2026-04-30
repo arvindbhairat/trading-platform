@@ -7,6 +7,14 @@ public interface IUserRepository
     /// <summary>Returns the user whose email matches, or <see langword="null"/> if not found.</summary>
     Task<UserDocument?> FindByEmailAsync(string email, CancellationToken ct = default);
 
+    /// <summary>
+    /// REQ-RECOVERY-001: finds the user who has the given (provider, providerKey)
+    /// in their <see cref="UserDocument.LinkedIdentities"/> list.
+    /// Returns <see langword="null"/> if no user has this identity linked.
+    /// </summary>
+    Task<UserDocument?> FindByLinkedIdentityAsync(
+        string provider, string providerKey, CancellationToken ct = default);
+
     // Creates the user record as pending_approval if it does not exist yet.
     // On subsequent sign-ins for the same user_id, updates display_name and updated_at only;
     // never downgrades an already-approved or deactivated record.
@@ -39,4 +47,36 @@ public interface IUserRepository
 
     // Soft-deletes: transitions any status → deactivated.
     Task DeactivateAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// REQ-RECOVERY-001: links a secondary OAuth identity to the user's account.
+    /// Throws <see cref="InvalidOperationException"/> if the identity is already linked
+    /// to a different user, or if the user already has 2 linked identities.
+    /// Returns the updated linked identity list.
+    /// </summary>
+    Task<List<LinkedIdentity>> LinkIdentityAsync(
+        string userId, string provider, string providerKey, string email,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// REQ-RECOVERY-002: unlinks a secondary OAuth identity.  Throws
+    /// <see cref="InvalidOperationException"/> if the provider is the user's
+    /// primary provider (the one in the UserId prefix).
+    /// </summary>
+    Task UnlinkIdentityAsync(
+        string userId, string provider, string providerKey,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// REQ-RECOVERY-005: admin-assisted rebind — replaces all linked identities
+    /// with a single new primary identity and clears the old provider/key.
+    /// Only the OAuth identity binding changes; all other state is preserved.
+    /// Returns the updated user document.
+    /// </summary>
+    Task<UserDocument> RebindIdentityAsync(
+        string targetUserId,
+        string newProvider,
+        string newProviderKey,
+        string newEmail,
+        CancellationToken ct = default);
 }

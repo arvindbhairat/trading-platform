@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -23,6 +24,15 @@ public static class AuthEndpoints
 
     // REQ-SEC-011: step-up re-authentication must be within this window to be valid.
     private static readonly TimeSpan StepUpDuration = TimeSpan.FromMinutes(5);
+
+    // REQ-RECOVERY-001: in-memory store for OAuth linking nonces.
+    // Keyed by nonce (random 64-char hex string), with the originating user's ID
+    // and creation timestamp.  Entries older than 5 minutes are cleaned up on access.
+    private static readonly ConcurrentDictionary<string, LinkNonce> _linkNonces = new();
+
+    private sealed record LinkNonce(string UserId, DateTime CreatedAt);
+
+    private static readonly TimeSpan LinkNonceTtl = TimeSpan.FromMinutes(5);
 
     private static readonly Dictionary<string, string> ProviderSchemeMap =
         new(StringComparer.OrdinalIgnoreCase)
@@ -67,6 +77,14 @@ public static class AuthEndpoints
             if (context.Request.Query.ContainsKey("step_up"))
             {
                 props.Items["step_up"] = "true";
+            }
+
+            // REQ-RECOVERY-001: pass link intent and nonce through OAuth Properties.
+            if (context.Request.Query.ContainsKey("link")
+                && context.Request.Query.ContainsKey("nonce"))
+            {
+                props.Items["link"] = "true";
+                props.Items["link_nonce"] = context.Request.Query["nonce"].ToString();
             }
 
             await context.ChallengeAsync(scheme, props);
@@ -177,6 +195,78 @@ public static class AuthEndpoints
                     cancellationToken: context.RequestAborted);
 
                 return Results.Redirect($"{frontend}/auth/callback?step_up=success");
+            }
+
+            // REQ-RECOVERY-001: linking flow — link a secondary OAuth identity to the
+            // currently-authenticated user.  The link/nonce are round-tripped through
+            // OAuth Properties via the login endpoint.
+            if (result.Properties.Items.TryGetValue("link", out var isLink)
+                && isLink == "true"
+                && result.Properties.Items.TryGetValue("link_nonce", out var nonceStr)
+                && nonceStr is not null
+                && _linkNonces.TryRemove(nonceStr, out var linkNonce))
+            {
+                if (DateTime.UtcNow - linkNonce.CreatedAt > LinkNonceTtl)
+                {
+                    return Results.Redirect($"{frontend}/settings?error=link_expired");
+                }
+
+                // Protect against linking the primary identity onto itself.
+                if ($"{providerLower}:{providerKey}" == linkNonce.UserId)
+                {
+                    return Results.Redirect($"{frontend}/settings?error=link_same_identity");
+                }
+
+                try
+                {
+                    await userRepo.LinkIdentityAsync(
+                        linkNonce.UserId, providerLower, providerKey, email,
+                        context.RequestAborted);
+
+                    await auditRepo.RecordAsync(
+                        linkNonce.UserId,
+                        "identity_linked",
+                        DateTime.UtcNow,
+                        details: new Dictionary<string, object?>
+                        {
+                            ["provider"] = providerLower,
+                            ["email"] = email,
+                        },
+                        cancellationToken: context.RequestAborted);
+
+                    return Results.Redirect($"{frontend}/settings?link=success");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.Redirect(
+                        $"{frontend}/settings?error={Uri.EscapeDataString(ex.Message)}");
+                }
+            }
+
+            // REQ-RECOVERY-001: sign-in via a linked secondary identity.
+            // If the provider:providerKey is not a primary userId but is in any user's
+            // linked_identities array, sign in as that user instead of creating a new account.
+            var linkedOwner = await userRepo.FindByLinkedIdentityAsync(
+                providerLower, providerKey, context.RequestAborted);
+            if (linkedOwner is not null)
+            {
+                // Use the linked account's userId, email, and display name for the session.
+                var linkedUserId = linkedOwner.UserId;
+                var linkedEmail = linkedOwner.Email;
+                var linkedName = linkedOwner.DisplayName;
+
+                var (linkedJwt, linkedJti, linkedIssuedAt, linkedExpiresAt) =
+                    jwtService.IssueTokenWithMeta(
+                        linkedUserId, linkedEmail, linkedName, providerLower);
+
+                var linkedUserAgent = context.Request.Headers.UserAgent.ToString();
+                await sessionRepo.CreateSessionAsync(
+                    linkedUserId, linkedJti, linkedIssuedAt, linkedExpiresAt,
+                    linkedUserAgent,
+                    mfaVerifiedAt: null, cancellationToken: context.RequestAborted);
+
+                return Results.Redirect(
+                    $"{frontend}/auth/callback?token={Uri.EscapeDataString(linkedJwt)}");
             }
 
             // REQ-ROLE-005: read seed admin email from bootstrap configuration.
@@ -398,6 +488,201 @@ public static class AuthEndpoints
             });
         }).RequireAuthorization();
 
+        // POST /api/v1/auth/link/init
+        // REQ-RECOVERY-001: generates a one-time nonce and returns the login URL for
+        // linking a secondary OAuth identity.  The nonce is round-tripped through OAuth
+        // Properties so the callback can link the identity to the originating user.
+        // CSRF-protected via the global CsrfMiddleware.
+        auth.MapPost("/link/init", async (
+            HttpContext context,
+            IUserRepository userRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null)
+                return Results.Forbid();
+
+            var nonce = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+            _linkNonces[nonce] = new LinkNonce(user.UserId, DateTime.UtcNow);
+
+            // Determine which provider to use for linking.  Prefer a different provider
+            // than the primary; otherwise fall back to the primary's provider.
+            var linkProvider = user.Provider == "google" ? "microsoft" : "google";
+
+            return Results.Ok(new
+            {
+                link_url = $"/api/v1/auth/login/{linkProvider}?link=true&nonce={nonce}"
+            });
+        }).RequireAuthorization();
+
+        // GET /api/v1/auth/linked-identities
+        // REQ-RECOVERY-001/REQ-PROFILE-009: returns the user's linked secondary OAuth
+        // identities with masked emails.
+        auth.MapGet("/linked-identities", async (
+            HttpContext context,
+            IUserRepository userRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null)
+                return Results.Forbid();
+
+            var linked = user.LinkedIdentities?
+                .Select(i => new
+                {
+                    provider = i.Provider,
+                    email = EmailMask.Mask(i.Email),
+                    linked_at = i.LinkedAt.ToString("o")
+                })
+                .ToList() ?? [];
+
+            return Results.Ok(new
+            {
+                primary_provider = user.Provider,
+                primary_email = EmailMask.Mask(user.Email),
+                linked_identities = linked,
+                total_count = linked.Count,
+                max_allowed = 2,
+                single_warning = linked.Count == 0
+            });
+        }).RequireAuthorization();
+
+        // POST /api/v1/auth/linked-identities/unlink
+        // REQ-RECOVERY-002: unlinks a secondary identity.  Unlinking the primary
+        // identity (the one used for the current session) is not permitted.
+        auth.MapPost("/linked-identities/unlink", async (
+            HttpContext context,
+            IUserRepository userRepo,
+            IAuditEventRepository auditRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+
+            var body = await context.Request.ReadFromJsonAsync<UnlinkRequest>(
+                cancellationToken: context.RequestAborted);
+            if (body is null || string.IsNullOrWhiteSpace(body.Provider)
+                || string.IsNullOrWhiteSpace(body.ProviderKey))
+            {
+                return Results.BadRequest(new { error = "provider_and_provider_key_required" });
+            }
+
+            // REQ-RECOVERY-002: prevent unlinking the currently-active primary identity.
+            if ($"{body.Provider}:{body.ProviderKey}" == userId)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "cannot_unlink_primary",
+                    message = "Cannot unlink the identity currently used for this session. " +
+                              "Sign in with your alternate identity first, then unlink."
+                });
+            }
+
+            await userRepo.UnlinkIdentityAsync(
+                userId, body.Provider, body.ProviderKey, context.RequestAborted);
+
+            await auditRepo.RecordAsync(
+                userId,
+                "identity_unlinked",
+                DateTime.UtcNow,
+                details: new Dictionary<string, object?>
+                {
+                    ["provider"] = body.Provider,
+                },
+                cancellationToken: context.RequestAborted);
+
+            return Results.Ok(new { unlinked = true });
+        }).RequireAuthorization();
+
+        // POST /api/v1/auth/admin/recover
+        // REQ-RECOVERY-005: admin-assisted account recovery — rebinds the target
+        // user's account to a new OAuth identity.  Requires admin role and valid
+        // step-up re-authentication (REQ-SEC-011).
+        auth.MapPost("/admin/recover", async (
+            HttpContext context,
+            IUserRepository userRepo,
+            ISessionRepository sessionRepo,
+            IAuditEventRepository auditRepo) =>
+        {
+            var adminUserId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            var adminUser = await userRepo.FindByUserIdAsync(adminUserId, context.RequestAborted);
+            if (adminUser is null || adminUser.Role != UserRole.Admin)
+                return Results.Forbid();
+
+            // REQ-SEC-011: validate step-up within 5 minutes.
+            var adminJti = context.User.FindFirst("jti")?.Value ?? "";
+            var adminSession = await sessionRepo.FindBySessionTokenAsync(
+                adminJti, context.RequestAborted);
+            var stepUpValid = adminSession?.StepUpAuthenticatedAt.HasValue == true
+                && adminSession.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+            if (!stepUpValid)
+            {
+                return Results.Json(
+                    new { error = "step_up_required" },
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var body = await context.Request.ReadFromJsonAsync<AdminRecoverRequest>(
+                cancellationToken: context.RequestAborted);
+            if (body is null || string.IsNullOrWhiteSpace(body.TargetUserId)
+                || string.IsNullOrWhiteSpace(body.NewProvider)
+                || string.IsNullOrWhiteSpace(body.NewProviderKey))
+            {
+                return Results.BadRequest(new { error = "target_user_id_provider_and_key_required" });
+            }
+
+            var beforeUser = await userRepo.FindByUserIdAsync(
+                body.TargetUserId, context.RequestAborted);
+            if (beforeUser is null)
+                return Results.NotFound(new { error = "target_user_not_found" });
+
+            // Capture before state for audit.
+            var beforeState = new Dictionary<string, object?>
+            {
+                ["user_id"] = beforeUser.UserId,
+                ["provider"] = beforeUser.Provider,
+                ["email"] = beforeUser.Email,
+                ["linked_identities"] = beforeUser.LinkedIdentities?
+                    .Select(i => $"{i.Provider}:{i.ProviderKey}").ToList(),
+            };
+
+            var updated = await userRepo.RebindIdentityAsync(
+                body.TargetUserId, body.NewProvider, body.NewProviderKey, body.NewEmail
+                    ?? beforeUser.Email,
+                context.RequestAborted);
+
+            await auditRepo.RecordAsync(
+                adminUserId,
+                "admin_recovery_rebind",
+                DateTime.UtcNow,
+                details: new Dictionary<string, object?>
+                {
+                    ["target_user_id"] = body.TargetUserId,
+                    ["before"] = beforeState,
+                    ["after"] = new Dictionary<string, object?>
+                    {
+                        ["user_id"] = updated.UserId,
+                        ["provider"] = updated.Provider,
+                        ["email"] = updated.Email,
+                    },
+                    ["verification_items"] = body.VerificationItems,
+                },
+                cancellationToken: context.RequestAborted);
+
+            return Results.Ok(new
+            {
+                recovered = true,
+                new_user_id = updated.UserId,
+                note = "User must complete FYERS re-authentication on next sign-in."
+            });
+        }).RequireAuthorization();
+
         // Testing / development only: GET /api/v1/auth/test-token
         // Issues a JWT, upserts the test user as approved, and creates a session record
         // so subsequent tests exercise the "approved" path through session/status.
@@ -484,4 +769,33 @@ public static class AuthEndpoints
 internal static class JwtRegisteredClaimNamesCompat
 {
     internal const string Sub = "sub";
+}
+
+// REQ-RECOVERY-002: request body for unlinking a secondary identity.
+internal sealed record UnlinkRequest(
+    string Provider,
+    string ProviderKey);
+
+// REQ-RECOVERY-005: request body for admin-assisted account recovery rebind.
+internal sealed record AdminRecoverRequest(
+    string TargetUserId,
+    string NewProvider,
+    string NewProviderKey,
+    string? NewEmail,
+    List<string?>? VerificationItems);
+
+/// <summary>Masks an email for display: j***@example.com (REQ-PROFILE-009, REQ-RECOVERY-001).</summary>
+internal static class EmailMask
+{
+    internal static string Mask(string email)
+    {
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 0) return email;
+        var localPart = email[..atIndex];
+        var domain = email[atIndex..];
+        var maskedLocal = localPart.Length > 1
+            ? localPart[0] + new string('*', localPart.Length - 1)
+            : localPart[0] + "*";
+        return maskedLocal + domain;
+    }
 }

@@ -63,9 +63,35 @@ public sealed class UserDocument
     [BsonIgnoreIfNull]
     public DateTime? EquityBaseOverrideUpdatedAt { get; set; }
 
+    // REQ-RECOVERY-001: list of linked secondary OAuth identities.
+    // Max 2 identities per REQ-RECOVERY-002.  Null when no secondary identity is linked.
+    [BsonElement("linked_identities")]
+    [BsonIgnoreIfNull]
+    public List<LinkedIdentity>? LinkedIdentities { get; init; }
+
     [BsonElement("created_at")]
     public required DateTime CreatedAt { get; init; }
 
     [BsonElement("updated_at")]
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// A secondary OAuth identity linked to this platform account (REQ-RECOVERY-001).
+/// The <see cref="Provider"/> + <see cref="ProviderKey"/> tuple must be unique
+/// across all users — enforced at the application layer.
+/// </summary>
+public sealed class LinkedIdentity
+{
+    [BsonElement("provider")]
+    public required string Provider { get; init; }
+
+    [BsonElement("provider_key")]
+    public required string ProviderKey { get; init; }
+
+    [BsonElement("email")]
+    public required string Email { get; init; }
+
+    [BsonElement("linked_at")]
+    public required DateTime LinkedAt { get; init; }
 }
