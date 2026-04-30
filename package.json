@@ -19,5 +19,8 @@
     "worker:run": "dotnet run --project apps/worker/SignalStack.Worker.csproj",
     "dotnet:build": "dotnet build SignalStack.sln -c Release",
     "dotnet:test": "dotnet test SignalStack.sln -c Release"
+  },
+  "devDependencies": {
+    "next": "^15.5.15"
   }
 }

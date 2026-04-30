@@ -833,6 +833,7 @@ export const userNavItems: NavItem[] = [
 export const adminNavItems: NavItem[] = [
   { id: "home",      label: "Admin home",     icon: "shield" },
   { id: "approvals", label: "User approvals", icon: "users", badge: 4, badgeTone: "warn" },
+  { id: "config",    label: "Config",         icon: "settings" },
   { id: "universe",  label: "Universe",       icon: "layers" },
   { id: "jobs",      label: "Job runs",       icon: "activity" },
   { id: "calendar",  label: "Trading calendar", icon: "calendar" },

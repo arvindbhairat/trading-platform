@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Api.SysConfig;
 using SignalStack.Api.Auth;
@@ -180,6 +181,9 @@ app.MapFyersEndpoints();
 
 // PLD WebSocket session lease endpoint — REQ-SESSION-014
 app.MapPldEndpoints();
+
+// Admin sys_config management endpoints — P2-T11 / REQ-CONFIG-005/005a/007, REQ-SEC-011
+app.MapAdminConfigEndpoints();
 
 app.Run();
 

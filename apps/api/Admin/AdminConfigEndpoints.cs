@@ -1,0 +1,307 @@
+using System.Text.Json;
+using System.Security.Claims;
+using MongoDB.Bson;
+using SignalStack.Api.Auth;
+using SignalStack.Api.Audit;
+using SignalStack.Api.Sessions;
+using SignalStack.Api.Users;
+using SignalStack.Api.SysConfig;
+
+namespace SignalStack.Api.Admin;
+
+public static class AdminConfigEndpoints
+{
+    // REQ-SEC-011: these categories require step-up re-authentication to edit.
+    private static readonly HashSet<string> SensitiveCategories =
+        ["risk", "legal", "operations"];
+
+    // Matches the 5-minute window in AuthEndpoints (REQ-SEC-011).
+    private static readonly TimeSpan StepUpDuration = TimeSpan.FromMinutes(5);
+
+    public static IEndpointRouteBuilder MapAdminConfigEndpoints(
+        this IEndpointRouteBuilder app)
+    {
+        var admin = app.MapGroup("/api/v1/admin");
+
+        // GET /api/v1/admin/config — list all config entries, optional ?category= filter
+        // REQ-CONFIG-005/007: category-based listing.
+        admin.MapGet("/config", async (
+            HttpContext context,
+            ISysConfigRepository configRepo,
+            string? category) =>
+        {
+            var entries = await configRepo.ListAllAsync(category, context.RequestAborted);
+            var result = entries.Select(doc => MapToEntry(doc));
+            return Results.Ok(new { entries = result });
+        }).RequireAuthorization();
+
+        // GET /api/v1/admin/config/categories — list distinct categories
+        admin.MapGet("/config/categories", async (
+            HttpContext context,
+            ISysConfigRepository configRepo) =>
+        {
+            var categories = await configRepo.ListCategoriesAsync(context.RequestAborted);
+            return Results.Ok(new { categories });
+        }).RequireAuthorization();
+
+        // GET /api/v1/admin/config/{key} — get single entry
+        admin.MapGet("/config/{key}", async (
+            string key,
+            HttpContext context,
+            ISysConfigRepository configRepo) =>
+        {
+            var doc = await configRepo.GetByKeyAsync(key, context.RequestAborted);
+            if (doc is null)
+                return Results.NotFound(new { error = "config_key_not_found" });
+
+            return Results.Ok(new { entry = MapToEntry(doc) });
+        }).RequireAuthorization();
+
+        // PUT /api/v1/admin/config/{key} — update a config value
+        // REQ-CONFIG-005: audit trail on every edit.
+        // REQ-SEC-011: step-up required for risk/legal/operations categories.
+        // CSRF-protected via the global CsrfMiddleware.
+        admin.MapPut("/config/{key}", async (
+            string key,
+            HttpContext context,
+            ISysConfigRepository configRepo,
+            ISessionRepository sessionRepo,
+            IAuditEventRepository auditRepo,
+            IUserRepository userRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+
+            // Verify admin role.
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null || user.Role != UserRole.Admin)
+                return Results.Forbid();
+
+            var body = await context.Request.ReadFromJsonAsync<UpdateConfigRequest>(
+                cancellationToken: context.RequestAborted);
+            if (body is null)
+                return Results.BadRequest(new { error = "invalid_body" });
+
+            // Fetch current entry before mutation for audit and step-up check.
+            var current = await configRepo.GetByKeyAsync(key, context.RequestAborted);
+            if (current is null)
+                return Results.NotFound(new { error = "config_key_not_found" });
+
+            if (!current.Contains("isEditable") || !current["isEditable"].AsBoolean)
+                return Results.BadRequest(new { error = "config_key_not_editable" });
+
+            var category = current.Contains("category") ? current["category"].AsString : "";
+            var valueType = current.Contains("valueType") ? current["valueType"].AsString : "string";
+            var priorValue = ExtractValue(current, "value");
+
+            // REQ-SEC-011: step-up check for sensitive categories.
+            if (SensitiveCategories.Contains(category))
+            {
+                var jti = context.User.FindFirst("jti")?.Value ?? "";
+                var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
+                var stepUpValid = session?.StepUpAuthenticatedAt.HasValue == true
+                    && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+                if (!stepUpValid)
+                {
+                    return Results.Json(
+                        new { error = "step_up_required", category },
+                        statusCode: StatusCodes.Status401Unauthorized);
+                }
+            }
+
+            // Convert the incoming JSON value to BsonValue based on valueType.
+            BsonValue newBsonValue;
+            try
+            {
+                newBsonValue = ConvertJsonElementToBsonValue(body.Value, valueType);
+            }
+            catch (FormatException)
+            {
+                return Results.BadRequest(new { error = "invalid_value_for_type", valueType });
+            }
+
+            // Write audit event BEFORE mutation (REQ-CONFIG-005/005a).
+            await auditRepo.RecordAsync(
+                userId,
+                "config_updated",
+                DateTime.UtcNow,
+                details: new Dictionary<string, object?>
+                {
+                    ["key"] = key,
+                    ["category"] = category,
+                    ["value_type"] = valueType,
+                    ["prior_value"] = priorValue,
+                    ["new_value"] = body.Value,
+                },
+                cancellationToken: context.RequestAborted);
+
+            // Perform the mutation.
+            var updated = await configRepo.UpdateAsync(
+                key, newBsonValue, userId, context.RequestAborted);
+
+            if (updated is null)
+                return Results.NotFound(new { error = "config_key_not_found" });
+
+            return Results.Ok(new { entry = MapToEntry(updated) });
+        }).RequireAuthorization();
+
+        // POST /api/v1/admin/config/{key}/reset — reset a config value to its default
+        // REQ-CONFIG-005a: reset must produce an audit event.
+        // REQ-SEC-011: step-up required for risk/legal/operations categories.
+        admin.MapPost("/config/{key}/reset", async (
+            string key,
+            HttpContext context,
+            ISysConfigRepository configRepo,
+            ISessionRepository sessionRepo,
+            IAuditEventRepository auditRepo,
+            IUserRepository userRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+
+            // Verify admin role.
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null || user.Role != UserRole.Admin)
+                return Results.Forbid();
+
+            // Fetch current entry before mutation for audit and step-up check.
+            var current = await configRepo.GetByKeyAsync(key, context.RequestAborted);
+            if (current is null)
+                return Results.NotFound(new { error = "config_key_not_found" });
+
+            var category = current.Contains("category") ? current["category"].AsString : "";
+            var priorValue = ExtractValue(current, "value");
+            var defaultValue = ExtractValue(current, "defaultValue");
+
+            // REQ-SEC-011: step-up check for sensitive categories.
+            if (SensitiveCategories.Contains(category))
+            {
+                var jti = context.User.FindFirst("jti")?.Value ?? "";
+                var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
+                var stepUpValid = session?.StepUpAuthenticatedAt.HasValue == true
+                    && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+                if (!stepUpValid)
+                {
+                    return Results.Json(
+                        new { error = "step_up_required", category },
+                        statusCode: StatusCodes.Status401Unauthorized);
+                }
+            }
+
+            // Write audit event BEFORE mutation (REQ-CONFIG-005a).
+            await auditRepo.RecordAsync(
+                userId,
+                "config_reset",
+                DateTime.UtcNow,
+                details: new Dictionary<string, object?>
+                {
+                    ["key"] = key,
+                    ["category"] = category,
+                    ["prior_value"] = priorValue,
+                    ["default_value"] = defaultValue,
+                },
+                cancellationToken: context.RequestAborted);
+
+            // Perform the reset.
+            var updated = await configRepo.ResetToDefaultAsync(
+                key, userId, context.RequestAborted);
+
+            if (updated is null)
+                return Results.NotFound(new { error = "config_key_not_found" });
+
+            return Results.Ok(new { entry = MapToEntry(updated) });
+        }).RequireAuthorization();
+
+        return app;
+    }
+
+    private static SysConfigEntry MapToEntry(BsonDocument doc)
+    {
+        return new SysConfigEntry(
+            Key: doc.GetValue("key", "").AsString,
+            Category: doc.GetValue("category", "").AsString,
+            ValueType: doc.GetValue("valueType", "string").AsString,
+            Value: ExtractValue(doc, "value"),
+            DefaultValue: ExtractValue(doc, "defaultValue"),
+            Description: doc.GetValue("description", "").AsString,
+            AppliesTo: doc.GetValue("appliesTo", BsonNull.Value).IsBsonNull
+                ? []
+                : doc["appliesTo"].AsBsonArray.Select(v => v.AsString).ToArray(),
+            IsEditable: doc.GetValue("isEditable", BsonBoolean.True).AsBoolean,
+            RequiresRestart: doc.GetValue("requiresRestart", BsonBoolean.False).AsBoolean,
+            Status: doc.GetValue("status", "active").AsString,
+            UpdatedAt: doc.GetValue("updatedAt", "").AsString,
+            UpdatedByUserId: doc.GetValue("updatedByUserId", "").AsString,
+            Version: doc.GetValue("version", 1).AsInt32
+        );
+    }
+
+    private static object? ExtractValue(BsonDocument doc, string field)
+    {
+        if (!doc.Contains(field)) return null;
+        var val = doc[field];
+        return val switch
+        {
+            null or BsonNull => null,
+            BsonString s => s.AsString,
+            BsonInt32 i => i.AsInt32,
+            BsonInt64 l => l.AsInt64,
+            BsonDouble d => d.AsDouble,
+            BsonBoolean b => b.AsBoolean,
+            _ => val.ToString()
+        };
+    }
+
+    private static BsonValue ConvertJsonElementToBsonValue(JsonElement el, string valueType)
+    {
+        if (valueType == "number")
+        {
+            return el.ValueKind switch
+            {
+                JsonValueKind.Number => el.TryGetInt64(out var l)
+                    ? BsonValue.Create(l)
+                    : BsonValue.Create(el.GetDouble()),
+                JsonValueKind.String => BsonValue.Create(long.Parse(el.GetString()!)),
+                _ => throw new FormatException()
+            };
+        }
+
+        if (valueType == "boolean")
+        {
+            return el.ValueKind switch
+            {
+                JsonValueKind.True => BsonBoolean.True,
+                JsonValueKind.False => BsonBoolean.False,
+                JsonValueKind.String => bool.TryParse(el.GetString(), out var b)
+                    ? BsonValue.Create(b)
+                    : throw new FormatException(),
+                _ => throw new FormatException()
+            };
+        }
+
+        // Default to string.
+        return new BsonString(el.ValueKind == JsonValueKind.String
+            ? el.GetString()!
+            : el.GetRawText());
+    }
+}
+
+public sealed record SysConfigEntry(
+    string Key,
+    string Category,
+    string ValueType,
+    object? Value,
+    object? DefaultValue,
+    string Description,
+    string[] AppliesTo,
+    bool IsEditable,
+    bool RequiresRestart,
+    string Status,
+    string UpdatedAt,
+    string UpdatedByUserId,
+    int Version
+);
+
+public sealed record UpdateConfigRequest(JsonElement Value);

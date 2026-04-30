@@ -38,6 +38,80 @@ public sealed class MongoSysConfigRepository : ISysConfigRepository
         return doc["value"].AsString;
     }
 
+    public async Task<List<BsonDocument>> ListAllAsync(string? category = null, CancellationToken ct = default)
+    {
+        var filter = category is not null
+            ? Builders<BsonDocument>.Filter.Eq("category", category)
+            : Builders<BsonDocument>.Filter.Empty;
+
+        return await _sysConfig
+            .Find(filter)
+            .Sort(Builders<BsonDocument>.Sort.Ascending("key"))
+            .ToListAsync(ct);
+    }
+
+    public async Task<BsonDocument?> GetByKeyAsync(string key, CancellationToken ct = default)
+    {
+        return await FindByKeyAsync(key, ct);
+    }
+
+    public async Task<BsonDocument?> UpdateAsync(string key, BsonValue newValue, string updatedByUserId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var update = Builders<BsonDocument>.Update
+            .Set("value", newValue)
+            .Set("updatedAt", now.ToString("o"))
+            .Set("updatedByUserId", updatedByUserId)
+            .Inc("version", 1);
+
+        var options = new FindOneAndUpdateOptions<BsonDocument>
+        {
+            ReturnDocument = ReturnDocument.After
+        };
+
+        return await _sysConfig
+            .FindOneAndUpdateAsync(
+                Builders<BsonDocument>.Filter.Eq("key", key),
+                update,
+                options,
+                ct);
+    }
+
+    public async Task<BsonDocument?> ResetToDefaultAsync(string key, string updatedByUserId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        // Read current doc to get defaultValue.
+        var doc = await FindByKeyAsync(key, ct);
+        if (doc is null || !doc.Contains("defaultValue")) return null;
+
+        var defaultValue = doc["defaultValue"];
+        var update = Builders<BsonDocument>.Update
+            .Set("value", defaultValue)
+            .Set("updatedAt", now.ToString("o"))
+            .Set("updatedByUserId", updatedByUserId)
+            .Inc("version", 1);
+
+        var options = new FindOneAndUpdateOptions<BsonDocument>
+        {
+            ReturnDocument = ReturnDocument.After
+        };
+
+        return await _sysConfig
+            .FindOneAndUpdateAsync(
+                Builders<BsonDocument>.Filter.Eq("key", key),
+                update,
+                options,
+                ct);
+    }
+
+    public async Task<List<string>> ListCategoriesAsync(CancellationToken ct = default)
+    {
+        var cursor = await _sysConfig
+            .DistinctAsync<string>("category", Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+        return await cursor.ToListAsync(ct);
+    }
+
     private async Task<BsonDocument?> FindByKeyAsync(string key, CancellationToken ct)
     {
         return await _sysConfig
