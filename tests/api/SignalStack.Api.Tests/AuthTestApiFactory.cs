@@ -36,6 +36,7 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
                 ["Auth:Jwt:Audience"] = "signalstack-portal",
                 ["Auth:Jwt:ExpiryMinutes"] = "60",
                 ["Auth:FrontendBaseUrl"] = "http://localhost:3000",
+                ["Auth:SeedAdminEmail"] = "admin@signalstack.test",
                 ["SignalStack:Bootstrap:LastKnownGood:CachePath"] = ""
             });
         });

@@ -189,9 +189,17 @@ Each task carries:
 - **Depends on:** P2-T3.
 - **REQ:** REQ-ROLE-005/007/007a, REQ-BCP-009.
 - **Vertical slice:** first sign-in by `SEED_ADMIN_EMAIL` creates the admin record + assigns the role atomically; admin sign-in without an MFA `amr` claim is refused; Facebook attempt for the admin email is blocked with the prescribed message.
+- **Conflict found:** REQ-ROLE-007a (transfer recovery summary) is a frontend admin-dashboard feature requiring `job_runs` data, not a backend-auth scope. P2-T4-CR created to resolve.
+
+### P2-T4-CR — Conflict resolution: remove REQ-ROLE-007a from P2-T4 scope
+- **Depends on:** none (plan-document correction).
+- **REQ:** none direct (plan-doc correction only).
+- **Touches:** `execution_plan/execution_plan.md`.
+- **Vertical slice:** REQ-ROLE-007a removed from P2-T4 REQ list; reassigned to an existing or new Phase 2 task whose scope includes the admin dashboard and job-runs infrastructure. If no suitable existing task is found, a new task is created at the end of Phase 2 with REQ-ROLE-007a in its REQ list.
+- **Verification:** grep confirms REQ-ROLE-007a does not appear in P2-T4's REQ line after this task completes.
 
 ### P2-T5 — Admin step-up re-authentication helper + audit chain
-- **Depends on:** P2-T4.
+- **Depends on:** P2-T4-CR.
 - **REQ:** REQ-SEC-011, REQ-CONFIG-005a.
 - **Vertical slice:** an action requiring step-up returns "re-authenticate" if the last OAuth handshake is older than 5 minutes; step-up event recorded and chained to the gated action's audit row.
 
@@ -259,7 +267,7 @@ Each task carries:
 - **Vertical slice:** minimal `<fyers-button>` page hosted; sandbox confirms `data-product = CNC` is accepted; outcome recorded as ADR note under `docs/adr/`; helper edits `status.json` to deactivate the inactive Phase 7 branch (P7 vs P7-FALLBACK).
 
 ### P2-T18 — Phase-gate verification for Phase 2
-- **Depends on:** P2-T1..T17.
+- **Depends on:** P2-T1..T17, P2-T4-CR.
 
 ---
 

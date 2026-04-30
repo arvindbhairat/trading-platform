@@ -85,4 +85,40 @@ public sealed class MongoUserRepository : IUserRepository
 
         await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    // REQ-ROLE-005: atomically creates or promotes the user to admin + approved.
+    public async Task UpsertAdminOnSignInAsync(
+        string userId,
+        string email,
+        string displayName,
+        string provider,
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var filter = Builders<UserDocument>.Filter.Eq(u => u.UserId, userId);
+
+        var setOnInsert = Builders<UserDocument>.Update
+            .SetOnInsert(u => u.Id, ObjectId.GenerateNewId())
+            .SetOnInsert(u => u.UserId, userId)
+            .SetOnInsert(u => u.Email, email)
+            .SetOnInsert(u => u.Provider, provider)
+            .SetOnInsert(u => u.Role, UserRole.Admin)
+            .SetOnInsert(u => u.Status, UserApprovalState.Approved)
+            .SetOnInsert(u => u.LedgerSnapshotVersion, 1L)
+            .SetOnInsert(u => u.CreatedAt, now);
+
+        // Always elevate role and status on every admin sign-in so the bootstrap is
+        // idempotent — subsequent sign-ins keep the admin role and approved status.
+        var setAlways = Builders<UserDocument>.Update
+            .Set(u => u.DisplayName, displayName)
+            .Set(u => u.Role, UserRole.Admin)
+            .Set(u => u.Status, UserApprovalState.Approved)
+            .Set(u => u.UpdatedAt, now);
+
+        var combined = Builders<UserDocument>.Update.Combine(setOnInsert, setAlways);
+
+        await _users.UpdateOneAsync(filter, combined,
+            new UpdateOptions { IsUpsert = true }, ct);
+    }
 }

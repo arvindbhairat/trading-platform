@@ -29,4 +29,10 @@ public sealed class SessionDocument
 
     [BsonElement("user_agent")]
     public string? UserAgent { get; init; }
+
+    // REQ-BCP-009: set when the admin user's OAuth amr claim confirms MFA was used.
+    // Null on sessions where MFA was not verified.
+    [BsonElement("mfa_verified_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? MfaVerifiedAt { get; init; }
 }

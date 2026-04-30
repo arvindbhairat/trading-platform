@@ -26,6 +26,7 @@ public sealed class MongoSessionRepository : ISessionRepository
         DateTime issuedAt,
         DateTime expiresAt,
         string? userAgent,
+        DateTime? mfaVerifiedAt = null,
         CancellationToken cancellationToken = default)
     {
         var doc = new SessionDocument
@@ -36,6 +37,7 @@ public sealed class MongoSessionRepository : ISessionRepository
             IssuedAt = issuedAt,
             ExpiresAt = expiresAt,
             UserAgent = userAgent,
+            MfaVerifiedAt = mfaVerifiedAt,
         };
 
         using var txnSession = await _client.StartSessionAsync(cancellationToken: cancellationToken);

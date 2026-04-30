@@ -70,4 +70,33 @@ public sealed class InMemoryUserRepository : IUserRepository
         }
         return Task.CompletedTask;
     }
+
+    public Task UpsertAdminOnSignInAsync(
+        string userId, string email, string displayName, string provider,
+        CancellationToken ct = default)
+    {
+        _byUserId.AddOrUpdate(
+            userId,
+            _ => new UserDocument
+            {
+                Id = ObjectId.GenerateNewId(),
+                UserId = userId,
+                Email = email,
+                DisplayName = displayName,
+                Provider = provider,
+                Role = UserRole.Admin,
+                Status = UserApprovalState.Approved,
+                LedgerSnapshotVersion = 1,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            },
+            (_, existing) =>
+            {
+                existing.Role = UserRole.Admin;
+                existing.Status = UserApprovalState.Approved;
+                existing.UpdatedAt = DateTime.UtcNow;
+                return existing;
+            });
+        return Task.CompletedTask;
+    }
 }

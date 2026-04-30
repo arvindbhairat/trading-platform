@@ -14,6 +14,18 @@ public interface IUserRepository
         string provider,
         CancellationToken ct = default);
 
+    // REQ-ROLE-005: atomically creates or promotes a user to admin role with approved
+    // status.  Used when the authenticated email matches SEED_ADMIN_EMAIL.
+    // On insert: creates with role=admin, status=approved.
+    // On update: sets role=admin, status=approved regardless of prior status
+    // (deactivated admin re-activates on matching seed email sign-in).
+    Task UpsertAdminOnSignInAsync(
+        string userId,
+        string email,
+        string displayName,
+        string provider,
+        CancellationToken ct = default);
+
     // Returns the count of users with status = "approved" (non-deactivated).
     // Used by UserApprovalService to enforce REQ-LEGAL-003 ceiling.
     Task<long> CountApprovedActiveAsync(CancellationToken ct = default);

@@ -16,6 +16,7 @@ public interface ISessionRepository
         DateTime issuedAt,
         DateTime expiresAt,
         string? userAgent,
+        DateTime? mfaVerifiedAt = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns the session whose token matches, or <see langword="null"/> if not found or TTL-expired.</summary>
