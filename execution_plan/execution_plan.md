@@ -187,9 +187,9 @@ Each task carries:
 
 ### P2-T4 — Lazy admin bootstrap + admin OAuth restricted to Google/Microsoft + `amr` MFA enforcement
 - **Depends on:** P2-T3.
-- **REQ:** REQ-ROLE-005/007/007a, REQ-BCP-009.
+- **REQ:** REQ-ROLE-005/007, REQ-BCP-009.
 - **Vertical slice:** first sign-in by `SEED_ADMIN_EMAIL` creates the admin record + assigns the role atomically; admin sign-in without an MFA `amr` claim is refused; Facebook attempt for the admin email is blocked with the prescribed message.
-- **Conflict found:** REQ-ROLE-007a (transfer recovery summary) is a frontend admin-dashboard feature requiring `job_runs` data, not a backend-auth scope. P2-T4-CR created to resolve.
+- **Conflict resolved:** REQ-ROLE-007a removed from scope by P2-T4-CR and reassigned to P2-T19.
 
 ### P2-T4-CR — Conflict resolution: remove REQ-ROLE-007a from P2-T4 scope
 - **Depends on:** none (plan-document correction).
@@ -265,6 +265,13 @@ Each task carries:
 - **Depends on:** P2-T7.
 - **REQ:** REQ-ORDER-010b.
 - **Vertical slice:** minimal `<fyers-button>` page hosted; sandbox confirms `data-product = CNC` is accepted; outcome recorded as ADR note under `docs/adr/`; helper edits `status.json` to deactivate the inactive Phase 7 branch (P7 vs P7-FALLBACK).
+
+### P2-T19 — Transfer recovery summary on admin home page (REQ-ROLE-007a)
+- **Depends on:** P2-T11 (admin sys_config UI provides admin dashboard infrastructure).
+- **REQ:** REQ-ROLE-007a.
+- **Touches:** `apps/web`, `apps/api`.
+- **Vertical slice:** admin home page displays transfer recovery summary card with job-run status, transfer window detection, one-click retry actions, and FYERS token status notice. Implicitly requires Phase P5 job_runs infrastructure (P5-T2) and notification delivery (P5-T4) to be fully operational.
+- **Verification:** admin home page renders transfer recovery summary with live data; REQ-ROLE-007a acceptance criteria met.
 
 ### P2-T18 — Phase-gate verification for Phase 2
 - **Depends on:** P2-T1..T17, P2-T4-CR.
