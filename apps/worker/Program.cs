@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -40,7 +41,16 @@ builder.Services
 builder.Services.AddSingleton<IRmeEventConsumer, NoOpRmeEventConsumer>();
 builder.Services.AddSingleton<IPositionChannelRegistry, PositionChannelRegistry>();
 
+// Sentinel startup check (REQ-CONFIG-010): fails fast if seeder was skipped.
+builder.Services.AddSingleton<SeedVersionStartupGuard>();
+
 var host = builder.Build();
+
+// ── Sentinel startup check (REQ-CONFIG-010) ─────────────────────────────
+// Fail fast if the sys_config seeder has not been run.
+var sentinelGuard = host.Services.GetRequiredService<SeedVersionStartupGuard>();
+await sentinelGuard.VerifyAsync();
+
 await host.RunAsync();
 
 public partial class Program;

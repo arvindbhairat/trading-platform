@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SignalStack.Api.Audit;
+using SignalStack.Api.SysConfig;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
@@ -45,7 +47,11 @@ builder.Services.AddFyersTokenManagement();
 // PLD WebSocket session lease — REQ-SESSION-014
 builder.Services.AddPldWebSocketServices();
 
-builder.Services.AddHealthChecks();
+// Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
+builder.Services.AddHealthChecks()
+    .AddCheck<SeedVersionHealthCheck>("seed_version_sentinel",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["readyz"]);
 builder.Services.AddRateLimiter(options =>
 {
   options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -158,7 +164,10 @@ app.Use(async (context, next) =>
 
 app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.3")));
 app.MapHealthChecks("/api/v1/healthz");
-app.MapHealthChecks("/api/v1/readyz");
+app.MapHealthChecks("/api/v1/readyz", new()
+{
+    Predicate = check => check.Tags.Contains("readyz")
+});
 app.MapGroup("/api/v1/auth")
   .RequireRateLimiting(AuthRateLimitPolicy)
   .MapPost("/probe", () => Results.Ok(new { status = "ok" }));

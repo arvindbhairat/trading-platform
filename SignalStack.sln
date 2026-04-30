@@ -31,6 +31,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "seed", "seed", "{2EDB8AEC-E
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalStack.Seed", "apps\seed\SignalStack.Seed.csproj", "{B990EA9A-68CA-4119-AEB5-5A1449B3E15E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalStack.SqlMigrations", "packages\migrations\SignalStack.SqlMigrations\SignalStack.SqlMigrations.csproj", "{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -137,6 +139,18 @@ Global
 		{B990EA9A-68CA-4119-AEB5-5A1449B3E15E}.Release|x64.Build.0 = Release|Any CPU
 		{B990EA9A-68CA-4119-AEB5-5A1449B3E15E}.Release|x86.ActiveCfg = Release|Any CPU
 		{B990EA9A-68CA-4119-AEB5-5A1449B3E15E}.Release|x86.Build.0 = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|x64.Build.0 = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Debug|x86.Build.0 = Debug|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|x64.ActiveCfg = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|x64.Build.0 = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|x86.ActiveCfg = Release|Any CPU
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -148,5 +162,6 @@ Global
 		{01E438A9-B746-47C8-957E-1ADCFC9C2765} = {BDACC876-D277-4AA0-9746-3BE3651FB616}
 		{2EDB8AEC-E1D4-B40B-F958-FC42BD6AC392} = {1787FE1D-075E-9E68-7218-25F1BD1BBEAB}
 		{B990EA9A-68CA-4119-AEB5-5A1449B3E15E} = {2EDB8AEC-E1D4-B40B-F958-FC42BD6AC392}
+		{2133E1CE-F95D-47B8-BDC6-ACCD14FC957B} = {70E7FE4F-8D34-0DCB-9C50-039D63DE2527}
 	EndGlobalSection
 EndGlobal

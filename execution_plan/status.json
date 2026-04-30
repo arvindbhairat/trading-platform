@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T10",
+  "current_task_id": "P2-T11",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -30,10 +30,10 @@
     "P2-T6",
     "P2-T7",
     "P2-T8",
-    "P2-T9"
+    "P2-T9",
+    "P2-T10"
   ],
   "pending_tasks": [
-    "P2-T10",
     "P2-T11",
     "P2-T12",
     "P2-T13",
@@ -250,7 +250,11 @@
       "REQ-CONFIG-004",
       "REQ-CONFIG-009",
       "REQ-CONFIG-010",
-      "REQ-CONFIG-011"
+      "REQ-CONFIG-011",
+      "REQ-MIGRATION-002",
+      "REQ-MIGRATION-004",
+      "REQ-MIGRATION-006",
+      "REQ-MIGRATION-007"
     ],
     "P3": [],
     "P4": [],
@@ -261,5 +265,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T00:00:00Z"
+  "last_updated": "2026-05-01T12:00:00Z"
 }

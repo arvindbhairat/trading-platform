@@ -31,6 +31,13 @@ public sealed class MongoSysConfigRepository : ISysConfigRepository
         return doc["value"].AsString;
     }
 
+    public async Task<string?> GetSeedVersionAsync(CancellationToken ct = default)
+    {
+        var doc = await FindByKeyAsync("platform.seed.version", ct);
+        if (doc is null || !doc.Contains("value")) return null;
+        return doc["value"].AsString;
+    }
+
     private async Task<BsonDocument?> FindByKeyAsync(string key, CancellationToken ct)
     {
         return await _sysConfig
