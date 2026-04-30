@@ -1,17 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+// Stub superseded by MongoMigrationBootstrapExtensions.AddMongoMigrations.
+// This file is retained only to satisfy the project reference from apps/api
+// that was added during P2-T4 scaffolding. The full implementation lives in
+// MongoMigrationBootstrapExtensions.cs.
 
-namespace SignalStack.Migrations;
-
-public static class MigrationExtensions
-{
-    public static IServiceCollection AddMongoMigrations(
-        this IServiceCollection services,
-        string? mongoConnectionString,
-        string? mongoDatabaseName)
-    {
-        services.TryAddSingleton<MongoMigrationHostedService>();
-        services.AddHostedService(sp => sp.GetRequiredService<MongoMigrationHostedService>());
-        return services;
-    }
-}

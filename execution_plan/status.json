@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T4",
+  "current_task_id": "P2-T5",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -24,10 +24,10 @@
     "P2-T1",
     "P2-T2",
     "P2-T3",
-    "P2-T4-CR"
+    "P2-T4-CR",
+    "P2-T4"
   ],
   "pending_tasks": [
-    "P2-T4",
     "P2-T5",
     "P2-T6",
     "P2-T7",
@@ -217,6 +217,9 @@
       "REQ-ROLE-002",
       "REQ-ROLE-003",
       "REQ-ROLE-004",
+      "REQ-ROLE-005",
+      "REQ-ROLE-007",
+      "REQ-BCP-009",
       "REQ-LEGAL-003"
     ],
     "P3": [],
@@ -228,5 +231,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-30T18:00:00Z"
+  "last_updated": "2026-04-30T18:15:00Z"
 }
