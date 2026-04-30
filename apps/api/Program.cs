@@ -5,6 +5,7 @@ using SignalStack.Api.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
+using SignalStack.Api.Pld;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 using SignalStack.Configuration.Bootstrap;
@@ -40,6 +41,9 @@ builder.Services.AddAuditEventManagement();
 
 // FYERS credential management + token lifecycle — REQ-AUTH-003..010, 014, REQ-SESSION-009
 builder.Services.AddFyersTokenManagement();
+
+// PLD WebSocket session lease — REQ-SESSION-014
+builder.Services.AddPldWebSocketServices();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
@@ -108,6 +112,12 @@ app.Use(async (context, next) =>
   await next();
 });
 
+// WebSocket support for browser-tier PLD stream — REQ-SESSION-014.
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
+
 app.UseRateLimiter();
 
 // Auth middleware — must precede CsrfMiddleware so context.User is populated.
@@ -158,6 +168,9 @@ app.MapAuthEndpoints(app.Environment);
 
 // FYERS credential management + token lifecycle endpoints — P2-T7
 app.MapFyersEndpoints();
+
+// PLD WebSocket session lease endpoint — REQ-SESSION-014
+app.MapPldEndpoints();
 
 app.Run();
 
