@@ -12,6 +12,14 @@ public static class AuthEndpoints
     // credential configuration — the UI must never hide a provider button.
     private static readonly string[] SupportedProviders = ["google", "microsoft", "facebook"];
 
+    // REQ-BCP-009: amr claim values that indicate MFA was used at the identity provider.
+    // Google and Microsoft return one or more of these in the OAuth ID token / access token
+    // when the user authenticated with a multi-factor method.
+    private static readonly HashSet<string> MfaClaimValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mfa", "mca", "hwk", "otp"
+    };
+
     private static readonly Dictionary<string, string> ProviderSchemeMap =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -55,7 +63,7 @@ public static class AuthEndpoints
 
         // GET /api/v1/auth/callback/{provider}
         // OAuth provider redirects here after user consent.
-        // Issues a JWT, upserts the user record (REQ-ROLE-001/004), and creates a
+        // Issues a JWT, upserts the user record (REQ-ROLE-001/004/005), and creates a
         // server-side session (REQ-SESSION-002/002a), then redirects to the frontend.
         auth.MapGet("/callback/{provider}", async (
             string provider,
@@ -86,23 +94,65 @@ public static class AuthEndpoints
             var providerKey = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? Guid.NewGuid().ToString();
             var userId = $"{provider.ToLowerInvariant()}:{providerKey}";
+            var providerLower = provider.ToLowerInvariant();
+            var frontend = configuration["Auth:FrontendBaseUrl"] ?? "";
 
-            // REQ-ROLE-001/004: create or refresh the user record; new users start as
-            // pending_approval and remain blocked until the admin approves them.
-            await userRepo.UpsertOnSignInAsync(userId, email, name,
-                provider.ToLowerInvariant(), context.RequestAborted);
+            // REQ-ROLE-005: read seed admin email from bootstrap configuration.
+            var seedAdminEmail = configuration["Auth:SeedAdminEmail"]
+                ?? configuration["SEED_ADMIN_EMAIL"]
+                ?? "";
+            var isSeedAdmin = !string.IsNullOrEmpty(seedAdminEmail)
+                && string.Equals(email, seedAdminEmail, StringComparison.OrdinalIgnoreCase);
+
+            // REQ-ROLE-007 / REQ-BCP-009: admin OAuth restricted to Google or Microsoft.
+            // Facebook/Meta blocked for admin email because it does not reliably expose MFA
+            // state in its standard OAuth response.
+            if (isSeedAdmin && providerLower == "facebook")
+            {
+                return Results.Redirect(
+                    $"{frontend}/login?error=admin_provider_restricted");
+            }
+
+            // REQ-BCP-009: validate amr MFA claim for admin sign-in.
+            DateTime? mfaVerifiedAt = null;
+            if (isSeedAdmin)
+            {
+                var amrClaims = principal.FindAll("amr")
+                    .Select(c => c.Value)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasMfa = amrClaims.Overlaps(MfaClaimValues);
+                if (!hasMfa)
+                {
+                    return Results.Redirect(
+                        $"{frontend}/login?error=admin_mfa_required");
+                }
+                mfaVerifiedAt = DateTime.UtcNow;
+            }
+
+            // REQ-ROLE-005: bootstrap admin or create regular user.
+            if (isSeedAdmin)
+            {
+                await userRepo.UpsertAdminOnSignInAsync(userId, email, name,
+                    providerLower, context.RequestAborted);
+            }
+            else
+            {
+                // REQ-ROLE-001/004: create or refresh the user record; new users start as
+                // pending_approval and remain blocked until the admin approves them.
+                await userRepo.UpsertOnSignInAsync(userId, email, name,
+                    providerLower, context.RequestAborted);
+            }
 
             var (jwt, jti, issuedAt, expiresAt) = jwtService.IssueTokenWithMeta(
-                userId, email, name, provider.ToLowerInvariant());
+                userId, email, name, providerLower);
 
             // REQ-SESSION-002 / REQ-SESSION-002a: atomically invalidate prior session
             // and write the new one before redirecting the user.
             var userAgent = context.Request.Headers.UserAgent.ToString();
             await sessionRepo.CreateSessionAsync(
-                userId, jti, issuedAt, expiresAt, userAgent,
+                userId, jti, issuedAt, expiresAt, userAgent, mfaVerifiedAt,
                 context.RequestAborted);
 
-            var frontend = configuration["Auth:FrontendBaseUrl"] ?? "";
             return Results.Redirect(
                 $"{frontend}/auth/callback?token={Uri.EscapeDataString(jwt)}");
         });
@@ -212,7 +262,7 @@ public static class AuthEndpoints
                 await sessionRepo.CreateSessionAsync(
                     testUserId, jti, issuedAt, expiresAt,
                     userAgent: "test-client",
-                    context.RequestAborted);
+                    cancellationToken: context.RequestAborted);
 
                 return Results.Ok(new { token = jwt });
             });

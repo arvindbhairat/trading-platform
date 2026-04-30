@@ -22,6 +22,7 @@ public sealed class InMemorySessionRepository : ISessionRepository
         DateTime issuedAt,
         DateTime expiresAt,
         string? userAgent,
+        DateTime? mfaVerifiedAt = null,
         CancellationToken cancellationToken = default)
     {
         // Atomically replace: remove old session for user, then add new one.
@@ -35,6 +36,7 @@ public sealed class InMemorySessionRepository : ISessionRepository
             IssuedAt = issuedAt,
             ExpiresAt = expiresAt,
             UserAgent = userAgent,
+            MfaVerifiedAt = mfaVerifiedAt,
         };
 
         _byToken[sessionToken] = doc;
