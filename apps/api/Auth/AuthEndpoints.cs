@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using SignalStack.Api.Audit;
+using SignalStack.Api.Fyers;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 
@@ -366,12 +367,15 @@ public static class AuthEndpoints
         // Returns the portal session state for the authenticated user.
         // REQ-SESSION-007/010/011/012/013: drives the frontend routing to the
         // correct lifecycle screen (fyers_required, pending_approval, active, …).
-        // P2-T3 wires the real user-approval state check. P2-T7 wires the
-        // FYERS-token check (approved users remain "fyers_required" until then).
+        // P2-T7 wires the FYERS-token check: approved users without a valid token
+        // see "fyers_required"; approved users with a dirty token see "fyers_dirty"
+        // (admin sees non-blocking warning per REQ-SESSION-009); approved users
+        // with a valid token see "active".
         auth.MapGet("/session/status", async (
             HttpContext context,
             ISessionRepository sessionRepo,
-            IUserRepository userRepo) =>
+            IUserRepository userRepo,
+            IFyersTokenRepository fyersTokenRepo) =>
         {
             var jti = context.User.FindFirst("jti")?.Value ?? "";
             var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
@@ -400,13 +404,55 @@ public static class AuthEndpoints
                 });
             }
 
-            // Approved: stub "fyers_required" until P2-T7 wires the FYERS token check.
-            // REQ-SEC-011: include step-up status for admin users.
+            // REQ-AUTH-007/008/009: check FYERS token status for approved users.
+            var hasActive = await fyersTokenRepo.HasActiveTokenAsync(
+                session.UserId, context.RequestAborted);
+            var dirtyToken = await fyersTokenRepo.FindDirtyByUserIdAsync(
+                session.UserId, context.RequestAborted);
+
+            // REQ-SESSION-009: admin with dirty token sees non-blocking warning.
             if (user.Role == UserRole.Admin)
             {
                 var stepUpValid = session.StepUpAuthenticatedAt.HasValue
                     && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
 
+                if (hasActive)
+                {
+                    return Results.Ok(new
+                    {
+                        state = "active",
+                        expires_at = session.ExpiresAt.ToString("o"),
+                        step_up = new
+                        {
+                            valid = stepUpValid,
+                            authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
+                            expires_at = stepUpValid
+                                ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
+                                : null
+                        }
+                    });
+                }
+
+                if (dirtyToken is not null)
+                {
+                    // REQ-SESSION-009: admin sees non-blocking warning, not a hard lock.
+                    // Admin can still navigate while seeing the persistent warning.
+                    return Results.Ok(new
+                    {
+                        state = "fyers_dirty_admin",
+                        expires_at = session.ExpiresAt.ToString("o"),
+                        step_up = new
+                        {
+                            valid = stepUpValid,
+                            authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
+                            expires_at = stepUpValid
+                                ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
+                                : null
+                        }
+                    });
+                }
+
+                // Admin has no FYERS token at all.
                 return Results.Ok(new
                 {
                     state = "fyers_required",
@@ -422,6 +468,29 @@ public static class AuthEndpoints
                 });
             }
 
+            // Regular user path.
+            if (hasActive)
+            {
+                // REQ-SESSION-010: both OAuth and FYERS complete.
+                return Results.Ok(new
+                {
+                    state = "active",
+                    expires_at = session.ExpiresAt.ToString("o")
+                });
+            }
+
+            if (dirtyToken is not null)
+            {
+                // REQ-AUTH-009: dirty token blocks access for regular users.
+                // Hard lock — user must reauthenticate with FYERS.
+                return Results.Ok(new
+                {
+                    state = "fyers_dirty",
+                    expires_at = session.ExpiresAt.ToString("o")
+                });
+            }
+
+            // REQ-SESSION-010/011: approved user with no FYERS token on record.
             return Results.Ok(new
             {
                 state = "fyers_required",
