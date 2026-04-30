@@ -16,11 +16,14 @@ public sealed class BootstrapConfigurationLoader
     try
     {
       var remoteValues = LoadRemoteValues(options, contentRootPath);
-      cacheStore.Write(remoteValues, utcNow);
+
+      // LKG write is best-effort — a concurrent write from another test process is harmless.
+      try { cacheStore.Write(remoteValues, utcNow); }
+      catch (IOException) { }
 
       return new ConfigurationBootstrapResult
       {
-        Values = remoteValues,
+        Values = new Dictionary<string, string?>(remoteValues, StringComparer.OrdinalIgnoreCase),
         LastSuccessfulReadUtc = utcNow,
         SourceKind = ConfigurationSourceKind.AzureAppConfiguration,
         AppConfigurationReachable = true

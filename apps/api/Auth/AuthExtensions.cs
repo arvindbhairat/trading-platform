@@ -1,0 +1,106 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
+namespace SignalStack.Api.Auth;
+
+public static class AuthExtensions
+{
+    public static IServiceCollection AddSignalStackAuth(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddSingleton<JwtTokenService>();
+
+        // Register authentication schemes.
+        var authBuilder = services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(); // TokenValidationParameters are set below via PostConfigure.
+
+        // Resolve JWT validation parameters from DI's IConfiguration.
+        // Using .Configure<IConfiguration> ensures the options are built from the
+        // DI-registered IConfiguration (which includes all test-factory overrides),
+        // rather than from the builder.Configuration captured at DI registration time —
+        // the two differ in WebApplicationFactory test scenarios.
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IConfiguration>((options, config) =>
+            {
+                var secret = config["Auth:Jwt:Secret"] ?? "";
+                if (string.IsNullOrWhiteSpace(secret)) return;
+
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = config["Auth:Jwt:Issuer"] ?? "signalstack-api",
+                    ValidateAudience = true,
+                    ValidAudience = config["Auth:Jwt:Audience"] ?? "signalstack-portal",
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(secret)),
+                    ClockSkew = TimeSpan.FromSeconds(30)
+                };
+            });
+
+        // OAuth providers are conditionally registered when credentials are configured.
+        // REQ-AUTH-011: the login page always shows all three providers regardless of whether
+        // their server-side credentials are present; the provider list endpoint returns all three
+        // unconditionally. Missing credentials only affect the redirect path for that provider.
+        var googleClientId = configuration["Auth:Google:ClientId"];
+        var googleSecret = configuration["Auth:Google:ClientSecret"];
+        if (!string.IsNullOrWhiteSpace(googleClientId)
+            && !string.IsNullOrWhiteSpace(googleSecret))
+        {
+            authBuilder.AddGoogle(options =>
+            {
+                options.ClientId = googleClientId;
+                options.ClientSecret = googleSecret;
+                options.CallbackPath = "/api/v1/auth/callback/google";
+                options.SaveTokens = false;
+            });
+        }
+
+        var msClientId = configuration["Auth:Microsoft:ClientId"];
+        var msSecret = configuration["Auth:Microsoft:ClientSecret"];
+        if (!string.IsNullOrWhiteSpace(msClientId)
+            && !string.IsNullOrWhiteSpace(msSecret))
+        {
+            authBuilder.AddMicrosoftAccount(options =>
+            {
+                options.ClientId = msClientId;
+                options.ClientSecret = msSecret;
+                options.CallbackPath = "/api/v1/auth/callback/microsoft";
+                options.SaveTokens = false;
+            });
+        }
+
+        var fbAppId = configuration["Auth:Facebook:AppId"];
+        var fbSecret = configuration["Auth:Facebook:AppSecret"];
+        if (!string.IsNullOrWhiteSpace(fbAppId) && !string.IsNullOrWhiteSpace(fbSecret))
+        {
+            authBuilder.AddFacebook(options =>
+            {
+                options.AppId = fbAppId;
+                options.AppSecret = fbSecret;
+                options.CallbackPath = "/api/v1/auth/callback/facebook";
+                options.SaveTokens = false;
+            });
+        }
+
+        services.AddAuthorization();
+
+        // CSRF: double-submit cookie pattern as defence-in-depth per REQ-SEC-001 and
+        // engineering-standards § CSRF model. The XSRF-TOKEN cookie is readable by JS
+        // (not HttpOnly) so the portal can copy it into the X-XSRF-TOKEN request header.
+        services.AddAntiforgery(options =>
+        {
+            options.HeaderName = "X-XSRF-TOKEN";
+            options.Cookie.Name = "XSRF-TOKEN";
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.HttpOnly = false;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        });
+
+        return services;
+    }
+}

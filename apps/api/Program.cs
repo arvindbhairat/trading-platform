@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using SignalStack.Api.Auth;
 using SignalStack.Api.Observability;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -20,6 +21,9 @@ builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
 
 // Trade-ledger write lock primitives (REQ-PORT-031/031a/031b — writers wired in P5-T8)
 builder.Services.AddLedgerWriteLock();
+
+// OAuth / JWT Bearer / CSRF — REQ-AUTH-001/002/011, REQ-SEC-001
+builder.Services.AddSignalStackAuth(builder.Configuration);
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
@@ -90,6 +94,13 @@ app.Use(async (context, next) =>
 
 app.UseRateLimiter();
 
+// Auth middleware — must precede CsrfMiddleware so context.User is populated.
+app.UseAuthentication();
+app.UseAuthorization();
+
+// CSRF enforcement on authenticated mutations — REQ-SEC-001 defence-in-depth.
+app.UseMiddleware<CsrfMiddleware>();
+
 app.Use(async (context, next) =>
 {
   await next();
@@ -115,16 +126,18 @@ app.Use(async (context, next) =>
   }
 });
 
-app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.2")));
+app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.3")));
 app.MapHealthChecks("/api/v1/healthz");
 app.MapHealthChecks("/api/v1/readyz");
 app.MapGroup("/api/v1/auth")
   .RequireRateLimiting(AuthRateLimitPolicy)
   .MapPost("/probe", () => Results.Ok(new { status = "ok" }));
 
+// Auth endpoints: providers, login, callback, csrf, me — P2-T1
+app.MapAuthEndpoints(app.Environment);
+
 app.Run();
 
 public sealed record ApiRootResponse(string Name, string Version);
 
 public partial class Program;
-

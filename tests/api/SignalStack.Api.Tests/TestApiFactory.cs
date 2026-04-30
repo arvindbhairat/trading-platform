@@ -28,6 +28,15 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:MongoDb"] = "mongodb://test-stub:27017/signalstack-test",
+                ["Auth:Jwt:Secret"] = AuthTestApiFactory.TestJwtSecret,
+                ["Auth:Jwt:Issuer"] = "signalstack-api",
+                ["Auth:Jwt:Audience"] = "signalstack-portal",
+                ["Auth:FrontendBaseUrl"] = "http://localhost:3000",
+                // Disable LKG caching in tests to prevent a race condition when
+                // multiple test factories start concurrently and both try to write
+                // the same cache file. Primary snapshot files are always present in
+                // the test output directory, so LKG fallback is never needed.
+                ["SignalStack:Bootstrap:LastKnownGood:CachePath"] = ""
             });
         });
 
