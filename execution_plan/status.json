@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T9",
+  "current_task_id": "P2-T10",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -29,10 +29,10 @@
     "P2-T5",
     "P2-T6",
     "P2-T7",
-    "P2-T8"
+    "P2-T8",
+    "P2-T9"
   ],
   "pending_tasks": [
-    "P2-T9",
     "P2-T10",
     "P2-T11",
     "P2-T12",
@@ -240,7 +240,11 @@
       "REQ-AUTH-009",
       "REQ-AUTH-010",
       "REQ-AUTH-014",
-      "REQ-SESSION-009"
+      "REQ-SESSION-009",
+      "REQ-CONFIG-004",
+      "REQ-CONFIG-009",
+      "REQ-CONFIG-010",
+      "REQ-CONFIG-011"
     ],
     "P3": [],
     "P4": [],
@@ -251,5 +255,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-30T18:55:05Z"
+  "last_updated": "2026-04-30T19:10:00Z"
 }
