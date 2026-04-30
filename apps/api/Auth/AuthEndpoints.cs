@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
+using SignalStack.Api.Audit;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 
@@ -19,6 +20,9 @@ public static class AuthEndpoints
     {
         "mfa", "mca", "hwk", "otp"
     };
+
+    // REQ-SEC-011: step-up re-authentication must be within this window to be valid.
+    private static readonly TimeSpan StepUpDuration = TimeSpan.FromMinutes(5);
 
     private static readonly Dictionary<string, string> ProviderSchemeMap =
         new(StringComparer.OrdinalIgnoreCase)
@@ -48,6 +52,8 @@ public static class AuthEndpoints
         // GET /api/v1/auth/login/{provider}
         // Initiates the OAuth redirect for the named provider.
         // REQ-AUTH-001: supports google, microsoft, facebook.
+        // When ?step_up=true is present, passes the intent through OAuth Properties
+        // so the callback can distinguish step-up from normal login (REQ-SEC-011).
         auth.MapGet("/login/{provider}", async (string provider, HttpContext context) =>
         {
             if (!ProviderSchemeMap.TryGetValue(provider, out var scheme))
@@ -57,6 +63,12 @@ public static class AuthEndpoints
             {
                 RedirectUri = $"/api/v1/auth/callback/{provider.ToLowerInvariant()}"
             };
+
+            if (context.Request.Query.ContainsKey("step_up"))
+            {
+                props.Items["step_up"] = "true";
+            }
+
             await context.ChallengeAsync(scheme, props);
             return Results.Empty;
         });
@@ -65,12 +77,15 @@ public static class AuthEndpoints
         // OAuth provider redirects here after user consent.
         // Issues a JWT, upserts the user record (REQ-ROLE-001/004/005), and creates a
         // server-side session (REQ-SESSION-002/002a), then redirects to the frontend.
+        // When initiated with ?step_up=true, updates the existing session's step-up
+        // timestamp instead of creating a new session (REQ-SEC-011).
         auth.MapGet("/callback/{provider}", async (
             string provider,
             HttpContext context,
             JwtTokenService jwtService,
             ISessionRepository sessionRepo,
             IUserRepository userRepo,
+            IAuditEventRepository auditRepo,
             IConfiguration configuration) =>
         {
             if (!ProviderSchemeMap.TryGetValue(provider, out var scheme))
@@ -96,6 +111,73 @@ public static class AuthEndpoints
             var userId = $"{provider.ToLowerInvariant()}:{providerKey}";
             var providerLower = provider.ToLowerInvariant();
             var frontend = configuration["Auth:FrontendBaseUrl"] ?? "";
+
+            // REQ-SEC-011: step-up re-authentication flow.
+            // When the OAuth Properties carry "step_up" = "true", we update the existing
+            // session's step-up timestamp instead of creating a new JWT / session.
+            if (result.Properties.Items.TryGetValue("step_up", out var isStepUp)
+                && isStepUp == "true")
+            {
+                var adminEmail = configuration["Auth:SeedAdminEmail"]
+                    ?? configuration["SEED_ADMIN_EMAIL"]
+                    ?? "";
+                var isAdmin = !string.IsNullOrEmpty(adminEmail)
+                    && string.Equals(email, adminEmail, StringComparison.OrdinalIgnoreCase);
+
+                if (!isAdmin)
+                {
+                    return Results.Redirect($"{frontend}/login?error=step_up_non_admin");
+                }
+
+                // REQ-ROLE-007: Facebook is blocked for admin step-up.
+                if (providerLower == "facebook")
+                {
+                    return Results.Redirect(
+                        $"{frontend}/login?error=admin_provider_restricted");
+                }
+
+                // REQ-BCP-009: validate amr MFA claim on step-up too.
+                var amrClaims = principal.FindAll("amr")
+                    .Select(c => c.Value)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasMfa = amrClaims.Overlaps(MfaClaimValues);
+                if (!hasMfa)
+                {
+                    return Results.Redirect(
+                        $"{frontend}/login?error=admin_mfa_required");
+                }
+
+                var user = await userRepo.FindByEmailAsync(email, context.RequestAborted);
+                if (user is null || user.Role != UserRole.Admin)
+                {
+                    return Results.Redirect($"{frontend}/login?error=step_up_non_admin");
+                }
+
+                var existingSession = await sessionRepo.FindByUserIdAsync(
+                    user.UserId, context.RequestAborted);
+                if (existingSession is null)
+                {
+                    return Results.Redirect($"{frontend}/login?error=session_expired");
+                }
+
+                var now = DateTime.UtcNow;
+                await sessionRepo.UpdateStepUpAsync(
+                    existingSession.SessionToken, now, context.RequestAborted);
+
+                // Write audit event for the step-up (REQ-SEC-011).
+                var stepUpEventId = await auditRepo.RecordAsync(
+                    user.UserId,
+                    "step_up_authenticated",
+                    now,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["provider"] = providerLower,
+                        ["step_up_duration_minutes"] = StepUpDuration.TotalMinutes,
+                    },
+                    cancellationToken: context.RequestAborted);
+
+                return Results.Redirect($"{frontend}/auth/callback?step_up=success");
+            }
 
             // REQ-ROLE-005: read seed admin email from bootstrap configuration.
             var seedAdminEmail = configuration["Auth:SeedAdminEmail"]
@@ -229,10 +311,90 @@ public static class AuthEndpoints
             }
 
             // Approved: stub "fyers_required" until P2-T7 wires the FYERS token check.
+            // REQ-SEC-011: include step-up status for admin users.
+            if (user.Role == UserRole.Admin)
+            {
+                var stepUpValid = session.StepUpAuthenticatedAt.HasValue
+                    && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+
+                return Results.Ok(new
+                {
+                    state = "fyers_required",
+                    expires_at = session.ExpiresAt.ToString("o"),
+                    step_up = new
+                    {
+                        valid = stepUpValid,
+                        authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
+                        expires_at = stepUpValid
+                            ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
+                            : null
+                    }
+                });
+            }
+
             return Results.Ok(new
             {
                 state = "fyers_required",
                 expires_at = session.ExpiresAt.ToString("o")
+            });
+        }).RequireAuthorization();
+
+        // POST /api/v1/auth/step-up/init
+        // REQ-SEC-011: admin-only endpoint that returns the login URL for step-up.
+        // The frontend redirects the browser to this URL to initiate a fresh OAuth
+        // handshake.  CSRF-protected via the global CsrfMiddleware.
+        auth.MapPost("/step-up/init", async (
+            HttpContext context,
+            IUserRepository userRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null || user.Role != UserRole.Admin)
+            {
+                return Results.Forbid();
+            }
+
+            // REQ-ROLE-007: admins cannot use Facebook; step-up uses the admin's
+            // original sign-in provider.
+            if (user.Provider == "facebook")
+            {
+                return Results.BadRequest(new
+                {
+                    error = "admin_provider_restricted",
+                    message = "Admins cannot use Facebook. Use Google or Microsoft."
+                });
+            }
+
+            return Results.Ok(new
+            {
+                step_up_url = $"/api/v1/auth/login/{user.Provider}?step_up=true"
+            });
+        }).RequireAuthorization();
+
+        // GET /api/v1/auth/step-up/status
+        // REQ-SEC-011: returns whether the current session has a valid step-up
+        // re-authentication (within the 5-minute window).
+        auth.MapGet("/step-up/status", async (
+            HttpContext context,
+            ISessionRepository sessionRepo) =>
+        {
+            var jti = context.User.FindFirst("jti")?.Value ?? "";
+            var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
+            if (session is null)
+                return Results.Unauthorized();
+
+            var isValid = session.StepUpAuthenticatedAt.HasValue
+                && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+
+            return Results.Ok(new
+            {
+                step_up_valid = isValid,
+                authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
+                expires_at = isValid
+                    ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
+                    : null
             });
         }).RequireAuthorization();
 

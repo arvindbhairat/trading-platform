@@ -62,4 +62,29 @@ public sealed class InMemorySessionRepository : ISessionRepository
             _byToken.TryGetValue(token, out doc);
         return Task.FromResult(doc);
     }
+
+    public Task UpdateStepUpAsync(
+        string sessionToken,
+        DateTime stepUpAuthenticatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (_byToken.TryGetValue(sessionToken, out var doc))
+        {
+            // SessionDocument uses { get; init; } — create a new instance with the
+            // updated step_up_authenticated_at value.
+            var updated = new SessionDocument
+            {
+                Id = doc.Id,
+                UserId = doc.UserId,
+                SessionToken = doc.SessionToken,
+                IssuedAt = doc.IssuedAt,
+                ExpiresAt = doc.ExpiresAt,
+                UserAgent = doc.UserAgent,
+                MfaVerifiedAt = doc.MfaVerifiedAt,
+                StepUpAuthenticatedAt = stepUpAuthenticatedAt,
+            };
+            _byToken[sessionToken] = updated;
+        }
+        return Task.CompletedTask;
+    }
 }

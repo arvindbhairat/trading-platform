@@ -18,6 +18,13 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult<UserDocument?>(doc);
     }
 
+    public Task<UserDocument?> FindByEmailAsync(string email, CancellationToken ct = default)
+    {
+        var doc = _byUserId.Values.FirstOrDefault(
+            u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<UserDocument?>(doc);
+    }
+
     public Task UpsertOnSignInAsync(
         string userId, string email, string displayName, string provider,
         CancellationToken ct = default)

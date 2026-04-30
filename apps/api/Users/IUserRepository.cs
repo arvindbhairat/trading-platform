@@ -4,6 +4,9 @@ public interface IUserRepository
 {
     Task<UserDocument?> FindByUserIdAsync(string userId, CancellationToken ct = default);
 
+    /// <summary>Returns the user whose email matches, or <see langword="null"/> if not found.</summary>
+    Task<UserDocument?> FindByEmailAsync(string email, CancellationToken ct = default);
+
     // Creates the user record as pending_approval if it does not exist yet.
     // On subsequent sign-ins for the same user_id, updates display_name and updated_at only;
     // never downgrades an already-approved or deactivated record.

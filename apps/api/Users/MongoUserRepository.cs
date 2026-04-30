@@ -21,6 +21,15 @@ public sealed class MongoUserRepository : IUserRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public async Task<UserDocument?> FindByEmailAsync(
+        string email,
+        CancellationToken ct = default)
+    {
+        return await _users
+            .Find(Builders<UserDocument>.Filter.Eq(u => u.Email, email))
+            .FirstOrDefaultAsync(ct);
+    }
+
     // Upsert: insert with pending_approval on first sign-in; update display_name + updated_at
     // on subsequent sign-ins without touching role or status.
     public async Task UpsertOnSignInAsync(

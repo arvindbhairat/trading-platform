@@ -76,4 +76,17 @@ public sealed class MongoSessionRepository : ISessionRepository
             .Find(Builders<SessionDocument>.Filter.Eq(s => s.UserId, userId))
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    // REQ-SEC-011: records the step-up timestamp on the current session.
+    public async Task UpdateStepUpAsync(
+        string sessionToken,
+        DateTime stepUpAuthenticatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<SessionDocument>.Filter.Eq(s => s.SessionToken, sessionToken);
+        var update = Builders<SessionDocument>.Update
+            .Set(s => s.StepUpAuthenticatedAt, stepUpAuthenticatedAt);
+
+        await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+    }
 }

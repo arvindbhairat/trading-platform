@@ -35,4 +35,11 @@ public sealed class SessionDocument
     [BsonElement("mfa_verified_at")]
     [BsonIgnoreIfNull]
     public DateTime? MfaVerifiedAt { get; init; }
+
+    // REQ-SEC-011: set when the admin completes a step-up re-authentication.
+    // Null on sessions where step-up has not been performed since session creation.
+    // Checked by gated endpoints: if older than 5 minutes, step-up is required.
+    [BsonElement("step_up_authenticated_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? StepUpAuthenticatedAt { get; init; }
 }

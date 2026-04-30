@@ -28,4 +28,13 @@ public interface ISessionRepository
     Task<SessionDocument?> FindByUserIdAsync(
         string userId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records the step-up re-authentication timestamp on the session identified by
+    /// <paramref name="sessionToken"/>.  REQ-SEC-011.
+    /// </summary>
+    Task UpdateStepUpAsync(
+        string sessionToken,
+        DateTime stepUpAuthenticatedAt,
+        CancellationToken cancellationToken = default);
 }
