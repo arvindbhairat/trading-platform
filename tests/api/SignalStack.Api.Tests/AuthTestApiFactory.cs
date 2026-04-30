@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SignalStack.Api.Sessions;
+using SignalStack.Api.SysConfig;
+using SignalStack.Api.Users;
 
 namespace SignalStack.Api.Tests;
 
@@ -57,6 +59,22 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
                 services.Remove(sessionDescriptor);
 
             services.AddSingleton<ISessionRepository, InMemorySessionRepository>();
+
+            // Replace MongoDB-backed user and sys_config repositories.
+            ReplaceService<IUserRepository>(services,
+                new ServiceDescriptor(typeof(IUserRepository),
+                    typeof(InMemoryUserRepository), ServiceLifetime.Singleton));
+
+            ReplaceService<ISysConfigRepository>(services,
+                new ServiceDescriptor(typeof(ISysConfigRepository),
+                    typeof(InMemorySysConfigRepository), ServiceLifetime.Singleton));
         });
+    }
+
+    private static void ReplaceService<T>(IServiceCollection services, ServiceDescriptor replacement)
+    {
+        var existing = services.SingleOrDefault(d => d.ServiceType == typeof(T));
+        if (existing is not null) services.Remove(existing);
+        services.Add(replacement);
     }
 }

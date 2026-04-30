@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Observability;
 using SignalStack.Api.Sessions;
+using SignalStack.Api.Users;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -28,6 +29,9 @@ builder.Services.AddSignalStackAuth(builder.Configuration);
 
 // Server-side session management — REQ-SESSION-001/002/002a
 builder.Services.AddSessionManagement();
+
+// User identity model, roles, approval state, tester ceiling — REQ-ROLE-001..004, REQ-LEGAL-003
+builder.Services.AddUserManagement();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
