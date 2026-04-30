@@ -9,9 +9,10 @@
 
 :root {
   /* ---------- Fonts ---------- */
-  /* --font-sans and --font-mono are injected by next/font in layout.tsx.
-     These :root declarations are fallbacks only, active if next/font fails to load. */
-  --font-display: var(--font-sans, 'Roboto'), ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+  /* Fonts are loaded from Google Fonts CDN via next/font in layout.tsx
+     (Roboto 400–800 + JetBrains Mono 400–600). These :root values are
+     overridden at runtime by the CSS variables next/font injects. */
+  --font-display: var(--font-sans);
   --font-sans:    'Roboto', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
