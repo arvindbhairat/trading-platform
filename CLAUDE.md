@@ -75,6 +75,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Never make startup-critical configuration depend only on MongoDB.
 - Never introduce secrets into source control, fixtures, or docs.
 - Never deploy the Worker Service as more than one running instance until the Phase C multi-instance partitioning extension in ADR-0003 is delivered and accepted in a new ADR. Azure App Service scale-out, auto-scale rules, and VM scale-sets must remain disabled for the Worker Service. Scale-out silently breaks the per-position channel invariant and causes concurrent writes on the same position document. The API service is unaffected and may scale horizontally.
+- Never introduce custom styles in `apps/web` outside the design system tokens defined in `globals.css`. All colors, spacing, font sizes, and shadows must use design tokens. All UI components must reuse or extend `src/components/primitives.tsx`. Before implementing any UI, consult `design_system/mock_screens/` and `design_system/preview/`. See `docs/engineering-standards.md` § "Design System Standards" for the full rules.
 
 ## Working Style
 
@@ -83,3 +84,4 @@ Unless the repository evolves in another direction, use these defaults:
 - update the canonical docs when a requirement actually changes
 - keep implementations simple, typed, observable, and testable
 - avoid speculative rewrites when incremental delivery is possible
+- enforce the design system strictly: start every UI change from `design_system/mock_screens/`, map components from `src/components/primitives.tsx`, and use tokens from `globals.css` — never hardcode visual values

@@ -5,7 +5,10 @@ function buildCsp(nonce: string) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self'",
+    // Inline styles are permitted because all style values come from
+    // design-system tokens (globals.css), not user-generated content.
+    // The design system relies on React style={} props for component styling.
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self' https:",

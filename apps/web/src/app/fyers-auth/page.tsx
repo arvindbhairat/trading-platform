@@ -1,24 +1,59 @@
 "use client";
 
+// FYERS OAuth return page. FYERS redirects here after OAuth flow completes.
+// Design system: tokens from globals.css and primitives.
+// Layout matches design_system/mock_screens/auth-screens.jsx.
+
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
+import { Card, Logo, Icon, Btn } from "@/components/primitives";
 
-// FYERS OAuth return page.  FYERS redirects here after the user completes the
-// OAuth flow.  The API callback (GET /api/v1/fyers/auth/callback) handles the
-// actual code exchange and redirects here with ?status=success or ?status=error.
-// This page also serves as the re-authentication entry point when accessed
-// directly with ?status=dirty (from auth/callback routing).
-//
-// REQ-AUTH-004 (admin) / REQ-AUTH-005 (user): FYERS auth completion.
-// REQ-AUTH-009/010: dirty token re-authentication.
-// REQ-SESSION-009: admin non-blocking warning.
 export default function FyersAuthPage() {
   return (
-    <Suspense fallback={<main><p>Loading…</p></main>}>
+    <Suspense
+      fallback={
+        <CenteredCard>
+          <ProcessingMessage message="Loading…" />
+        </CenteredCard>
+      }
+    >
       <FyersAuthContent />
     </Suspense>
   );
+}
+
+function CenteredCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background: "var(--bg-0)",
+        padding: "var(--s-6)",
+      }}
+    >
+      <Card
+        style={{
+          maxWidth: "440px",
+          width: "100%",
+          padding: "var(--s-8) var(--s-8) var(--s-6)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ marginBottom: "var(--s-6)" }}>
+          <Logo size={40} />
+        </div>
+        {children}
+      </Card>
+    </div>
+  );
+}
+
+function ProcessingMessage({ message }: { message: string }) {
+  return <p className="t-body">{message}</p>;
 }
 
 function FyersAuthContent() {
@@ -37,27 +72,22 @@ function FyersAuthContent() {
 
     if (statusParam === "success") {
       setStatus("success");
-      // FYERS token established — re-check session status.
       fetchSessionStatus().then((session: SessionStatus | null) => {
         if (!session) {
           router.replace("/login?error=session_check_failed");
           return;
         }
-
         switch (session.state) {
           case "active":
             router.replace("/");
             break;
           case "fyers_dirty_admin":
-            // REQ-SESSION-009: admin with dirty token — still proceed.
             router.replace("/");
             break;
           case "fyers_dirty":
-            // Still dirty — something went wrong.
             setStatus("error:token_still_dirty");
             break;
           default:
-            // Unknown state — redirect to home and let the session guard handle it.
             router.replace("/");
             break;
         }
@@ -70,50 +100,97 @@ function FyersAuthContent() {
       return;
     }
 
-    // No status param — waiting for redirect.
     setStatus("awaiting");
   }, [params, router]);
 
   if (status === "success") {
     return (
-      <main>
-        <h1>FYERS authentication successful</h1>
-        <p>Your FYERS account has been connected. Redirecting…</p>
-      </main>
+      <>
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "var(--up-bg)",
+            color: "var(--up-500)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto var(--s-4)",
+          }}
+        >
+          <Icon name="circle-check" size={24} />
+        </div>
+        <h1 style={{ marginBottom: "var(--s-3)" }}>FYERS authentication successful</h1>
+        <p className="t-body">Your FYERS account has been connected. Redirecting…</p>
+      </>
     );
   }
 
   if (status?.startsWith("error:")) {
     const errorMsg = status.substring(6);
     return (
-      <main>
-        <h1>FYERS authentication failed</h1>
-        <p>{errorMsg === "token_still_dirty" ? "Your FYERS token could not be refreshed. Please try again or contact support." : errorMsg}</p>
-        <button onClick={() => router.replace("/fyers-required")}>
+      <>
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "var(--down-bg)",
+            color: "var(--down-500)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto var(--s-4)",
+          }}
+        >
+          <Icon name="circle-x" size={24} />
+        </div>
+        <h1 style={{ marginBottom: "var(--s-3)" }}>FYERS authentication failed</h1>
+        <p className="t-body" style={{ marginBottom: "var(--s-4)" }}>
+          {errorMsg === "token_still_dirty"
+            ? "Your FYERS token could not be refreshed. Please try again or contact support."
+            : errorMsg}
+        </p>
+        <Btn variant="primary" onClick={() => router.replace("/fyers-required")}>
           Try again
-        </button>
-      </main>
+        </Btn>
+      </>
     );
   }
 
   if (status === "dirty") {
     return (
-      <main>
-        <h1>FYERS token requires re-authentication</h1>
-        <p>
+      <>
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "var(--warn-bg)",
+            color: "var(--warn-500)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto var(--s-4)",
+          }}
+        >
+          <Icon name="alert-triangle" size={24} />
+        </div>
+        <h1 style={{ marginBottom: "var(--s-3)" }}>FYERS token requires re-authentication</h1>
+        <p className="t-body" style={{ marginBottom: "var(--s-4)" }}>
           Your FYERS token has been marked as invalid or expired. You need to
           re-authenticate with FYERS to continue using the platform.
         </p>
-        <button onClick={() => router.replace("/fyers-required")}>
+        <Btn
+          variant="primary"
+          onClick={() => router.replace("/fyers-required")}
+        >
           Reconnect FYERS account
-        </button>
-      </main>
+        </Btn>
+      </>
     );
   }
 
-  return (
-    <main>
-      <p>Processing FYERS authentication…</p>
-    </main>
-  );
+  return <ProcessingMessage message="Processing FYERS authentication…" />;
 }

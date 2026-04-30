@@ -3,13 +3,14 @@
 // REQ-SESSION-007: non-blocking indicator when session is near expiry.
 // Appears when fewer than `warningThresholdMinutes` remain (default 30, driven
 // by sys_config `ui.session.expiry_warning_minutes` once P2-T9 seeder is live).
+//
+// Design system: uses tokens from globals.css. No hardcoded colors or spacing.
 
 import { useEffect, useState } from "react";
 import { getToken } from "@/lib/auth";
 import { minutesUntilExpiry, DEFAULT_EXPIRY_WARNING_MINUTES } from "@/lib/session";
 
 interface Props {
-  /** Minutes threshold for showing the warning (default: DEFAULT_EXPIRY_WARNING_MINUTES). */
   warningThresholdMinutes?: number;
 }
 
@@ -24,9 +25,7 @@ export default function SessionExpiryBanner({
       if (!token) { setMinsLeft(null); return; }
       setMinsLeft(minutesUntilExpiry(token));
     }
-
     refresh();
-    // Re-check every 60 seconds so the countdown stays reasonably accurate.
     const id = setInterval(refresh, 60_000);
     return () => clearInterval(id);
   }, []);
@@ -36,10 +35,34 @@ export default function SessionExpiryBanner({
   const mins = Math.ceil(minsLeft);
 
   return (
-    <div role="status" aria-live="polite">
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        background: "var(--warn-bg)",
+        border: "1px solid rgba(228,160,48,0.25)",
+        borderRadius: "var(--r-sm)",
+        padding: "var(--s-3) var(--s-4)",
+        marginBottom: "var(--s-4)",
+        fontSize: "13px",
+        color: "var(--warn-500)",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--s-2)",
+      }}
+    >
       <span>
         Your session expires in {mins} {mins === 1 ? "minute" : "minutes"}.{" "}
-        <a href="/login">Sign in again</a> to stay connected.
+        <a
+          href="/login"
+          style={{
+            color: "var(--brand-300)",
+            fontWeight: 500,
+          }}
+        >
+          Sign in again
+        </a>{" "}
+        to stay connected.
       </span>
     </div>
   );

@@ -129,3 +129,4 @@ These are the non-negotiable guardrails from `AGENTS.md` / `CLAUDE.md`. The agen
 - Startup-critical configuration must not depend solely on MongoDB.
 - No secrets in source control, fixtures, or docs.
 - Worker Service runs as exactly one instance through Phase A and Phase B (REQ-RME-CONC-006); no auto-scale, no scale-out.
+- All UI work in `apps/web` must comply with the Design System Standards in `docs/engineering-standards.md`. No hardcoded colors, spacing, fonts, or shadows. Every visual value must come from a design token in `globals.css`. Every component must reuse or extend `src/components/primitives.tsx`. Before implementing any UI, consult `design_system/mock_screens/` and `design_system/preview/` for the intended visual behavior.

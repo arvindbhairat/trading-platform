@@ -1,17 +1,45 @@
 "use client";
 
+// OAuth callback receiver. Stores JWT, checks session state, routes to lifecycle screen.
+// REQ-SESSION-010/011/012/013. P2-T7 adds fyers_dirty routing.
+// Design system: tokens from globals.css — minimal because this page is transient.
+
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { storeToken } from "@/lib/auth";
 import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
+import { Card, Logo } from "@/components/primitives";
 
-// Receives the JWT from the API OAuth callback redirect and stores it in
-// sessionStorage, then checks the server-side session state to route the user
-// to the correct lifecycle screen.
-// REQ-SESSION-010/011/012/013.  P2-T7 adds fyers_dirty routing.
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<main><p>Completing sign-in…</p></main>}>
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "100vh",
+            background: "var(--bg-0)",
+            padding: "var(--s-6)",
+          }}
+        >
+          <Card
+            style={{
+              maxWidth: "400px",
+              width: "100%",
+              padding: "var(--s-8) var(--s-8) var(--s-6)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ marginBottom: "var(--s-6)" }}>
+              <Logo size={40} />
+            </div>
+            <p className="t-body">Completing sign-in…</p>
+          </Card>
+        </div>
+      }
+    >
       <AuthCallbackContent />
     </Suspense>
   );
@@ -32,10 +60,8 @@ function AuthCallbackContent() {
 
     storeToken(token);
 
-    // Check server-side session state to route to the correct screen.
     fetchSessionStatus().then((status: SessionStatus | null) => {
       if (!status) {
-        // Could not reach API — fall back to login with an error.
         router.replace("/login?error=session_check_failed");
         return;
       }
@@ -48,11 +74,9 @@ function AuthCallbackContent() {
           router.replace("/fyers-required");
           break;
         case "fyers_dirty":
-          // REQ-AUTH-009: dirty token — user must reauthenticate with FYERS.
           router.replace("/fyers-auth?status=dirty");
           break;
         case "fyers_dirty_admin":
-          // REQ-SESSION-009: admin sees non-blocking warning, routed to home.
           router.replace("/");
           break;
         case "deactivated":
@@ -69,9 +93,7 @@ function AuthCallbackContent() {
     });
   }, [params, router]);
 
-  return (
-    <main>
-      <p>Completing sign-in…</p>
-    </main>
-  );
+  // Transient — rendered for a split second during the JWT handoff.
+  // The fallback above is what the user actually sees.
+  return null;
 }

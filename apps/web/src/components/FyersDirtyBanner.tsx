@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { apiFetch } from "@/lib/auth";
-
 // REQ-AUTH-009/010 / REQ-SESSION-009: dirty-token UX.
 // For regular users: blocking modal that prevents access to protected features.
 // For admins: non-blocking persistent warning banner (REQ-SESSION-009).
+//
+// Design system: uses tokens from globals.css and primitives.
+// All hardcoded values (#fff3cd, #ffc107, #fff, #666, #999, inline rem) removed.
+
+import { useState } from "react";
+import { Btn, Icon, Card, Pill } from "@/components/primitives";
+import { apiFetch } from "@/lib/auth";
+
 interface FyersDirtyBannerProps {
   isAdmin: boolean;
 }
@@ -14,7 +19,6 @@ export default function FyersDirtyBanner({ isAdmin }: FyersDirtyBannerProps) {
   const [reauthLoading, setReauthLoading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  // Admin can dismiss; users cannot.
   if (dismissed) return null;
 
   const handleReauth = async () => {
@@ -38,48 +42,48 @@ export default function FyersDirtyBanner({ isAdmin }: FyersDirtyBannerProps) {
     // REQ-SESSION-009: non-blocking persistent warning for admin.
     return (
       <div
-        style={{
-          background: "#fff3cd",
-          border: "1px solid #ffc107",
-          borderRadius: "4px",
-          padding: "0.75rem 1rem",
-          margin: "0.5rem 0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
         role="alert"
+        style={{
+          background: "var(--warn-bg)",
+          border: "1px solid rgba(228,160,48,0.25)",
+          borderRadius: "var(--r-sm)",
+          padding: "var(--s-3) var(--s-4)",
+          margin: "var(--s-2) 0",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "var(--s-4)",
+          fontSize: "13px",
+          color: "var(--fg-2)",
+        }}
       >
-        <div>
-          <strong>FYERS token issue:</strong> Your FYERS token is invalid or
-          expired. EOD sync and all admin-token-dependent background jobs will
-          fail until the token is re-established.
+        <div style={{ display: "flex", gap: "var(--s-3)", alignItems: "flex-start", flex: 1 }}>
+          <span style={{ color: "var(--warn-500)", flexShrink: 0, marginTop: "1px" }}>
+            <Icon name="alert-triangle" size={16} />
+          </span>
+          <div>
+            <strong style={{ color: "var(--warn-500)" }}>FYERS token issue:</strong>{" "}
+            Your FYERS token is invalid or expired. EOD sync and all
+            admin-token-dependent background jobs will fail until the token is
+            re-established.
+          </div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-          <button
+        <div style={{ display: "flex", gap: "var(--s-2)", flexShrink: 0 }}>
+          <Btn
+            variant="secondary"
+            size="sm"
             onClick={handleReauth}
             disabled={reauthLoading}
-            style={{
-              padding: "0.4rem 0.8rem",
-              fontSize: "0.875rem",
-              cursor: reauthLoading ? "not-allowed" : "pointer",
-            }}
           >
             {reauthLoading ? "Reconnecting…" : "Reconnect FYERS"}
-          </button>
-          <button
+          </Btn>
+          <Btn
+            variant="ghost"
+            size="sm"
             onClick={() => setDismissed(true)}
-            style={{
-              padding: "0.4rem 0.8rem",
-              fontSize: "0.875rem",
-              cursor: "pointer",
-              background: "transparent",
-              border: "1px solid #999",
-            }}
           >
             Dismiss
-          </button>
+          </Btn>
         </div>
       </div>
     );
@@ -91,45 +95,62 @@ export default function FyersDirtyBanner({ isAdmin }: FyersDirtyBannerProps) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.5)",
+        background: "rgba(0,0,0,0.6)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
+        zIndex: "var(--z-modal)",
+        padding: "var(--s-6)",
       }}
     >
-      <div
+      <Card
         style={{
-          background: "#fff",
-          borderRadius: "8px",
-          padding: "2rem",
           maxWidth: "480px",
-          width: "90%",
+          width: "100%",
+          padding: "var(--s-8)",
           textAlign: "center",
         }}
       >
-        <h2 style={{ marginTop: 0 }}>FYERS authentication required</h2>
-        <p>
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "var(--down-bg)",
+            color: "var(--down-500)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto var(--s-4)",
+          }}
+        >
+          <Icon name="alert-triangle" size={24} />
+        </div>
+
+        <h2 style={{ marginBottom: "var(--s-3)" }}>
+          FYERS authentication required
+        </h2>
+
+        <p className="t-body" style={{ marginBottom: "var(--s-3)" }}>
           Your FYERS token has expired or is no longer valid. You need to
           re-authenticate with FYERS to continue using the platform.
         </p>
-        <p style={{ fontSize: "0.875rem", color: "#666" }}>
+
+        <p className="t-body-sm" style={{ marginBottom: "var(--s-5)" }}>
           Dashboard, charts, portfolio analytics, and signal workflows are
           unavailable until FYERS authentication is re-established.
         </p>
-        <button
+
+        <Btn
+          variant="primary"
+          size="lg"
+          full
           onClick={handleReauth}
           disabled={reauthLoading}
-          style={{
-            padding: "0.75rem 1.5rem",
-            fontSize: "1rem",
-            cursor: reauthLoading ? "not-allowed" : "pointer",
-            marginTop: "0.5rem",
-          }}
         >
           {reauthLoading ? "Connecting…" : "Reconnect FYERS account"}
-        </button>
-      </div>
+        </Btn>
+      </Card>
     </div>
   );
 }

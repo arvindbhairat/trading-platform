@@ -72,6 +72,48 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 - **CSRF model.** Portal-to-API authentication uses Bearer JWT tokens carried in the HTTP `Authorization` header; cross-site requests cannot set the `Authorization` header, making this pattern inherently CSRF-safe. OAuth session state is maintained in HttpOnly, SameSite=Strict cookies that are never used as the sole credential for state-changing API endpoints — the Bearer token is always required and must be validated server-side before any mutation is applied. CSRF tokens (REQ-SEC-001) remain as a mandatory defence-in-depth layer on top of this model. Any endpoint that deviates from Bearer-in-header authentication (for example, a webhook receiver or a callback from FYERS) must explicitly document its authentication model and its CSRF mitigation in the endpoint's code comment and in the relevant requirement.
 - **Token and secret redaction in structured logs.** Every .NET service must configure a Serilog destructuring policy that redacts the *value* of any log property whose name — case-insensitively — matches any of the following patterns: `*token*`, `*access_token*`, `*authorization*`, `*secret*`, `*password*`, `*api_key*`, `*apikey*`. Matched values must be replaced with the literal string `[REDACTED]`; the property name must be preserved so log entries remain parseable. The policy must be registered before any provider, enricher, or sink is attached to the `LoggerConfiguration` so that it applies to every enrichment and sink in the pipeline, including OTLP export. This requirement exists because the FYERS user token is fetched in the browser tier and may traverse request context objects, HttpClient instances, or middleware that would otherwise log it verbatim. The policy must be covered by a unit test that asserts a `LogEvent` containing a property named `access_token` (or any alias in the pattern list) is written with value `[REDACTED]` to the in-memory sink.
 
+## Design System Standards
+
+The design system is the single source of truth for all UI work in `apps/web`. Every visual decision must derive from files under `design_system/`.
+
+### Source of truth files (load order)
+
+1. `design_system/colors_and_type.css` — canonical CSS variables and type scale
+2. `design_system/mock_screens/tokens.css` — identical token set used by mock screens
+3. `design_system/ui_kits/user-portal/Primitives.jsx` — shared components (Icon, Logo, Pill, Btn, Card, Num, Label, LegalFooter)
+4. `design_system/ui_kits/user-portal/AppShell.jsx` — 3-zone layout shell
+5. `design_system/ui_kits/admin-portal/` — admin-specific components
+6. `design_system/preview/` — visual reference HTML files for every token category
+7. `design_system/mock_screens/` — full-page mockups for auth, user, and admin flows
+
+### Mandatory rules for all UI work in apps/web
+
+1. **No custom styling.** Do not introduce new colors, spacing, font sizes, or shadows. Reuse tokens defined in `globals.css` (which mirrors `colors_and_type.css`).
+2. **Component reuse first.** Before creating any new component, check `src/components/primitives.tsx`. If a similar component exists, reuse or extend it.
+3. **Design fidelity.** Use `design_system/mock_screens/` as the reference for layout and structure. Match spacing, alignment, and hierarchy precisely.
+4. **Token usage.** Prefer design tokens over hardcoded values. For example: `padding: var(--s-4)` not `padding: 16px`. `color: var(--fg-2)` not `color: #666`.
+5. **Typography.** Use only the defined type scale classes (`t-h1` through `t-label-sm`, `t-num-*`, `t-body-*`) from `globals.css`. No arbitrary font sizes or weights.
+6. **Colors.** Only use colors from the token system: `--bg-*`, `--fg-*`, `--brand-*`, `--up-*`, `--down-*`, `--warn-*`, `--info-*`, `--neutral-*`, `--line-*`.
+7. **New components.** If absolutely necessary, build using existing primitives. Add the new component to `src/components/primitives.tsx`. Ensure consistency with existing patterns.
+
+### Anti-patterns (strictly disallowed)
+
+- Inline styles with arbitrary values (e.g., `color: "#666"`, `padding: "1rem"`)
+- Creating duplicate components that already exist in primitives
+- Ignoring design tokens in favor of ad-hoc values
+- Using external UI libraries that conflict with the design system
+- Adding CSS that bypasses the token system
+
+### Implementation workflow
+
+1. Identify relevant mock screen in `design_system/mock_screens/`
+2. Map required components from `src/components/primitives.tsx`
+3. Apply tokens for spacing, colors, typography
+4. Validate against `design_system/preview/` examples
+5. Only then implement
+
+A UI task is not complete unless: no hardcoded styles are introduced, all UI elements map to design system components or tokens, and visual output matches mock screens closely.
+
 ## Frontend Standards
 
 - treat the UI as a view over server truth
