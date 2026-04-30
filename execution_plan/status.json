@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T1",
+  "current_task_id": "P2-T2",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -20,10 +20,10 @@
     "P1-T12",
     "P1-T13",
     "P1-T15",
-    "P1-T14"
+    "P1-T14",
+    "P2-T1"
   ],
   "pending_tasks": [
-    "P2-T1",
     "P2-T2",
     "P2-T3",
     "P2-T4",
@@ -198,7 +198,12 @@
       "REQ-PORT-031a",
       "REQ-PORT-031b"
     ],
-    "P2": [],
+    "P2": [
+      "REQ-AUTH-001",
+      "REQ-AUTH-002",
+      "REQ-AUTH-011",
+      "REQ-SEC-001"
+    ],
     "P3": [],
     "P4": [],
     "P5": [],
@@ -208,5 +213,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-04-30T00:00:00Z"
+  "last_updated": "2026-04-30T05:00:00Z"
 }
