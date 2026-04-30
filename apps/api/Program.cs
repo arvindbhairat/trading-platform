@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using SignalStack.Api.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Observability;
 using SignalStack.Api.Sessions;
@@ -32,6 +33,9 @@ builder.Services.AddSessionManagement();
 
 // User identity model, roles, approval state, tester ceiling — REQ-ROLE-001..004, REQ-LEGAL-003
 builder.Services.AddUserManagement();
+
+// Immutable audit event collection — REQ-SEC-011, REQ-CONFIG-005a
+builder.Services.AddAuditEventManagement();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>

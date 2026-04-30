@@ -18,6 +18,13 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult<UserDocument?>(doc);
     }
 
+    public Task<UserDocument?> FindByEmailAsync(string email, CancellationToken ct = default)
+    {
+        var doc = _byUserId.Values.FirstOrDefault(
+            u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<UserDocument?>(doc);
+    }
+
     public Task UpsertOnSignInAsync(
         string userId, string email, string displayName, string provider,
         CancellationToken ct = default)
@@ -98,5 +105,121 @@ public sealed class InMemoryUserRepository : IUserRepository
                 return existing;
             });
         return Task.CompletedTask;
+    }
+
+    public Task<UserDocument?> FindByLinkedIdentityAsync(
+        string provider, string providerKey, CancellationToken ct = default)
+    {
+        var doc = _byUserId.Values.FirstOrDefault(u =>
+            u.LinkedIdentities?.Any(i =>
+                i.Provider == provider && i.ProviderKey == providerKey) == true);
+        return Task.FromResult<UserDocument?>(doc);
+    }
+
+    public Task<List<LinkedIdentity>> LinkIdentityAsync(
+        string userId, string provider, string providerKey, string email,
+        CancellationToken ct = default)
+    {
+        if (!_byUserId.TryGetValue(userId, out var doc))
+            throw new InvalidOperationException("User not found.");
+
+        // Check cross-user uniqueness.
+        var otherOwner = _byUserId.Values.FirstOrDefault(u =>
+            u.UserId != userId &&
+            u.LinkedIdentities?.Any(i =>
+                i.Provider == provider && i.ProviderKey == providerKey) == true);
+        if (otherOwner is not null)
+            throw new InvalidOperationException(
+                "This identity is already linked to another account.");
+
+        var linked = doc.LinkedIdentities?.ToList() ?? [];
+
+        if (linked.Any(i => i.Provider == provider && i.ProviderKey == providerKey))
+            return Task.FromResult(linked);
+
+        if (linked.Count >= 2)
+            throw new InvalidOperationException(
+                "Maximum of 2 linked identities reached. Unlink one first.");
+
+        var newIdentity = new LinkedIdentity
+        {
+            Provider = provider,
+            ProviderKey = providerKey,
+            Email = email,
+            LinkedAt = DateTime.UtcNow,
+        };
+        linked.Add(newIdentity);
+
+        _byUserId[userId] = CloneWith(doc, linkedIdentities: linked, updatedAt: DateTime.UtcNow);
+        return Task.FromResult(linked);
+    }
+
+    public Task UnlinkIdentityAsync(
+        string userId, string provider, string providerKey,
+        CancellationToken ct = default)
+    {
+        if (_byUserId.TryGetValue(userId, out var doc) && doc.LinkedIdentities is not null)
+        {
+            var remaining = doc.LinkedIdentities
+                .Where(i => !(i.Provider == provider && i.ProviderKey == providerKey))
+                .ToList();
+            _byUserId[userId] = CloneWith(doc, linkedIdentities: remaining, updatedAt: DateTime.UtcNow);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<UserDocument> RebindIdentityAsync(
+        string targetUserId, string newProvider, string newProviderKey, string newEmail,
+        CancellationToken ct = default)
+    {
+        if (!_byUserId.TryGetValue(targetUserId, out var doc))
+            throw new InvalidOperationException("Target user not found.");
+
+        var newUserId = $"{newProvider}:{newProviderKey}";
+
+        var updated = new UserDocument
+        {
+            Id = doc.Id,
+            UserId = newUserId,
+            Email = newEmail,
+            DisplayName = doc.DisplayName,
+            Provider = newProvider,
+            Role = doc.Role,
+            Status = doc.Status,
+            LedgerSnapshotVersion = doc.LedgerSnapshotVersion,
+            EquityBaseOverride = doc.EquityBaseOverride,
+            EquityBaseOverrideUpdatedAt = doc.EquityBaseOverrideUpdatedAt,
+            LinkedIdentities = null,
+            CreatedAt = doc.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        _byUserId.TryRemove(targetUserId, out _);
+        _byUserId[newUserId] = updated;
+
+        return Task.FromResult(updated);
+    }
+
+    private static UserDocument CloneWith(
+        UserDocument source,
+        List<LinkedIdentity>? linkedIdentities = null,
+        DateTime? updatedAt = null)
+    {
+        return new UserDocument
+        {
+            Id = source.Id,
+            UserId = source.UserId,
+            Email = source.Email,
+            DisplayName = source.DisplayName,
+            Provider = source.Provider,
+            Role = source.Role,
+            Status = source.Status,
+            LedgerSnapshotVersion = source.LedgerSnapshotVersion,
+            EquityBaseOverride = source.EquityBaseOverride,
+            EquityBaseOverrideUpdatedAt = source.EquityBaseOverrideUpdatedAt,
+            LinkedIdentities = linkedIdentities ?? source.LinkedIdentities,
+            CreatedAt = source.CreatedAt,
+            UpdatedAt = updatedAt ?? source.UpdatedAt,
+        };
     }
 }
