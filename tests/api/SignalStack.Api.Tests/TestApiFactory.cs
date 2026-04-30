@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Sessions;
 
 namespace SignalStack.Api.Tests;
 
@@ -12,6 +13,8 @@ namespace SignalStack.Api.Tests;
 ///   <item>Runs in the "Testing" environment.</item>
 ///   <item>Supplies a stub MongoDB connection string so the Tier-1 bootstrap check passes.</item>
 ///   <item>Removes the <c>MongoMigrationHostedService</c> so tests do not require a live MongoDB.</item>
+///   <item>Replaces <c>ISessionRepository</c> with an in-memory implementation so the
+///         session-validation middleware works without a live MongoDB (REQ-SESSION-002a).</item>
 /// </list>
 /// The IMongoClient/IMongoDatabase singletons remain registered (MongoDB.Driver is lazy
 /// and will not attempt a connection until the first call); the hosted service is the only
@@ -34,8 +37,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
                 ["Auth:FrontendBaseUrl"] = "http://localhost:3000",
                 // Disable LKG caching in tests to prevent a race condition when
                 // multiple test factories start concurrently and both try to write
-                // the same cache file. Primary snapshot files are always present in
-                // the test output directory, so LKG fallback is never needed.
+                // the same cache file.
                 ["SignalStack:Bootstrap:LastKnownGood:CachePath"] = ""
             });
         });
@@ -50,6 +52,15 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
             foreach (var descriptor in migrationHosted)
                 services.Remove(descriptor);
+
+            // Replace the MongoDB-backed session repository so the session-validation
+            // middleware can run without a live MongoDB connection.
+            var sessionDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(ISessionRepository));
+            if (sessionDescriptor is not null)
+                services.Remove(sessionDescriptor);
+
+            services.AddSingleton<ISessionRepository, InMemorySessionRepository>();
         });
     }
 }

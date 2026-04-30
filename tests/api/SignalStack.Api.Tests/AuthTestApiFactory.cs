@@ -3,13 +3,15 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Sessions;
 
 namespace SignalStack.Api.Tests;
 
 /// <summary>
 /// WebApplicationFactory variant that supplements the base Testing configuration
-/// with JWT signing credentials so that the test-token endpoint and JWT Bearer
-/// validation work without requiring an external key store.
+/// with JWT signing credentials and an in-memory session repository so that the
+/// test-token endpoint, JWT Bearer validation, and session-validation middleware
+/// all work without requiring a live MongoDB.
 /// </summary>
 public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
 {
@@ -38,13 +40,23 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // Remove the migration hosted service so no live MongoDB is needed.
             var migrationHosted = services
                 .Where(d => d.ServiceType == typeof(IHostedService)
                              && d.ImplementationType?.Name == "MongoMigrationHostedService")
                 .ToList();
-
             foreach (var descriptor in migrationHosted)
                 services.Remove(descriptor);
+
+            // Replace the MongoDB-backed session repository with an in-memory
+            // implementation so the session-validation middleware works in tests
+            // without a live MongoDB connection (REQ-SESSION-002a).
+            var sessionDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(ISessionRepository));
+            if (sessionDescriptor is not null)
+                services.Remove(sessionDescriptor);
+
+            services.AddSingleton<ISessionRepository, InMemorySessionRepository>();
         });
     }
 }

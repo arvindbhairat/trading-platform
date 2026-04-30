@@ -4,10 +4,16 @@
  * exercised so they contribute to the TypeScript coverage report (REQ-NFR-014).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import Home from '../src/app/page';
 import RootLayout from '../src/app/layout';
+
+// SessionExpiryBanner uses browser-only APIs (sessionStorage, setInterval).
+// Mock it so the static render in tests doesn't fail.
+vi.mock('../src/components/SessionExpiryBanner', () => ({
+  default: () => null,
+}));
 
 describe('Home page', () => {
   it('returns a main element', () => {
@@ -19,7 +25,7 @@ describe('Home page', () => {
   it('contains the portal heading', () => {
     const element = Home();
     const children = element.props.children as React.ReactElement[];
-    const h1 = children.find((c) => c?.type === 'h1');
+    const h1 = children.find((c: React.ReactElement) => c?.type === 'h1');
     expect(h1).toBeDefined();
   });
 });
@@ -35,10 +41,9 @@ describe('RootLayout', () => {
   it('wraps children in body', () => {
     const child = createElement('span', null, 'test-child');
     const element = RootLayout({ children: child });
-    const body = (element.props.children as React.ReactElement[]).find(
-      (c) => c?.type === 'body',
-    );
-    expect(body).toBeDefined();
+    // html has exactly one child: the <body> element.
+    const body = element.props.children as React.ReactElement;
+    expect(body?.type).toBe('body');
     expect(body?.props?.children).toBe(child);
   });
 });

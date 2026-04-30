@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Observability;
+using SignalStack.Api.Sessions;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -24,6 +25,9 @@ builder.Services.AddLedgerWriteLock();
 
 // OAuth / JWT Bearer / CSRF — REQ-AUTH-001/002/011, REQ-SEC-001
 builder.Services.AddSignalStackAuth(builder.Configuration);
+
+// Server-side session management — REQ-SESSION-001/002/002a
+builder.Services.AddSessionManagement();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddRateLimiter(options =>
@@ -97,6 +101,10 @@ app.UseRateLimiter();
 // Auth middleware — must precede CsrfMiddleware so context.User is populated.
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Session validation: rejects requests whose JWT jti is no longer in the
+// sessions collection (REQ-SESSION-002: new login invalidates prior session).
+app.UseMiddleware<SessionValidationMiddleware>();
 
 // CSRF enforcement on authenticated mutations — REQ-SEC-001 defence-in-depth.
 app.UseMiddleware<CsrfMiddleware>();
