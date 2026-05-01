@@ -13,6 +13,8 @@
   Zero dependencies — uses only Windows-native .NET APIs.
 #>
 
+clear-host
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
