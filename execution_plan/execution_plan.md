@@ -294,8 +294,15 @@ Each task carries:
 - **Vertical slice:** Detected or suspected breach is recorded in `audit_events` with scope (data categories, affected count, systems), detection time, discovery actor, and containment steps. Runbook at `docs/operations/runbooks/data-breach-response.md` covers detection, triage, 72-hour notification, and post-incident review. Annual test exercise recorded in `audit_events`.
 - **Verification:** Unit test records a breach event and verifies `audit_events` shape matches REQ-PRIVACY-006. Runbook file exists with required sections.
 
+### P2-T23 — Remediation: user-side account recovery request flow (REQ-RECOVERY-004)
+- **Depends on:** P2-T15.
+- **REQ:** REQ-RECOVERY-004.
+- **Touches:** `apps/web`, `docs/operations/runbooks/`.
+- **Vertical slice:** A public (no-auth) page at `/recovery-request` lists the three required verification items (original OAuth email, FYERS account number or client ID, recent trade reference) and explains the email-based request process to the grievance officer. A documented intake procedure at `docs/operations/runbooks/account-recovery-intake.md` covers how the grievance officer processes incoming email requests, verifies the three items, and initiates the admin-assisted rebind flow (REQ-RECOVERY-005). The admin recovery endpoint (`POST /api/v1/auth/admin/recover`) already exists from P2-T6.
+- **Verification:** The public page renders without authentication and displays the three required verification items. The intake runbook covers email receipt, verification-item checklist, and handoff to the admin recovery portal flow.
+
 ### P2-T18 — Phase-gate verification for Phase 2
-- **Depends on:** P2-T1..T17, P2-T4-CR, P2-T20, P2-T21, P2-T22.
+- **Depends on:** P2-T1..T17, P2-T4-CR, P2-T20, P2-T21, P2-T22, P2-T23.
 
 ---
 

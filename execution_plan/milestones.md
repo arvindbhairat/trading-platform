@@ -32,7 +32,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
 
 ## v0.3 — Identity, Sessions, Legal/Privacy, Admin Bootstrap, sys_config
 
-- **Tasks:** P2-T1..T22.
+- **Tasks:** P2-T1..T23.
 - **Acceptance:**
   - OAuth + Bearer-JWT auth boundary works end-to-end with all three providers (REQ-AUTH-001/002/011).
   - Server-side `sessions` collection enforces 24h TTL + single-active-session + FYERS-required redirect + expiry warning (REQ-SESSION-001..013).
