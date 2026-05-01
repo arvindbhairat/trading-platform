@@ -1,10 +1,13 @@
-# Personal-Data Breach Response
+# Runbook 3 — Personal-Data Breach Response
 
+**REQ coverage:** REQ-PRIVACY-006  
 **Phase required:** A
-**Regulatory basis:** REQ-PRIVACY-006, DPDP Act 2023 Section 8 (breach notification)
+**Regulatory basis:** DPDP Act 2023 Section 8 (breach notification)
 **Notification deadline:** 72 hours from detection
-**Last reviewed:** *(not yet reviewed — stub)*
+**Last reviewed:** 2026-05-01 (initial authoring — field-test before Phase A user onboarding)
 **Owner:** Platform admin (also the designated grievance officer per REQ-PRIVACY-005)
+
+---
 
 ## Why this exists
 

@@ -10,7 +10,7 @@ Status per runbook reflects whether it must exist at the current phase (per `REQ
 |---:|---|---|:---:|:---|
 | 1 | DataSync failure recovery | `datasync-failure-recovery.md` | A | Stub in place, pending field-test refinement |
 | 2 | Admin FYERS token re-auth | `admin-fyers-token-reauth.md` | A | Stub in place, pending field-test refinement |
-| 3 | Data breach response (DPDP 72-hour notification) | `data-breach-response.md` | A | Stub in place, pending field-test refinement |
+| 3 | Data breach response (DPDP 72-hour notification) | `data-breach-response.md` | A | Authored in P2-T22 (REQ-PRIVACY-006) |
 | 4 | RME concurrency-freeze admin resolution | `rme-concurrency-freeze-resolution.md` | A | Missing — must be drafted before Phase 6 build starts |
 | 5 | MongoDB replica-set failover during LADS polling | `mongodb-failover-lads-recovery.md` | A | Missing — must be drafted before Phase 6 build starts |
 | 6 | EOD Signal Runner failure or abort | *not yet drafted* | B | Missing |

@@ -12,6 +12,9 @@ public sealed class InMemoryAuditEventRepository : IAuditEventRepository
 {
     private readonly ConcurrentBag<AuditEventDocument> _events = new();
 
+    /// <summary>Returns a snapshot of all recorded events for test assertions.</summary>
+    public IReadOnlyList<AuditEventDocument> GetEvents() => _events.ToList().AsReadOnly();
+
     public Task<ObjectId> RecordAsync(
         string actorId, string actionType, DateTime eventAt,
         Dictionary<string, object?>? details = null,

@@ -11,6 +11,7 @@ using SignalStack.Api.Observability;
 using SignalStack.Api.PhaseEnforcement;
 using SignalStack.Api.Pld;
 using SignalStack.Api.PrivacyRequest;
+using SignalStack.Api.DataBreach;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 using SignalStack.Configuration.Bootstrap;
@@ -203,6 +204,9 @@ app.MapAdminUserEndpoints();
 
 // Admin privacy request (DSAR) endpoints — P2-T21 / REQ-PRIVACY-004
 app.MapAdminPrivacyRequestEndpoints();
+
+// Admin data breach endpoints — P2-T22 / REQ-PRIVACY-006
+app.MapAdminBreachEndpoints();
 
 app.Run();
 
