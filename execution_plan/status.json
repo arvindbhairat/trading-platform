@@ -1,7 +1,7 @@
 {
   "current_phase": "P3",
   "current_version": "v0.4",
-  "current_task_id": "P3-T2",
+  "current_task_id": "P3-T3",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -45,10 +45,10 @@
     "P2-T23",
     "P2-T18",
     "P3-T1",
-    "P2-T19"
+    "P2-T19",
+    "P3-T2"
   ],
   "pending_tasks": [
-    "P3-T2",
     "P3-T3",
     "P3-T4",
     "P3-T5",
@@ -296,7 +296,25 @@
       "REQ-PRIVACY-006",
       "REQ-ROLE-007a"
     ],
-    "P3": ["REQ-MARKET-002c", "ADR-0005"],
+    "P3": [
+      "REQ-MARKET-002c",
+      "ADR-0005",
+      "REQ-UNIV-001",
+      "REQ-UNIV-002",
+      "REQ-UNIV-003",
+      "REQ-UNIV-004",
+      "REQ-UNIV-005",
+      "REQ-UNIV-006",
+      "REQ-UNIV-007",
+      "REQ-UNIV-008",
+      "REQ-UNIV-009",
+      "REQ-UNIV-010",
+      "REQ-HIST-005",
+      "REQ-HIST-006",
+      "REQ-HIST-007",
+      "REQ-HIST-008",
+      "REQ-HIST-008a"
+    ],
     "P4": [],
     "P5": [],
     "P6": [],
@@ -305,5 +323,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T19:00:00Z"
+  "last_updated": "2026-05-01T19:35:00Z"
 }

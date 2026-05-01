@@ -13,6 +13,7 @@ using SignalStack.Api.Pld;
 using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.DataBreach;
 using SignalStack.Api.Sessions;
+using SignalStack.Api.Universe;
 using SignalStack.Api.Users;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -56,6 +57,9 @@ builder.Services.AddPhaseConstraintServices();
 
 // Data subject rights workflow — REQ-PRIVACY-004 (P2-T21)
 builder.Services.AddPrivacyRequestManagement();
+
+// Symbol master + universe state management — P3-T2 / REQ-UNIV-001..010, REQ-HIST-005..008a
+builder.Services.AddUniverseManagement();
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -210,6 +214,9 @@ app.MapAdminBreachEndpoints();
 
 // Admin home / transfer recovery summary endpoints — P2-T19 / REQ-ROLE-007a
 app.MapAdminHomeEndpoints();
+
+// Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
+app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
 
 app.Run();
 

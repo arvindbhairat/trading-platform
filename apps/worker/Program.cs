@@ -44,12 +44,21 @@ builder.Services.AddSingleton<IPositionChannelRegistry, PositionChannelRegistry>
 // Sentinel startup check (REQ-CONFIG-010): fails fast if seeder was skipped.
 builder.Services.AddSingleton<SeedVersionStartupGuard>();
 
+// Symbol master suffix collision check (REQ-HIST-008a): fails fast if duplicate
+// sql_table_name_suffix values exist in the symbol master.
+builder.Services.AddSingleton<SymbolMasterCollisionGuard>();
+
 var host = builder.Build();
 
 // ── Sentinel startup check (REQ-CONFIG-010) ─────────────────────────────
 // Fail fast if the sys_config seeder has not been run.
 var sentinelGuard = host.Services.GetRequiredService<SeedVersionStartupGuard>();
 await sentinelGuard.VerifyAsync();
+
+// ── Symbol master suffix collision check (REQ-HIST-008a) ─────────────────
+// Fail fast if any duplicate sql_table_name_suffix values exist.
+var collisionGuard = host.Services.GetRequiredService<SymbolMasterCollisionGuard>();
+await collisionGuard.VerifyAsync();
 
 await host.RunAsync();
 

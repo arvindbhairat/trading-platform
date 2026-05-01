@@ -50,4 +50,13 @@ public sealed class InMemoryAuditEventRepository : IAuditEventRepository
         });
         return Task.FromResult(id);
     }
+
+    public Task<bool> HasEventAsync(
+        string actorId, string actionType,
+        CancellationToken cancellationToken = default)
+    {
+        var found = _events.Any(e =>
+            e.ActorId == actorId && e.ActionType == actionType);
+        return Task.FromResult(found);
+    }
 }
