@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FYERS CNC Sandbox Verification — REQ-ORDER-010b</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 640px;
+      width: 100%;
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+    .section {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .section h2 { font-size: 15px; margin-bottom: 8px; }
+    .section p, .section li { font-size: 13px; line-height: 1.5; color: #444; }
+    .section ul { padding-left: 18px; }
+    .section ul li { margin-bottom: 4px; }
+    code {
+      background: #e8e8e8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .button-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      background: #fff;
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      margin: 16px 0;
+      min-height: 100px;
+    }
+    .button-area.loaded { border-color: #4caf50; }
+    .label { font-size: 12px; color: #888; margin-bottom: 12px; }
+    .status {
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 12px;
+    }
+    .status.pass { background: #e8f5e9; color: #2e7d32; }
+    .status.fail { background: #ffebee; color: #c62828; }
+    .status.info { background: #e3f2fd; color: #1565c0; }
+    .status.warn { background: #fff3e0; color: #e65100; }
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .config-row:last-child { border-bottom: none; }
+    .config-row .key { font-weight: 600; color: #333; }
+    .config-row .value { color: #666; font-family: monospace; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    .controls { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+    .controls button {
+      padding: 8px 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .controls button:hover { background: #f0f0f0; }
+    .controls button.primary { background: #1976d2; color: #fff; border-color: #1976d2; }
+    .controls button.primary:hover { background: #1565c0; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔬 FYERS CNC Sandbox Verification</h1>
+    <p class="subtitle">REQ-ORDER-010b — Verify that <code>data-product = CNC</code> is accepted by <code>&lt;fyers-button&gt;</code></p>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>Configuration</h2>
+      <div class="config-row"><span class="key">SDK URL</span><span class="value" id="sdk-url">https://api-connect-docs.fyers.in/fyers-lib.js</span></div>
+      <div class="config-row"><span class="key">Sandbox API</span><span class="value">https://sandbox-api.fyers.in/</span></div>
+      <div class="config-row"><span class="key">Symbol (test)</span><span class="value">NSE:SBIN-EQ</span></div>
+      <div class="config-row"><span class="key">Product Type</span><span class="value" id="product-type">CNC</span></div>
+      <div class="config-row"><span class="key">Transaction Type</span><span class="value">BUY</span></div>
+      <div class="config-row"><span class="key">Order Type</span><span class="value">MARKET</span></div>
+      <div class="config-row"><span class="key">Quantity</span><span class="value">1</span></div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="section">
+      <h2>How to Test</h2>
+      <ol>
+        <li>Obtain a FYERS API Connect <strong>sandbox</strong> app ID from the FYERS developer dashboard.</li>
+        <li>Enter it below and click <strong>Initialise</strong>.</li>
+        <li>The <code>&lt;fyers-button&gt;</code> will render below with <code>data-product="CNC"</code>.</li>
+        <li>Click the button and attempt to place an order in the sandbox pop-up.</li>
+        <li>If the sandbox accepts <code>CNC</code> → <strong>PASS</strong>. If it rejects → <strong>FAIL</strong>.</li>
+      </ol>
+    </div>
+
+    <!-- App ID control -->
+    <div class="controls">
+      <input type="text" id="app-id-input" placeholder="Enter sandbox App ID (e.g., S1234567)" style="flex:1; padding:8px 12px; border:1px solid #ccc; border-radius:6px; font-size:13px;"/>
+      <button id="init-btn" class="primary">Initialise</button>
+      <button id="reset-btn">Reset</button>
+    </div>
+
+    <!-- SDK status -->
+    <div class="status info" id="sdk-status">⏳ SDK not loaded. Enter your sandbox App ID and click Initialise.</div>
+
+    <!-- Button area -->
+    <div class="button-area" id="button-area">
+      <span class="label">▼ &lt;fyers-button&gt; renders below ▼</span>
+      <div id="fyers-button-container"></div>
+    </div>
+
+    <!-- Result -->
+    <div id="result-area" class="hidden"></div>
+
+    <!-- Log -->
+    <div class="section">
+      <h2>Verification Log</h2>
+      <pre id="log">[等待初始化...]</pre>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const SDK_URL = 'https://api-connect-docs.fyers.in/fyers-lib.js';
+      const CONTAINER = document.getElementById('fyers-button-container');
+      const STATUS = document.getElementById('sdk-status');
+      const LOG = document.getElementById('log');
+      const RESULT = document.getElementById('result-area');
+      const INPUT = document.getElementById('app-id-input');
+      const INIT_BTN = document.getElementById('init-btn');
+      const RESET_BTN = document.getElementById('reset-btn');
+
+      function log(msg) {
+        const t = new Date().toISOString().slice(11, 19);
+        LOG.textContent += `\n[${t}] ${msg}`;
+        LOG.scrollTop = LOG.scrollHeight;
+      }
+
+      function setStatus(text, type) {
+        STATUS.textContent = text;
+        STATUS.className = 'status ' + type;
+      }
+
+      function showResult(passed, details) {
+        RESULT.classList.remove('hidden');
+        if (passed) {
+          RESULT.innerHTML = '<div class="status pass">✅ PASS: CNC is accepted by &lt;fyers-button&gt; in sandbox mode. ' + details + '</div>';
+        } else {
+          RESULT.innerHTML = '<div class="status fail">❌ FAIL: CNC was rejected. ' + details + '</div>';
+        }
+      }
+
+      // Listen for the FYERS widget callback (if SDK fires it)
+      window.fyersCallback = function(status, request_token) {
+        if (status === 'success') {
+          log('FYERS callback: SUCCESS (request_token=' + request_token + ')');
+          showResult(true, 'Widget callback received with status=success and request_token=' + request_token);
+        }
+      };
+
+      // Detect if SDK has already loaded the custom element
+      function isSdkLoaded() {
+        return customElements && customElements.get && (
+          customElements.get('fyers-button') !== undefined
+        );
+      }
+
+      function resetButton() {
+        CONTAINER.innerHTML = '';
+        setStatus('⏳ SDK loaded. Waiting for initialisation...', 'info');
+        RESULT.classList.add('hidden');
+        log('Reset. Enter sandbox App ID to initialise.');
+      }
+
+      async function initialise() {
+        const appId = INPUT.value.trim();
+        if (!appId) {
+          setStatus('⚠️ Please enter a sandbox App ID.', 'warn');
+          return;
+        }
+
+        CONTAINER.innerHTML = '';
+        RESULT.classList.add('hidden');
+        setStatus('⏳ Loading SDK...', 'info');
+        log('Initialising with App ID: ' + appId);
+
+        // Check if SDK script is already loaded
+        const existing = document.querySelector('script[src="' + SDK_URL + '"]');
+        if (existing && isSdkLoaded()) {
+          log('SDK already loaded. Re-rendering button.');
+        } else {
+          // Load the SDK
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = SDK_URL;
+            script.onload = () => {
+              log('SDK script loaded: ' + SDK_URL);
+              resolve();
+            };
+            script.onerror = (e) => {
+              log('ERROR: Failed to load SDK script.');
+              setStatus('❌ Failed to load FYERS SDK. Check network connectivity.', 'fail');
+              reject(e);
+            };
+            document.body.appendChild(script);
+          });
+        }
+
+        // Brief delay for SDK to register the custom element
+        await new Promise(r => setTimeout(r, 500));
+
+        if (!isSdkLoaded()) {
+          log('WARNING: fyers-button custom element not detected after SDK load.');
+          setStatus('⚠️ SDK loaded but &lt;fyers-button&gt; custom element not registered. Some SDKs register on interaction.', 'warn');
+        } else {
+          log('fyers-button custom element IS registered.');
+        }
+
+        // Create the fyers-button element with CNC product type
+        const btn = document.createElement('fyers-button');
+        btn.setAttribute('data-fyers', appId);
+        btn.setAttribute('data-symbol', 'NSE:SBIN-EQ');
+        btn.setAttribute('data-quantity', '1');
+        btn.setAttribute('data-product', 'CNC');       // <-- THE KEY TEST: CNC product type
+        btn.setAttribute('data-transaction_type', 'BUY');
+        btn.setAttribute('data-order_type', 'MARKET');
+        // Also try sandbox-specific attributes if supported
+        btn.setAttribute('data-env', 'sandbox');
+
+        CONTAINER.appendChild(btn);
+        log('Rendered <fyers-button> with data-product="CNC"');
+
+        setStatus('✅ SDK initialised. Click the button above to test CNC in the FYERS sandbox.', 'pass');
+        log('Ready for sandbox test. Click the button and observe the pop-up.');
+        log('');
+        log('=== EXPECTED BEHAVIOR ===');
+        log('If CNC is accepted: The FYERS sandbox pop-up opens with the order');
+        log('  pre-populated showing product type as CNC. Order can be submitted.');
+        log('If CNC is rejected: The widget shows an error or the order fails with');
+        log('  a product-type validation error.');
+        log('========================');
+      }
+
+      INIT_BTN.addEventListener('click', initialise);
+      RESET_BTN.addEventListener('click', resetButton);
+
+      // Initial state
+      log('Page loaded. FYERS CNC sandbox verification page ready.');
+      log('SDK URL: ' + SDK_URL);
+      log('Test symbol: NSE:SBIN-EQ');
+      log('Product type under test: CNC');
+      log(' ');
+      log('NOTE: A valid FYERS API Connect sandbox App ID is required.');
+      log('Obtain one from https://myapi.fyers.in/ before testing.');
+    })();
+  </script>
+</body>
+</html>
