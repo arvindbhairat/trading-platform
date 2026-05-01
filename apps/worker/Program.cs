@@ -3,9 +3,11 @@ using Microsoft.Extensions.Hosting;
 using SignalStack.Api.Universe;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
+using SignalStack.MarketData.Throttling;
 using SignalStack.Migrations;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
+using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Observability;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -52,6 +54,11 @@ builder.Services.AddSingleton<SymbolMasterCollisionGuard>();
 
 // Universe management services: symbol master, sync health (noop fallback), probe.
 builder.Services.AddUniverseManagement();
+
+// FYERS MDP adapter + throttle layer (P3-T9 / REQ-RATE-003/004/011/012).
+// Routes all FYERS API calls through the centralised throttling layer with
+// per-second, per-minute, and per-day limits from sys_config.
+builder.Services.AddFyersMarketDataProvider(builder.Configuration);
 
 // Symbol Validity Probe worker (REQ-UNIV-021/021a/021b).
 builder.Services.AddHostedService<SymbolProbeWorker>();
