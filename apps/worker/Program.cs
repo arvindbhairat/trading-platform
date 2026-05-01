@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Historical;
 using SignalStack.Api.Universe;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -9,6 +10,7 @@ using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Observability;
+using SignalStack.Worker.Jobs.HistoricDataSeed;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
 using SignalStack.Worker.Workers;
@@ -55,6 +57,12 @@ builder.Services.AddSingleton<SymbolMasterCollisionGuard>();
 // Universe management services: symbol master, sync health (noop fallback), probe.
 builder.Services.AddUniverseManagement();
 
+// Historical OHLCV data services — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a.
+// Registers ISymbolTableMapping (single shared mapping) and IOhlcvRepository (SQL Server).
+// Required by HistoricDataSeed (HDS) for per-symbol table materialisation and resumable seeding.
+var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
+builder.Services.AddHistoricalServices(sqlConnectionString);
+
 // FYERS MDP adapter + throttle layer (P3-T9 / REQ-RATE-003/004/011/012).
 // Routes all FYERS API calls through the centralised throttling layer with
 // per-second, per-minute, and per-day limits from sys_config.
@@ -62,6 +70,12 @@ builder.Services.AddFyersMarketDataProvider(builder.Configuration);
 
 // Symbol Validity Probe worker (REQ-UNIV-021/021a/021b).
 builder.Services.AddHostedService<SymbolProbeWorker>();
+
+// HistoricDataSeed (HDS) job: per-symbol table materialisation + idempotent + resumable.
+// Polls job_runs for pending HDS jobs, creates D_/W_/M_ tables atomically,
+// fetches historical OHLCV from the MDP, and computes weekly/monthly aggregates.
+// REQ-HIST-009/009a.
+builder.Services.AddHistoricDataSeed(builder.Configuration);
 
 var host = builder.Build();
 
@@ -74,6 +88,15 @@ await sentinelGuard.VerifyAsync();
 // Fail fast if any duplicate sql_table_name_suffix values exist.
 var collisionGuard = host.Services.GetRequiredService<SymbolMasterCollisionGuard>();
 await collisionGuard.VerifyAsync();
+
+// ── Initialise symbol-to-table-name mapping (REQ-HIST-011) ────────────────
+// Load the ISymbolTableMapping cache from MongoDB symbol_master so that
+// HistoricDataSeed and other jobs can resolve table names immediately.
+var tableMapping = host.Services.GetRequiredService<ISymbolTableMapping>();
+if (tableMapping is SymbolTableMappingService mappingSvc)
+{
+    await mappingSvc.InitializeAsync();
+}
 
 await host.RunAsync();
 

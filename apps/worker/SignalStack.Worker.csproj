@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
     <ProjectReference Include="..\..\packages\market-data\SignalStack.MarketData\SignalStack.MarketData.csproj" />
     <ProjectReference Include="..\..\packages\migrations\SignalStack.Migrations\SignalStack.Migrations.csproj" />
+    <ProjectReference Include="..\..\packages\migrations\SignalStack.SqlMigrations\SignalStack.SqlMigrations.csproj" />
     <ProjectReference Include="..\api\SignalStack.Api.csproj" />
   </ItemGroup>
 
