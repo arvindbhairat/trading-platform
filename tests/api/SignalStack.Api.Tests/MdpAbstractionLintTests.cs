@@ -97,6 +97,23 @@ public sealed class MdpAbstractionLintTests
     }
 
     [Fact]
+    public void TrueData_adapter_implements_IMarketDataProvider()
+    {
+        var trueDataPath = Path.Combine(RepoRoot, "apps", "worker",
+            "Integrations", "TrueData", "TrueDataMarketDataProvider.cs");
+        Assert.True(File.Exists(trueDataPath),
+            $"TrueData adapter not found at expected path: {trueDataPath}");
+
+        var content = File.ReadAllText(trueDataPath);
+        Assert.Contains("class TrueDataMarketDataProvider", content);
+        Assert.Contains(": IMarketDataProvider", content);
+        Assert.Contains("FetchHistoricalOhlcvAsync", content);
+        Assert.Contains("GetLatestQuoteAsync", content);
+        Assert.Contains("SubscribeToLivePrices", content);
+        Assert.Contains("CannedOhlcv", content);
+    }
+
+    [Fact]
     public void MarketDataProviderType_enum_exists()
     {
         var path = Path.Combine(RepoRoot, "packages", "market-data",
