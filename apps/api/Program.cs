@@ -16,6 +16,7 @@ using SignalStack.Api.Sessions;
 using SignalStack.Api.Universe;
 using SignalStack.Api.Users;
 using SignalStack.Api.Historical;
+using SignalStack.Api.Signals;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -71,6 +72,9 @@ builder.Services.AddUniverseManagement(sqlConnectionString);
 
 // Trading calendar management — P3-T3 / REQ-CALENDAR-001..006
 builder.Services.AddTradingCalendarManagement();
+
+// Signal Subscription management — P4-T1 / REQ-STRAT-007a/007b, REQ-STRAT-017b
+builder.Services.AddSignalSubscriptionManagement();
 
 // Historical OHLCV data services — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a
 // Registers ISymbolTableMapping (single shared mapping) and IOhlcvRepository (SQL Server).
@@ -202,7 +206,10 @@ app.Use(async (context, next) =>
   }
 });
 
-app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.4")));
+app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.5")));
+
+// Signal Subscription endpoints — P4-T1 / REQ-STRAT-007a/007b, REQ-STRAT-017b
+app.MapSignalSubscriptionEndpoints();
 app.MapHealthChecks("/api/v1/healthz");
 app.MapHealthChecks("/api/v1/readyz", new()
 {

@@ -1,7 +1,7 @@
 {
   "current_phase": "P4",
   "current_version": "v0.5",
-  "current_task_id": "P4-T1",
+  "current_task_id": "P4-T2",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -60,10 +60,10 @@
     "P3-T13",
     "P3-T14",
     "P3-T15",
-    "P3-T16"
+    "P3-T16",
+    "P4-T1"
   ],
   "pending_tasks": [
-    "P4-T1",
     "P4-T2",
     "P4-T3",
     "P4-T4",
@@ -363,7 +363,11 @@
       "REQ-MIGRATION-003",
       "REQ-MIGRATION-005"
     ],
-    "P4": [],
+    "P4": [
+      "REQ-STRAT-007a",
+      "REQ-STRAT-007b",
+      "REQ-STRAT-017b"
+    ],
     "P5": [],
     "P6": [],
     "P7": [],
@@ -371,5 +375,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-02T00:00:00Z"
+  "last_updated": "2026-05-01T12:00:00Z"
 }
