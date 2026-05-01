@@ -31,4 +31,14 @@ public interface IAuditEventRepository
         ObjectId stepUpEventId,
         Dictionary<string, object?>? details = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns <c>true</c> if the given actor has at least one audit event matching
+    /// the specified <paramref name="actionType"/>. Used by REQ-ROLE-007a to check
+    /// whether the transfer recovery summary has been dismissed.
+    /// </summary>
+    Task<bool> HasEventAsync(
+        string actorId,
+        string actionType,
+        CancellationToken cancellationToken = default);
 }

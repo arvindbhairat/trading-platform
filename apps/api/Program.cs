@@ -208,6 +208,9 @@ app.MapAdminPrivacyRequestEndpoints();
 // Admin data breach endpoints — P2-T22 / REQ-PRIVACY-006
 app.MapAdminBreachEndpoints();
 
+// Admin home / transfer recovery summary endpoints — P2-T19 / REQ-ROLE-007a
+app.MapAdminHomeEndpoints();
+
 app.Run();
 
 public sealed record ApiRootResponse(string Name, string Version);

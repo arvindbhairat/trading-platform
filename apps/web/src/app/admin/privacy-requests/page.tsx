@@ -64,7 +64,7 @@ const REQUEST_TYPE_ICONS: Record<string, string> = {
   grievance: "alert-triangle",
 };
 
-const STATUS_PILL_TONE: Record<string, "warn" | "up" | "down" | "info" | "neutral"> = {
+const STATUS_PILL_TONE: Record<string, "warn" | "up" | "down" | "info" | "neutral" | "brand"> = {
   open: "warn",
   acknowledged: "info",
   in_progress: "brand",

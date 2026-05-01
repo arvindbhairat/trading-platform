@@ -53,4 +53,16 @@ public sealed class MongoAuditEventRepository : IAuditEventRepository
         await _auditEvents.InsertOneAsync(doc, cancellationToken: cancellationToken);
         return doc.Id;
     }
+
+    public async Task<bool> HasEventAsync(
+        string actorId,
+        string actionType,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<AuditEventDocument>.Filter.And(
+            Builders<AuditEventDocument>.Filter.Eq(e => e.ActorId, actorId),
+            Builders<AuditEventDocument>.Filter.Eq(e => e.ActionType, actionType));
+
+        return await _auditEvents.Find(filter).AnyAsync(cancellationToken);
+    }
 }
