@@ -34,4 +34,13 @@ public interface IFyersTokenRepository
     /// Returns <c>false</c> if the token is missing, dirty, or expired.
     /// </summary>
     Task<bool> HasActiveTokenAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the raw access token value for the user's active token.
+    /// In production this resolves the Key Vault reference; in local-dev mode
+    /// it returns the stored token value directly.
+    /// Returns <see langword="null"/> if no active token exists.
+    /// REQ-MARKET-002b: browser-tier FYERS WebSocket needs the actual token.
+    /// </summary>
+    Task<string?> GetAccessTokenAsync(string userId, CancellationToken ct = default);
 }

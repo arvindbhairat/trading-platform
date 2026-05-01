@@ -93,12 +93,17 @@ public sealed class FyersAuthService
         }
 
         // Create the token document.
+        // REQ-MARKET-002b: for local-dev, store a simulated token value so the
+        // browser-tier FYERS WebSocket can use it. In production this is a
+        // Key Vault reference resolved at read time.
+        var simulatedTokenValue = $"sim_{userId}_{Convert.ToHexString(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(16))}";
         var token = new FyersTokenDocument
         {
             Id = MongoDB.Bson.ObjectId.GenerateNewId(),
             UserId = userId,
             FyersUserId = simulatedFyersUserId,
-            AccessTokenRef = $"kv:fyers:access:{userId}", // Key Vault ref in production
+            AccessTokenRef = simulatedTokenValue, // local-dev: token value; prod: KV ref
             IssuedAt = now,
             ExpiresAt = now.AddHours(24), // REQ-AUTH-008: day-scoped
             Status = FyersTokenStatus.Active,
@@ -119,6 +124,18 @@ public sealed class FyersAuthService
             cancellationToken: ct);
 
         return FyersAuthResult.Success();
+    }
+
+    /// <summary>
+    /// Returns the raw FYERS access token for browser-tier WebSocket use.
+    /// REQ-MARKET-002b: browser connects directly to FYERS Data WebSocket
+    /// using the logged-in user's access token.
+    /// Returns <see langword="null"/> if no active token exists.
+    /// </summary>
+    public async Task<string?> GetAccessTokenAsync(
+        string userId, CancellationToken ct = default)
+    {
+        return await _tokenRepo.GetAccessTokenAsync(userId, ct);
     }
 
     /// <summary>

@@ -166,6 +166,102 @@ public static class FyersEndpoints
             });
         }).RequireAuthorization();
 
+        // GET /api/v1/fyers/token
+        // Returns the user's active FYERS access token for browser-tier WebSocket use.
+        // The browser uses this token to connect directly to the FYERS Data WebSocket
+        // for live chart and quote refresh.
+        // REQ-MARKET-002b: browser-tier FYERS WebSocket only.
+        // CSRF is NOT required: this is a GET (read-only) endpoint.
+        fyers.MapGet("/token", async (
+            HttpContext context,
+            FyersAuthService fyersAuth) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            var token = await fyersAuth.GetAccessTokenAsync(userId, context.RequestAborted);
+
+            if (token is null)
+            {
+                return Results.Ok(new
+                {
+                    has_token = false,
+                    access_token = (string?)null
+                });
+            }
+
+            return Results.Ok(new
+            {
+                has_token = true,
+                access_token = token
+            });
+        }).RequireAuthorization();
+
+        // GET /api/v1/fyers/quotes?symbols=NSE:SBIN-EQ,NSE:RELIANCE-EQ
+        // REST fallback for live quotes when the FYERS Data WebSocket is unavailable.
+        // Proxies the FYERS REST quotes API using the logged-in user's FYERS token.
+        // REQ-MARKET-002b: browser-tier REST fallback for live data.
+        // CSRF is NOT required: this is a GET (read-only) endpoint.
+        fyers.MapGet("/quotes", async (
+            HttpContext context,
+            FyersAuthService fyersAuth,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            var symbols = context.Request.Query["symbols"].ToString();
+            if (string.IsNullOrWhiteSpace(symbols))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "symbols_required",
+                    message = "The 'symbols' query parameter is required."
+                });
+            }
+
+            var token = await fyersAuth.GetAccessTokenAsync(userId, context.RequestAborted);
+            if (token is null)
+            {
+                return Results.Ok(new
+                {
+                    s = "error",
+                    code = 401,
+                    message = "No active FYERS token available."
+                });
+            }
+
+            var appId = configuration["Fyers:AppId"]
+                ?? configuration["FYERS_APP_ID"]
+                ?? "";
+
+            var requestUrl = $"https://api-t1.fyers.in/data/quotes?symbols={Uri.EscapeDataString(symbols)}";
+            var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            request.Headers.Add("Authorization", $"{appId}:{token}");
+
+            try
+            {
+                var httpClient = httpClientFactory.CreateClient("FyersApi");
+                var response = await httpClient.SendAsync(request, context.RequestAborted);
+                var body = await response.Content.ReadAsStringAsync(context.RequestAborted);
+                return Results.Content(body, "application/json", response.StatusCode);
+            }
+            catch (HttpRequestException ex)
+            {
+                return Results.Ok(new
+                {
+                    s = "error",
+                    code = 503,
+                    message = $"FYERS quotes API unreachable: {ex.Message}"
+                });
+            }
+        }).RequireAuthorization();
+
         return app;
     }
 

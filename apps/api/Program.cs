@@ -48,7 +48,12 @@ builder.Services.AddUserManagement();
 builder.Services.AddAuditEventManagement();
 
 // FYERS credential management + token lifecycle — REQ-AUTH-003..010, 014, REQ-SESSION-009
+// Also registers HttpClient for FYERS REST API fallback (REQ-MARKET-002b).
 builder.Services.AddFyersTokenManagement();
+builder.Services.AddHttpClient("FyersApi", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // PLD WebSocket session lease — REQ-SESSION-014
 builder.Services.AddPldWebSocketServices();
@@ -130,7 +135,13 @@ if (!app.Environment.IsDevelopment())
 
 app.Use(async (context, next) =>
 {
-  context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'self'";
+  context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'none'; "
+        + "frame-ancestors 'none'; "
+        + "base-uri 'self'; "
+        + "connect-src 'self' https://api-t1.fyers.in wss://socket.fyers.in; "
+        + "img-src 'self' data:; "
+        + "style-src 'self' 'unsafe-inline';";
   context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
   context.Response.Headers["X-Content-Type-Options"] = "nosniff";
   context.Response.Headers["X-Frame-Options"] = "DENY";

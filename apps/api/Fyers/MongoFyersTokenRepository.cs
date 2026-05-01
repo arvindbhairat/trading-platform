@@ -82,4 +82,15 @@ public sealed class MongoFyersTokenRepository : IFyersTokenRepository
 
         return await _tokens.Find(filter).AnyAsync(ct);
     }
+
+    // REQ-MARKET-002b: returns the raw access token for browser-tier WebSocket use.
+    // In local-dev mode the AccessTokenRef is the token value itself;
+    // in production this resolves through Key Vault (caller's responsibility).
+    public async Task<string?> GetAccessTokenAsync(
+        string userId,
+        CancellationToken ct = default)
+    {
+        var active = await FindActiveByUserIdAsync(userId, ct);
+        return active?.AccessTokenRef;
+    }
 }
