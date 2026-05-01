@@ -60,6 +60,7 @@ public static class AdminConfigEndpoints
         // PUT /api/v1/admin/config/{key} — update a config value
         // REQ-CONFIG-005: audit trail on every edit.
         // REQ-SEC-011: step-up required for risk/legal/operations categories.
+        // REQ-LEGAL-001: phase transitions require justification + step-up audit chain.
         // CSRF-protected via the global CsrfMiddleware.
         admin.MapPut("/config/{key}", async (
             string key,
@@ -96,8 +97,15 @@ public static class AdminConfigEndpoints
             var priorValue = ExtractValue(current, "value");
 
             // REQ-SEC-011: step-up check for sensitive categories.
+            // REQ-LEGAL-001: justification required for sensitive category edits.
+            ObjectId? stepUpEventId = null;
             if (SensitiveCategories.Contains(category))
             {
+                if (string.IsNullOrWhiteSpace(body.Justification))
+                {
+                    return Results.BadRequest(new { error = "justification_required" });
+                }
+
                 var jti = context.User.FindFirst("jti")?.Value ?? "";
                 var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
                 var stepUpValid = session?.StepUpAuthenticatedAt.HasValue == true
@@ -108,6 +116,8 @@ public static class AdminConfigEndpoints
                         new { error = "step_up_required", category },
                         statusCode: StatusCodes.Status401Unauthorized);
                 }
+
+                stepUpEventId = session!.StepUpEventId;
             }
 
             // Convert the incoming JSON value to BsonValue based on valueType.
@@ -121,20 +131,38 @@ public static class AdminConfigEndpoints
                 return Results.BadRequest(new { error = "invalid_value_for_type", valueType });
             }
 
-            // Write audit event BEFORE mutation (REQ-CONFIG-005/005a).
-            await auditRepo.RecordAsync(
-                userId,
-                "config_updated",
-                DateTime.UtcNow,
-                details: new Dictionary<string, object?>
-                {
-                    ["key"] = key,
-                    ["category"] = category,
-                    ["value_type"] = valueType,
-                    ["prior_value"] = priorValue,
-                    ["new_value"] = body.Value,
-                },
-                cancellationToken: context.RequestAborted);
+            // Build shared audit details (REQ-CONFIG-005/005a, REQ-LEGAL-001).
+            var auditDetails = new Dictionary<string, object?>
+            {
+                ["key"] = key,
+                ["category"] = category,
+                ["value_type"] = valueType,
+                ["prior_value"] = priorValue,
+                ["new_value"] = body.Value,
+            };
+            if (!string.IsNullOrWhiteSpace(body.Justification))
+                auditDetails["justification"] = body.Justification;
+
+            // Write audit event BEFORE mutation.
+            if (stepUpEventId.HasValue)
+            {
+                await auditRepo.RecordStepUpGatedAsync(
+                    userId,
+                    "config_updated",
+                    DateTime.UtcNow,
+                    stepUpEventId.Value,
+                    details: auditDetails,
+                    cancellationToken: context.RequestAborted);
+            }
+            else
+            {
+                await auditRepo.RecordAsync(
+                    userId,
+                    "config_updated",
+                    DateTime.UtcNow,
+                    details: auditDetails,
+                    cancellationToken: context.RequestAborted);
+            }
 
             // Perform the mutation.
             var updated = await configRepo.UpdateAsync(
@@ -149,6 +177,7 @@ public static class AdminConfigEndpoints
         // POST /api/v1/admin/config/{key}/reset — reset a config value to its default
         // REQ-CONFIG-005a: reset must produce an audit event.
         // REQ-SEC-011: step-up required for risk/legal/operations categories.
+        // REQ-LEGAL-001: justification required for sensitive category resets.
         admin.MapPost("/config/{key}/reset", async (
             string key,
             HttpContext context,
@@ -166,6 +195,9 @@ public static class AdminConfigEndpoints
             if (user is null || user.Role != UserRole.Admin)
                 return Results.Forbid();
 
+            var body = await context.Request.ReadFromJsonAsync<ResetConfigRequest>(
+                cancellationToken: context.RequestAborted);
+
             // Fetch current entry before mutation for audit and step-up check.
             var current = await configRepo.GetByKeyAsync(key, context.RequestAborted);
             if (current is null)
@@ -176,8 +208,15 @@ public static class AdminConfigEndpoints
             var defaultValue = ExtractValue(current, "defaultValue");
 
             // REQ-SEC-011: step-up check for sensitive categories.
+            // REQ-LEGAL-001: justification required for sensitive category resets.
+            ObjectId? stepUpEventId = null;
             if (SensitiveCategories.Contains(category))
             {
+                if (body is null || string.IsNullOrWhiteSpace(body.Justification))
+                {
+                    return Results.BadRequest(new { error = "justification_required" });
+                }
+
                 var jti = context.User.FindFirst("jti")?.Value ?? "";
                 var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
                 var stepUpValid = session?.StepUpAuthenticatedAt.HasValue == true
@@ -188,21 +227,41 @@ public static class AdminConfigEndpoints
                         new { error = "step_up_required", category },
                         statusCode: StatusCodes.Status401Unauthorized);
                 }
+
+                stepUpEventId = session!.StepUpEventId;
             }
 
+            // Build shared audit details (REQ-CONFIG-005a, REQ-LEGAL-001).
+            var auditDetails = new Dictionary<string, object?>
+            {
+                ["key"] = key,
+                ["category"] = category,
+                ["prior_value"] = priorValue,
+                ["default_value"] = defaultValue,
+            };
+            if (body?.Justification is not null)
+                auditDetails["justification"] = body.Justification;
+
             // Write audit event BEFORE mutation (REQ-CONFIG-005a).
-            await auditRepo.RecordAsync(
-                userId,
-                "config_reset",
-                DateTime.UtcNow,
-                details: new Dictionary<string, object?>
-                {
-                    ["key"] = key,
-                    ["category"] = category,
-                    ["prior_value"] = priorValue,
-                    ["default_value"] = defaultValue,
-                },
-                cancellationToken: context.RequestAborted);
+            if (stepUpEventId.HasValue)
+            {
+                await auditRepo.RecordStepUpGatedAsync(
+                    userId,
+                    "config_reset",
+                    DateTime.UtcNow,
+                    stepUpEventId.Value,
+                    details: auditDetails,
+                    cancellationToken: context.RequestAborted);
+            }
+            else
+            {
+                await auditRepo.RecordAsync(
+                    userId,
+                    "config_reset",
+                    DateTime.UtcNow,
+                    details: auditDetails,
+                    cancellationToken: context.RequestAborted);
+            }
 
             // Perform the reset.
             var updated = await configRepo.ResetToDefaultAsync(
@@ -304,4 +363,10 @@ public sealed record SysConfigEntry(
     int Version
 );
 
-public sealed record UpdateConfigRequest(JsonElement Value);
+public sealed record UpdateConfigRequest(JsonElement Value, string? Justification = null);
+
+/// <summary>
+/// Request body for resetting a config value to its default.
+/// REQ-LEGAL-001: justification is required for sensitive category resets.
+/// </summary>
+public sealed record ResetConfigRequest(string? Justification = null);

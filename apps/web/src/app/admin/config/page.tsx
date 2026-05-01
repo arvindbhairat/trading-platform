@@ -44,6 +44,7 @@ interface EditState {
   valueType: string;
   currentValue: string;
   originalValue: string;
+  justification: string;
 }
 
 type Notification = { type: "success" | "error"; message: string };
@@ -91,6 +92,8 @@ export default function AdminConfigPage() {
 
   // Reset confirmation.
   const [resetKey, setResetKey] = useState<string | null>(null);
+  const [resetCategory, setResetCategory] = useState<string>("");
+  const [resetJustification, setResetJustification] = useState("");
   const [resetting, setResetting] = useState(false);
 
   // ── Data fetching ────────────────────────────────────────────────────
@@ -181,6 +184,7 @@ export default function AdminConfigPage() {
       valueType: entry.valueType,
       currentValue: formatValue(entry.value),
       originalValue: formatValue(entry.value),
+      justification: "",
     });
     setNotification(null);
   }
@@ -203,10 +207,15 @@ export default function AdminConfigPage() {
     try {
       const parsedValue = parseValueForType(edit.currentValue, edit.valueType);
 
+      const body: Record<string, unknown> = { value: parsedValue };
+      if (SENSITIVE_CATEGORIES.has(edit.category)) {
+        body.justification = edit.justification;
+      }
+
       const res = await apiFetch(`/api/v1/admin/config/${encodeURIComponent(edit.key)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: parsedValue }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -247,8 +256,21 @@ export default function AdminConfigPage() {
     setNotification(null);
 
     try {
+      const bodyPayload: Record<string, unknown> = {};
+      if (SENSITIVE_CATEGORIES.has(resetCategory)) {
+        bodyPayload.justification = resetJustification;
+      }
+
       const res = await apiFetch(`/api/v1/admin/config/${encodeURIComponent(resetKey)}/reset`, {
         method: "POST",
+        headers:
+          Object.keys(bodyPayload).length > 0
+            ? { "Content-Type": "application/json" }
+            : undefined,
+        body:
+          Object.keys(bodyPayload).length > 0
+            ? JSON.stringify(bodyPayload)
+            : undefined,
       });
 
       if (!res.ok) {
@@ -261,6 +283,8 @@ export default function AdminConfigPage() {
       await res.json();
       setNotification({ type: "success", message: `"${resetKey}" reset to default` });
       setResetKey(null);
+      setResetCategory("");
+      setResetJustification("");
       fetchData();
     } catch (err) {
       setNotification({
@@ -454,7 +478,11 @@ export default function AdminConfigPage() {
                         </button>
                         <button
                           disabled={!entry.isEditable}
-                          onClick={() => setResetKey(entry.key)}
+                          onClick={() => {
+                            setResetKey(entry.key);
+                            setResetCategory(entry.category);
+                            setResetJustification("");
+                          }}
                           aria-label="Reset to default"
                           style={{
                             background: "var(--bg-3)",
@@ -527,6 +555,37 @@ export default function AdminConfigPage() {
                 <Pill tone="info">Value changed</Pill>
               </span>
             )}
+
+            {/* REQ-LEGAL-001: justification required for sensitive category edits */}
+            {SENSITIVE_CATEGORIES.has(edit.category) && (
+              <div style={{ marginTop: "var(--s-4)" }}>
+                <Field
+                  label="Justification"
+                  hint="Explain why this change is needed. Recorded in audit log."
+                >
+                  <textarea
+                    value={edit.justification}
+                    onChange={(e) =>
+                      setEdit({ ...edit, justification: e.target.value })
+                    }
+                    rows={3}
+                    placeholder="Required for sensitive configuration changes"
+                    style={{
+                      width: "100%",
+                      padding: "var(--s-2) var(--s-3)",
+                      borderRadius: "var(--rad-1)",
+                      border: "1px solid var(--border-1)",
+                      background: "var(--bg-0)",
+                      color: "var(--t-0)",
+                      fontSize: "var(--fs-sm)",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </Field>
+              </div>
+            )}
+
             <div
               style={{
                 display: "flex",
@@ -559,11 +618,48 @@ export default function AdminConfigPage() {
               This will reset <code>{resetKey}</code> to its default value. An audit
               event will be recorded. This action cannot be undone.
             </p>
+
+            {/* REQ-LEGAL-001: justification required for sensitive category resets */}
+            {SENSITIVE_CATEGORIES.has(resetCategory) && (
+              <div style={{ marginBottom: "var(--s-4)" }}>
+                <Field
+                  label="Justification"
+                  hint="Explain why this reset is needed. Recorded in audit log."
+                >
+                  <textarea
+                    value={resetJustification}
+                    onChange={(e) => setResetJustification(e.target.value)}
+                    rows={3}
+                    placeholder="Required for sensitive configuration changes"
+                    style={{
+                      width: "100%",
+                      padding: "var(--s-2) var(--s-3)",
+                      borderRadius: "var(--rad-1)",
+                      border: "1px solid var(--border-1)",
+                      background: "var(--bg-0)",
+                      color: "var(--t-0)",
+                      fontSize: "var(--fs-sm)",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </Field>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: "var(--s-3)" }}>
               <Btn variant="danger" onClick={confirmReset} disabled={resetting}>
                 {resetting ? "Resetting…" : "Confirm reset"}
               </Btn>
-              <Btn variant="ghost" onClick={() => setResetKey(null)} disabled={resetting}>
+              <Btn
+                variant="ghost"
+                onClick={() => {
+                  setResetKey(null);
+                  setResetCategory("");
+                  setResetJustification("");
+                }}
+                disabled={resetting}
+              >
                 Cancel
               </Btn>
             </div>

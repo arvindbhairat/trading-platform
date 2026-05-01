@@ -182,10 +182,8 @@ public static class AuthEndpoints
                 }
 
                 var now = DateTime.UtcNow;
-                await sessionRepo.UpdateStepUpAsync(
-                    existingSession.SessionToken, now, context.RequestAborted);
 
-                // Write audit event for the step-up (REQ-SEC-011).
+                // Write audit event for the step-up (REQ-SEC-011 / REQ-LEGAL-001).
                 var stepUpEventId = await auditRepo.RecordAsync(
                     user.UserId,
                     "step_up_authenticated",
@@ -196,6 +194,11 @@ public static class AuthEndpoints
                         ["step_up_duration_minutes"] = StepUpDuration.TotalMinutes,
                     },
                     cancellationToken: context.RequestAborted);
+
+                // Store the step-up event ID on the session so gated endpoints
+                // can chain their audit events back (REQ-LEGAL-001).
+                await sessionRepo.UpdateStepUpAsync(
+                    existingSession.SessionToken, now, stepUpEventId, context.RequestAborted);
 
                 return Results.Redirect($"{frontend}/auth/callback?step_up=success");
             }

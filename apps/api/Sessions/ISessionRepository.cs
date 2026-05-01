@@ -1,3 +1,5 @@
+using MongoDB.Bson;
+
 namespace SignalStack.Api.Sessions;
 
 /// <summary>
@@ -30,11 +32,13 @@ public interface ISessionRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Records the step-up re-authentication timestamp on the session identified by
-    /// <paramref name="sessionToken"/>.  REQ-SEC-011.
+    /// Records the step-up re-authentication timestamp and the corresponding
+    /// audit event <c>_id</c> on the session identified by <paramref name="sessionToken"/>.
+    /// REQ-SEC-011 / REQ-LEGAL-001.
     /// </summary>
     Task UpdateStepUpAsync(
         string sessionToken,
         DateTime stepUpAuthenticatedAt,
+        ObjectId stepUpEventId,
         CancellationToken cancellationToken = default);
 }

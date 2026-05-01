@@ -42,4 +42,11 @@ public sealed class SessionDocument
     [BsonElement("step_up_authenticated_at")]
     [BsonIgnoreIfNull]
     public DateTime? StepUpAuthenticatedAt { get; init; }
+
+    // REQ-SEC-011 / REQ-LEGAL-001: the audit event _id of the most recent
+    // step-up re-authentication for this session.  Used by gated endpoints to
+    // chain their audit events back to the authorising step-up (RecordStepUpGatedAsync).
+    [BsonElement("step_up_event_id")]
+    [BsonIgnoreIfNull]
+    public ObjectId? StepUpEventId { get; init; }
 }
