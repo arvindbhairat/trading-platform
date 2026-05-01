@@ -391,6 +391,7 @@ export function LegalFooter() {
         <Link href="/legal/privacy" style={linkStyle}>Privacy Policy</Link>
         <Link href="/legal/disclaimer" style={linkStyle}>Disclaimer</Link>
         <Link href="/legal/tester-acknowledgement" style={linkStyle}>Tester Acknow.</Link>
+        <Link href="/legal/grievances" style={linkStyle}>Contact &amp; Grievances</Link>
       </span>
     </div>
   );

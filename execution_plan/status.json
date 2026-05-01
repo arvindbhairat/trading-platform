@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T15",
+  "current_task_id": "P2-T16",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -35,10 +35,10 @@
     "P2-T11",
     "P2-T12",
     "P2-T13",
-    "P2-T14"
+    "P2-T14",
+    "P2-T15"
   ],
   "pending_tasks": [
-    "P2-T15",
     "P2-T16",
     "P2-T17",
     "P2-T20",
@@ -260,7 +260,15 @@
       "REQ-LEGAL-007",
       "REQ-LEGAL-008",
       "REQ-PRIVACY-003",
-      "REQ-PRIVACY-007"
+      "REQ-PRIVACY-007",
+      "REQ-PRIVACY-001",
+      "REQ-PRIVACY-002",
+      "REQ-PRIVACY-005",
+      "REQ-PRIVACY-008",
+      "REQ-PRIVACY-009",
+      "REQ-PRIVACY-010",
+      "REQ-PRIVACY-011",
+      "REQ-PRIVACY-012"
     ],
     "P3": [],
     "P4": [],
@@ -271,5 +279,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T09:45:00Z"
+  "last_updated": "2026-05-01T10:00:00Z"
 }

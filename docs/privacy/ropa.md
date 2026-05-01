@@ -2,7 +2,7 @@
 
 **Required by:** `REQ-PRIVACY-010`
 **Phase:** A
-**Last reviewed:** *(not yet reviewed — initial draft)*
+**Last reviewed:** 2026-05-01
 **Owner / data fiduciary:** Arvind Bhairat
 **Grievance officer:** Arvind Bhairat — `[GRIEVANCE_EMAIL]`
 **Operator entity:** Sole proprietor; no incorporated entity at this time
