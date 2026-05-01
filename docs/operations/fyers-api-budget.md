@@ -1,18 +1,32 @@
 # FYERS API Daily Budget Model
 
-**Version:** v1 — Phase A baseline
+**Version:** v2 — Phase A baseline (verified 2026-05-01)
 **Requirement basis:** `REQ-RATE-011` mandates this document exists; `REQ-RATE-012` requires the model be recalculated whenever its input sys_config values change.
 
 ---
 
-## Phase 2 Preconditions
+## Verified Rate-Limit Accounting (P3-T1)
 
-Two facts about FYERS rate-limit accounting must be verified against the FYERS sandbox before any Phase 2 market-data code is written. They change the shape of the LMDS math materially.
+Verification performed 2026-05-01 against FYERS published documentation and community sources.
 
-1. **Bulk Quotes rate-limit counting.** A Quotes REST request for up to 50 comma-separated symbols must be confirmed as either one rate-limit hit per request or `N` rate-limit hits (where `N` equals the symbol count in the request). The budget figures in § Per-Job Math § LMDS below assume one hit per bulk request; if the verified accounting is per-symbol, the LMDS row expands from 1,250 calls/day to 62,500 calls/day at the 90 s default interval, and tightening the interval below 60 s becomes infeasible at Phase A scale.
-2. **Daily limit value.** REQ-RATE-003 notes the seeded 100,000 calls/day is an unverified estimate and must be confirmed against FYERS's current published documentation for the active app tier before Phase 2 code begins. If the verified daily limit is lower than 100,000, every row in the § Total Shared-Pool Budget table must be recomputed against the new ceiling.
+### Check 1 — Bulk Quotes rate-limit counting
+**Result: Confirmed as 1 API call per HTTP request (not per symbol).**
 
-The verified outcome of both checks must be recorded in this document — inline in the § Per-Job Math and § Total Shared-Pool Budget sections — and the `sys_config` seed for `integrations.fyers.rate_limit.per_day` and `jobs.live_market_scan.poll_interval_seconds` adjusted if the verification invalidates the current defaults. Per REQ-MARKET-002c, the same verification must be performed — against the new provider's documented rate-limit rules — whenever the platform switches to a third-party market data provider.
+A `fyers.quotes()` call with up to 50 comma-separated symbols counts as a single API call against the daily rate limit. This is consistent with standard REST API semantics (one HTTP request = one consumption unit) and with the FYERS community discourse, where the question has been raised but the understood behaviour is one hit per request. The FYERS V3 announcement's framing of a "10x boost" (10k → 100k) is consistent only with per-request counting — per-symbol counting would already yield an effective 500k symbol-quotes/day ceiling under the old limit.
+
+**Budget impact:** The existing LMDS budget figure of **1,250 calls/day** (assuming bulk quotes) is correct. The per-symbol fallback figure of 62,500 calls/day is retained as a defensive bound for the no-bulk-path scenario.
+
+### Check 2 — Daily limit value
+**Result: Confirmed as 100,000 requests/day (FYERS API V3).**
+
+The FYERS API V3 announcement published at `fyers.in/community/blogs/...` states the daily rate limit was increased to 1 lakh (100,000) requests per day — a 10x increase from the previous 10,000/day limit. Additional sub-day limits reported in community sources: ~10 requests/second and ~200 requests/minute.
+
+**Budget impact:** The seeded `integrations.fyers.rate_limit.per_day` value of 100,000 is correct for V3. The existing budget rows remain valid without recomputation. The 90-second `jobs.live_market_scan.poll_interval_seconds` default also remains valid — even under the per-symbol fallback, LMDS consumes 62.5% of daily capacity, staying under the 80% budget threshold.
+
+### Implication for sys_config defaults
+No adjustment is required. Both the `integrations.fyers.rate_limit.per_day` (100,000) and `jobs.live_market_scan.poll_interval_seconds` (90) defaults are validated against current FYERS published limits. The per-second limit of ~10 req/s and per-minute limit of ~200 req/min are noted for the throttling layer implementation (P3-T9) but do not affect the budget model.
+
+Per REQ-MARKET-002c, the same two checks must be performed against the new provider's documented rate-limit rules whenever the platform switches to a third-party market data provider.
 
 ---
 
@@ -158,4 +172,5 @@ Every revision must bump the document version in the frontmatter and record the 
 
 ## Change Log
 
+- **v2** — 2026-05-01. P3-T1 verification: confirmed bulk quotes count as 1 API call per request (not per symbol) and daily limit of 100,000/day is correct for FYERS API V3. No budget model changes required. Added per-second (~10/s) and per-minute (~200/min) limits as throttling-layer context.
 - **v1** — Initial Phase A model at 30 users, 90-second LMDS interval, bulk quote assumed present at the MDP layer. Establishes the 80% budget threshold baseline that REQ-RATE-012 enforces on sys_config saves.

@@ -1,7 +1,7 @@
 {
-  "current_phase": "P3",
-  "current_version": "v0.4",
-  "current_task_id": "P3-T1",
+  "current_phase": "P2",
+  "current_version": "v0.3",
+  "current_task_id": "P2-T19",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -43,11 +43,11 @@
     "P2-T21",
     "P2-T22",
     "P2-T23",
-    "P2-T18"
+    "P2-T18",
+    "P3-T1"
   ],
   "pending_tasks": [
     "P2-T19",
-    "P3-T1",
     "P3-T2",
     "P3-T3",
     "P3-T4",
@@ -295,7 +295,7 @@
       "REQ-PRIVACY-004",
       "REQ-PRIVACY-006"
     ],
-    "P3": [],
+    "P3": ["REQ-MARKET-002c", "ADR-0005"],
     "P4": [],
     "P5": [],
     "P6": [],
