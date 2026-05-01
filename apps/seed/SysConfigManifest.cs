@@ -24,6 +24,7 @@ public static class SysConfigManifest
         new("jobs.ledger_lock.skip_warn_threshold",    "jobs",           "number",  "3",    "Consecutive lock-skip attempts before warning.",                                                                     "REQ-PORT-031"),
         new("jobs.account_sync.intraday_interval_minutes","jobs",        "number",  "15",   "Intraday interval for LADS account sync.",                                                                           "REQ-PORT-019"),
         new("jobs.account_sync.manual_sync_min_interval_seconds","jobs",  "number",  "120",  "Minimum interval between manual syncs.",                                                                              "REQ-PORT-021"),
+        new("jobs.eod_sync.default_time_ist",          "jobs",           "string",  "17:00","Default EOD sync time in IST. Used as the initial default for post-market sync scheduling.",                      "REQ-CALENDAR-004"),
 
         // ── market_data ───────────────────────────────────────────────────
         new("market_data.halt.consecutive_stale_polls","market_data",    "number",  "3",    "Consecutive stale polls triggering halt detection.",                                                                "REQ-HALT-001"),

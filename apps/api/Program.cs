@@ -61,6 +61,9 @@ builder.Services.AddPrivacyRequestManagement();
 // Symbol master + universe state management — P3-T2 / REQ-UNIV-001..010, REQ-HIST-005..008a
 builder.Services.AddUniverseManagement();
 
+// Trading calendar management — P3-T3 / REQ-CALENDAR-001..006
+builder.Services.AddTradingCalendarManagement();
+
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
     .AddCheck<SeedVersionHealthCheck>("seed_version_sentinel",
@@ -217,6 +220,9 @@ app.MapAdminHomeEndpoints();
 
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
+
+// Trading calendar endpoints — P3-T3 / REQ-CALENDAR-001..006
+app.MapTradingCalendarEndpoints();
 
 app.Run();
 

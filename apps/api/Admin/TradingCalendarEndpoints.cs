@@ -1,0 +1,205 @@
+using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace SignalStack.Api.Admin;
+
+/// <summary>
+/// Admin CRUD endpoints for the internal NSE trading calendar.
+/// REQ-CALENDAR-001..006.
+/// </summary>
+public static class TradingCalendarEndpoints
+{
+    private const string Tag = "Admin";
+
+    public static IEndpointRouteBuilder MapTradingCalendarEndpoints(this IEndpointRouteBuilder app)
+    {
+        var admin = app.MapGroup("/api/v1/admin/calendar");
+
+        // GET /api/v1/admin/calendar — list calendar entries
+        // Optionally filter by ?from=YYYY-MM-DD&to=YYYY-MM-DD&session_type=normal
+        // REQ-CALENDAR-002: view all session types and non-trading-day markers.
+        admin.MapGet("/", async (
+            ITradingCalendarRepository repo,
+            string? from,
+            string? to,
+            string? sessionType,
+            CancellationToken ct) =>
+        {
+            var entries = await repo.GetAllAsync(from, to, sessionType, ct);
+            return Results.Ok(new { entries });
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
+        // GET /api/v1/admin/calendar/{date} — find entries for a specific date
+        admin.MapGet("/{date}", async (
+            string date,
+            ITradingCalendarRepository repo,
+            CancellationToken ct) =>
+        {
+            if (!DateOnly.TryParse(date, out _))
+                return Results.BadRequest(new { error = "invalid_date_format" });
+
+            var entries = await repo.FindByDateAsync(date, ct);
+            return Results.Ok(new { entries });
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
+        // POST /api/v1/admin/calendar — create a new calendar entry
+        // REQ-CALENDAR-002: supports normal, special, muhurat sessions and non-trading-day markers.
+        // Session records require start/end times; non-trading-day markers require only date + optional holiday name.
+        admin.MapPost("/", async (
+            CreateCalendarEntryRequest request,
+            ITradingCalendarRepository repo,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.SessionDate))
+                return Results.BadRequest(new { error = "session_date_required" });
+
+            if (!DateOnly.TryParse(request.SessionDate, out _))
+                return Results.BadRequest(new { error = "invalid_session_date_format" });
+
+            if (string.IsNullOrWhiteSpace(request.SessionType))
+                return Results.BadRequest(new { error = "session_type_required" });
+
+            var validTypes = new[] { "normal", "special", "muhurat", "non_trading_day" };
+            if (!validTypes.Contains(request.SessionType))
+                return Results.BadRequest(new { error = "invalid_session_type", validTypes });
+
+            // REQ-CALENDAR-002: validate based on type
+            if (request.SessionType == "non_trading_day")
+            {
+                // Non-trading-day markers must NOT have session times; only optional holiday name.
+                if (request.SessionStartTime is not null || request.SessionEndTime is not null)
+                    return Results.BadRequest(new { error = "non_trading_day_must_not_have_session_times" });
+            }
+            else
+            {
+                // Session records require start and end times.
+                if (string.IsNullOrWhiteSpace(request.SessionStartTime))
+                    return Results.BadRequest(new { error = "session_start_time_required" });
+                if (string.IsNullOrWhiteSpace(request.SessionEndTime))
+                    return Results.BadRequest(new { error = "session_end_time_required" });
+
+                if (!TimeOnly.TryParse(request.SessionStartTime, out _))
+                    return Results.BadRequest(new { error = "invalid_session_start_time_format" });
+                if (!TimeOnly.TryParse(request.SessionEndTime, out _))
+                    return Results.BadRequest(new { error = "invalid_session_end_time_format" });
+            }
+
+            // Check for duplicate: same date + same type
+            var existing = await repo.FindByDateAndTypeAsync(request.SessionDate, request.SessionType, ct);
+            if (existing is not null)
+                return Results.Conflict(new { error = "duplicate_calendar_entry", sessionDate = request.SessionDate, sessionType = request.SessionType });
+
+            // Check: for non-session types, only one entry per date is allowed
+            // (since the concept of "two different non-trading-day markers on same date" doesn't add value)
+            if (request.SessionType == "non_trading_day")
+            {
+                var dateEntries = await repo.FindByDateAsync(request.SessionDate, ct);
+                if (dateEntries.Count > 0)
+                    return Results.Conflict(new { error = "date_already_has_entry", sessionDate = request.SessionDate });
+            }
+
+            var now = DateTime.UtcNow;
+            var doc = new TradingCalendarDocument
+            {
+                SessionDate = request.SessionDate,
+                SessionType = request.SessionType,
+                SessionStartTime = request.SessionStartTime,
+                SessionEndTime = request.SessionEndTime,
+                HolidayName = request.SessionType == "non_trading_day" ? request.HolidayName : null,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await repo.CreateAsync(doc, ct);
+            return Results.Created($"/api/v1/admin/calendar/{doc.Id}", doc);
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
+        // PUT /api/v1/admin/calendar/{id} — update an existing calendar entry
+        admin.MapPut("/{id}", async (
+            string id,
+            UpdateCalendarEntryRequest request,
+            ITradingCalendarRepository repo,
+            CancellationToken ct) =>
+        {
+            if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
+                return Results.BadRequest(new { error = "invalid_id" });
+
+            var validTypes = new[] { "normal", "special", "muhurat", "non_trading_day" };
+            if (request.SessionType is not null && !validTypes.Contains(request.SessionType))
+                return Results.BadRequest(new { error = "invalid_session_type", validTypes });
+
+            await repo.UpdateAsync(
+                objectId,
+                sessionType: request.SessionType,
+                sessionStartTime: request.SessionStartTime,
+                sessionEndTime: request.SessionEndTime,
+                holidayName: request.HolidayName,
+                ct: ct);
+
+            return Results.Ok(new { status = "updated" });
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
+        // DELETE /api/v1/admin/calendar/{id} — delete a calendar entry
+        admin.MapDelete("/{id}", async (
+            string id,
+            ITradingCalendarRepository repo,
+            CancellationToken ct) =>
+        {
+            if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
+                return Results.BadRequest(new { error = "invalid_id" });
+
+            await repo.DeleteAsync(objectId, ct);
+            return Results.Ok(new { status = "deleted" });
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
+        return app;
+    }
+}
+
+/// <summary>Request body for POST /api/v1/admin/calendar.</summary>
+public sealed record CreateCalendarEntryRequest
+{
+    /// <summary>Session date in Asia/Kolkata (ISO 8601, e.g. "2026-05-01").</summary>
+    [Required] public string SessionDate { get; init; } = "";
+
+    /// <summary>Session type: "normal", "special", "muhurat", or "non_trading_day".</summary>
+    [Required] public string SessionType { get; init; } = "";
+
+    /// <summary>Session start time in IST (HH:mm format). Required for session records.</summary>
+    public string? SessionStartTime { get; init; }
+
+    /// <summary>Session end time in IST (HH:mm format). Required for session records.</summary>
+    public string? SessionEndTime { get; init; }
+
+    /// <summary>Holiday name for non-trading-day markers (e.g. "Republic Day"). Optional.</summary>
+    public string? HolidayName { get; init; }
+}
+
+/// <summary>Request body for PUT /api/v1/admin/calendar/{id}.</summary>
+public sealed record UpdateCalendarEntryRequest
+{
+    /// <summary>New session type. Null = no change.</summary>
+    public string? SessionType { get; init; }
+
+    /// <summary>New session start time. Null = no change.</summary>
+    public string? SessionStartTime { get; init; }
+
+    /// <summary>New session end time. Null = no change.</summary>
+    public string? SessionEndTime { get; init; }
+
+    /// <summary>New holiday name. Null = no change.</summary>
+    public string? HolidayName { get; init; }
+}

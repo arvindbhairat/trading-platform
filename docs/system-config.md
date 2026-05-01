@@ -273,6 +273,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `market_data.halt.stale_symbol_pct` | market_data | number | 80 | REQ-HALT-001 |
 | `jobs.account_sync.intraday_interval_minutes` | jobs | number | 15 | REQ-PORT-019 |
 | `jobs.account_sync.manual_sync_min_interval_seconds` | jobs | number | 120 | REQ-PORT-021 |
+| `jobs.eod_sync.default_time_ist` | jobs | string | `17:00` | REQ-CALENDAR-004 (default EOD sync time in IST) |
 | `market_data.quote.stale_after_seconds` | market_data | number | 300 | REQ-DASH-013 |
 | `market_data.eod.skip_symbol_if_daily_bar_missing` | market_data | boolean | true | REQ-MARKET-006 |
 | `market_data.validation.max_invalid_candle_pct` | market_data | number | 5 | REQ-MARKET-015 |
