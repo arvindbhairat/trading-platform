@@ -185,6 +185,9 @@ app.MapPldEndpoints();
 // Admin sys_config management endpoints — P2-T11 / REQ-CONFIG-005/005a/007, REQ-SEC-011
 app.MapAdminConfigEndpoints();
 
+// Admin user management endpoints — P2-T12 / REQ-ROLE-004, REQ-SESSION-012/013
+app.MapAdminUserEndpoints();
+
 app.Run();
 
 public sealed record ApiRootResponse(string Name, string Version);

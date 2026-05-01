@@ -80,7 +80,7 @@ function AuthCallbackContent() {
           router.replace("/");
           break;
         case "deactivated":
-          router.replace("/login?error=account_deactivated");
+          router.replace("/deactivated");
           break;
         case "pending_acknowledgement":
           router.replace("/login?error=acknowledgement_required");

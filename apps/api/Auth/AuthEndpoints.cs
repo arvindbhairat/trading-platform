@@ -394,7 +394,7 @@ public static class AuthEndpoints
                 });
             }
 
-            // Deactivated users are locked out.
+            // REQ-SESSION-013: deactivated users are locked out and see the deactivated screen.
             if (user.Status == UserApprovalState.Deactivated)
             {
                 return Results.Ok(new

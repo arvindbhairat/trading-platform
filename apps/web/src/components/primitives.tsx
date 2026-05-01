@@ -838,3 +838,12 @@ export const adminNavItems: NavItem[] = [
   { id: "jobs",      label: "Job runs",       icon: "activity" },
   { id: "calendar",  label: "Trading calendar", icon: "calendar" },
 ];
+
+/** Returns a copy of adminNavItems with the approvals badge set to the given count. */
+export function adminNavItemsWithApprovals(count: number): NavItem[] {
+  return adminNavItems.map((item) =>
+    item.id === "approvals"
+      ? { ...item, badge: count > 0 ? count : undefined }
+      : item,
+  );
+}

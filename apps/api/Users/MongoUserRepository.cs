@@ -108,6 +108,26 @@ public sealed class MongoUserRepository : IUserRepository
         await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
 
+    public async Task<List<UserDocument>> ListUsersAsync(
+        string? statusFilter = null, CancellationToken ct = default)
+    {
+        var filter = statusFilter is not null
+            ? Builders<UserDocument>.Filter.Eq(u => u.Status, statusFilter)
+            : Builders<UserDocument>.Filter.Empty;
+
+        return await _users
+            .Find(filter)
+            .Sort(Builders<UserDocument>.Sort.Descending(u => u.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    public async Task<long> CountPendingAsync(CancellationToken ct = default)
+    {
+        return await _users.CountDocumentsAsync(
+            Builders<UserDocument>.Filter.Eq(u => u.Status, UserApprovalState.PendingApproval),
+            cancellationToken: ct);
+    }
+
     // REQ-ROLE-005: atomically creates or promotes the user to admin + approved.
     public async Task UpsertAdminOnSignInAsync(
         string userId,

@@ -78,6 +78,26 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    public Task<List<UserDocument>> ListUsersAsync(
+        string? statusFilter = null, CancellationToken ct = default)
+    {
+        var users = _byUserId.Values
+            .OrderByDescending(u => u.CreatedAt)
+            .AsEnumerable();
+
+        if (statusFilter is not null)
+            users = users.Where(u => u.Status == statusFilter);
+
+        return Task.FromResult(users.ToList());
+    }
+
+    public Task<long> CountPendingAsync(CancellationToken ct = default)
+    {
+        var count = _byUserId.Values
+            .Count(u => u.Status == UserApprovalState.PendingApproval);
+        return Task.FromResult((long)count);
+    }
+
     public Task UpsertAdminOnSignInAsync(
         string userId, string email, string displayName, string provider,
         CancellationToken ct = default)

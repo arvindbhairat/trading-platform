@@ -1,13 +1,83 @@
-// REQ-SESSION-012 / REQ-SESSION-013: approval-pending screen.
+"use client";
+
+// REQ-SESSION-012 / REQ-SESSION-013: approval-pending screen with auto-refresh.
 // Rendered when the user has completed OAuth but their account is still awaiting
 // admin approval. Must not expose any protected portal content.
+// Polls the session status every 30 seconds so the user is automatically
+// redirected once the admin approves (P2-T12).
 //
 // Design system: uses tokens from globals.css and primitives.
 // Layout matches design_system/mock_screens/auth-screens.jsx.
 
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Card, Logo, Icon } from "@/components/primitives";
+import { getToken } from "@/lib/auth";
+import { fetchSessionStatus } from "@/lib/session";
+
+const POLL_INTERVAL_MS = 30_000;
 
 export default function PendingApprovalPage() {
+  const router = useRouter();
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const checkStatus = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const status = await fetchSessionStatus();
+    if (!status) {
+      router.replace("/login?error=session_check_failed");
+      return;
+    }
+
+    // If no longer pending_approval, route to the appropriate screen.
+    if (status.state !== "pending_approval") {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      switch (status.state) {
+        case "fyers_required":
+          router.replace("/fyers-required");
+          break;
+        case "fyers_dirty":
+          router.replace("/fyers-auth?status=dirty");
+          break;
+        case "active":
+          router.replace("/");
+          break;
+        case "deactivated":
+          router.replace("/deactivated");
+          break;
+        default:
+          router.replace("/login");
+          break;
+      }
+      return;
+    }
+
+    setLastChecked(new Date());
+  }, [router]);
+
+  useEffect(() => {
+    // Check immediately on mount.
+    checkStatus();
+
+    // Then poll every POLL_INTERVAL_MS.
+    intervalRef.current = setInterval(checkStatus, POLL_INTERVAL_MS);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [checkStatus]);
+
   return (
     <div
       style={{
@@ -51,6 +121,14 @@ export default function PendingApprovalPage() {
           administrator has reviewed and approved your request. Please check back
           later or contact your platform administrator for assistance.
         </p>
+        {lastChecked && (
+          <p
+            className="t-body-sm"
+            style={{ color: "var(--t-3)", marginBottom: 0 }}
+          >
+            Last checked: {lastChecked.toLocaleTimeString()}
+          </p>
+        )}
       </Card>
     </div>
   );
