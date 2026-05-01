@@ -89,6 +89,11 @@ builder.Services.AddHistoricDataSeed(builder.Configuration);
 // REQ-MARKET-003/005/005a/006/007/009/013.
 builder.Services.AddDataSync(builder.Configuration);
 
+// EODSR sequencing gate (REQ-MARKET-007): EOD Signal Runner refuses to start
+// without a DataSync EOD success marker for the target trading session.
+// Registers IEodMarkerReader (reads DS markers from job_runs) and EodSequencingGate.
+builder.Services.AddEodSequencingGate();
+
 var host = builder.Build();
 
 // ── Sentinel startup check (REQ-CONFIG-010) ─────────────────────────────

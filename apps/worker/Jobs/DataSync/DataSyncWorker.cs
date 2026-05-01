@@ -309,6 +309,47 @@ internal sealed class DataSyncWorker : BackgroundService
             finalUpdate,
             cancellationToken: ct);
 
+        // ── Write per-session success markers (REQ-MARKET-007) ───────────────
+        // For a completed run, each processed session gets its own lightweight
+        // marker document so that EODSR (and the auto-detect logic) can verify
+        // that DataSync has completed for any individual session date.
+        // Markers are idempotent: ReplaceOneAsync with upsert:true ensures
+        // exactly one marker per session regardless of re-runs.
+        if (outcomeField == OutcomeCompleted
+            && result.CompletedSymbolsPerSession is { Count: > 0 }
+            && result.CompletedSymbolsPerSession.Count > 1)
+        {
+            foreach (var (session, _) in result.CompletedSymbolsPerSession)
+            {
+                var sessionStr = session.ToString("yyyy-MM-dd");
+
+                var markerFilter = Builders<BsonDocument>.Filter.Eq("job_type", DsJobType)
+                                 & Builders<BsonDocument>.Filter.Eq("marker_type", "eod")
+                                 & Builders<BsonDocument>.Filter.Eq("session_date", sessionStr);
+
+                var markerDoc = new BsonDocument
+                {
+                    ["job_type"] = DsJobType,
+                    ["marker_type"] = "eod",
+                    ["outcome"] = OutcomeCompleted,
+                    ["session_date"] = sessionStr,
+                    ["parent_job_id"] = jobId,
+                    ["created_at"] = DateTime.UtcNow,
+                };
+
+                await jobRuns.ReplaceOneAsync(
+                    markerFilter,
+                    markerDoc,
+                    new ReplaceOptions { IsUpsert = true },
+                    cancellationToken: ct);
+            }
+
+            _logger.LogInformation(
+                "DataSync: wrote {Count} per-session EOD success markers " +
+                "for parent job {JobId}.",
+                result.CompletedSymbolsPerSession.Count, jobId);
+        }
+
         _logger.LogInformation(
             "DataSync job {JobId} completed: {Outcome}. " +
             "{Processed}/{Total} sessions, {SymbolSessions} total symbol-sessions.",
