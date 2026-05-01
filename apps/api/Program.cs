@@ -221,6 +221,9 @@ app.MapAdminHomeEndpoints();
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
 
+// Universe sync endpoints (admin) — P3-T5 / REQ-UNIV-011..020
+app.MapUniverseSyncEndpoints();
+
 // Trading calendar endpoints — P3-T3 / REQ-CALENDAR-001..006
 app.MapTradingCalendarEndpoints();
 

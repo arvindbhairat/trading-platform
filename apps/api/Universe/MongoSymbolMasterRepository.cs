@@ -120,4 +120,13 @@ public sealed class MongoSymbolMasterRepository : ISymbolMasterRepository
         var combined = Builders<SymbolMasterDocument>.Filter.And(filters);
         return await _collection.Find(combined).AnyAsync(ct);
     }
+
+    public async Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default)
+    {
+        var filter = Builders<SymbolMasterDocument>.Filter.Eq(s => s.Id, id);
+        var update = Builders<SymbolMasterDocument>.Update
+            .Set(s => s.Symbol, newSymbol.ToUpperInvariant())
+            .Set(s => s.UpdatedAt, DateTime.UtcNow);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }

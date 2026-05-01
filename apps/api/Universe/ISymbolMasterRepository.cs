@@ -54,4 +54,10 @@ public interface ISymbolMasterRepository
     /// Returns true if a conflict exists.
     /// </summary>
     Task<bool> HasConflictAsync(string symbol, string isin, ObjectId? excludeId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Renames a symbol in place, preserving <c>sql_table_name_suffix</c> and all
+    /// downstream references. REQ-UNIV-020 — approved rename path.
+    /// </summary>
+    Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default);
 }
