@@ -80,7 +80,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 
 ## Phase 5: Portfolio Analytics
 
-**Entry precondition:** The corporate-action detection threshold calibration note (`docs/adr/0004-calibration-note-YYYYMMDD.md`) must be committed before Phase 5 implementation begins. This calibration governs which positions enter the `SuspendedForCorporateAction` state (EC-3 / REQ-PLC-00x) and the threshold cannot be changed without re-verifying the detection code. See ADR-0004 for calibration owner, sample window, and deliverable form.
+**Entry precondition:** The corporate-action detection threshold calibration note (`docs/adr/0004-calibration-note-20260501.md`) is committed and ADR-0004 is accepted. The 50% default threshold is confirmed for Phase A operations. See the calibration note for analysis of Nifty 500 corporate actions from the 2022–2023 sample window. This calibration governs which positions enter the `SuspendedForCorporateAction` state (EC-3 / REQ-PLC-00x) and the threshold cannot be changed without re-verifying the detection code.
 
 - sync trades, holdings, positions, and orders from FYERS
 - build immutable trade ledger

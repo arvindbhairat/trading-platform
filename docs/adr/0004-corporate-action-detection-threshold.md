@@ -2,7 +2,9 @@
 
 ## Status
 
-**Proposed — threshold requires calibration before Phase 5 (portfolio) implementation**
+**Accepted — 2026-05-01 — calibration note committed at `docs/adr/0004-calibration-note-20260501.md`**
+
+The calibration note confirms the 50% default as the correct threshold for Phase A operations. See the calibration note for full analysis of Nifty 500 corporate actions from the 2022–2023 sample window, false-positive/false-negative estimates, and monitoring plan.
 
 ---
 
