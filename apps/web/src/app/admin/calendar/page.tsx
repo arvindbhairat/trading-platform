@@ -21,6 +21,14 @@ import { getToken, apiFetch } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+interface CoverageData {
+  unconfirmed_count: number;
+  earliest_unconfirmed_date: string | null;
+  unconfirmed_dates: string[];
+  checked_from: string;
+  checked_to: string;
+}
+
 interface CalendarEntry {
   id: string;
   sessionDate: string;
@@ -140,6 +148,7 @@ export default function AdminCalendarPage() {
   const router = useRouter();
 
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
+  const [coverage, setCoverage] = useState<CoverageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -179,14 +188,23 @@ export default function AdminCalendarPage() {
       if (filterTo) params.set("to", filterTo);
       if (filterType) params.set("sessionType", filterType);
 
-      const res = await apiFetch(`/api/v1/admin/calendar/?${params.toString()}`);
-      if (!res.ok) {
-        setError(`Failed to load calendar entries: ${res.status}`);
+      const [entriesRes, coverageRes] = await Promise.all([
+        apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
+        apiFetch("/api/v1/admin/calendar/coverage"),
+      ]);
+
+      if (!entriesRes.ok) {
+        setError(`Failed to load calendar entries: ${entriesRes.status}`);
         setLoading(false);
         return;
       }
 
-      const data = await res.json();
+      if (coverageRes.ok) {
+        const covData: CoverageData = await coverageRes.json();
+        setCoverage(covData);
+      }
+
+      const data = await entriesRes.json();
       const docs: ApiDocument[] = data.entries ?? [];
       setEntries(docs.map(mapDocument));
     } catch (err) {
@@ -372,6 +390,32 @@ export default function AdminCalendarPage() {
           Session records define market hours; non-trading-day markers
           explicitly signal exchange closure.
         </p>
+
+        {/* Coverage warning banner — REQ-CALENDAR-007 */}
+        {coverage && coverage.unconfirmed_count > 0 && (
+          <Card
+            accent="warn"
+            style={{
+              padding: "var(--s-4) var(--s-6)",
+              marginBottom: "var(--s-6)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+              <Icon name="alert-triangle" size={18} />
+              <span className="t-body-sm">
+                <strong>{coverage.unconfirmed_count} unconfirmed weekday(s)</strong>{" "}
+                in the next 30 days
+                {coverage.earliest_unconfirmed_date && (
+                  <> (earliest: {formatDate(coverage.earliest_unconfirmed_date)})</>
+                )}
+                . Add session records or non-trading-day markers to resolve.
+              </span>
+            </div>
+          </Card>
+        )}
 
         {/* Notification banner */}
         {notification && (

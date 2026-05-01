@@ -1,7 +1,7 @@
 {
   "current_phase": "P3",
   "current_version": "v0.4",
-  "current_task_id": "P3-T4",
+  "current_task_id": "P3-T5",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -47,10 +47,10 @@
     "P3-T1",
     "P2-T19",
     "P3-T2",
-    "P3-T3"
+    "P3-T3",
+    "P3-T4"
   ],
   "pending_tasks": [
-    "P3-T4",
     "P3-T5",
     "P3-T6",
     "P3-T7",
@@ -319,7 +319,8 @@
       "REQ-CALENDAR-003",
       "REQ-CALENDAR-004",
       "REQ-CALENDAR-005",
-      "REQ-CALENDAR-006"
+      "REQ-CALENDAR-006",
+      "REQ-CALENDAR-007"
     ],
     "P4": [],
     "P5": [],
@@ -329,5 +330,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T14:20:00Z"
+  "last_updated": "2026-05-01T21:00:00Z"
 }

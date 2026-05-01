@@ -20,6 +20,14 @@ import { getToken, apiFetch } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+interface CoverageData {
+  unconfirmed_count: number;
+  earliest_unconfirmed_date: string | null;
+  unconfirmed_dates: string[];
+  checked_from: string;
+  checked_to: string;
+}
+
 interface FailedJobEntry {
   jobType: string;
   scheduledRunTime: string;
@@ -46,6 +54,7 @@ export default function AdminHomePage() {
 
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<TransferRecoverySummary | null>(null);
+  const [coverage, setCoverage] = useState<CoverageData | null>(null);
   const [dismissing, setDismissing] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
 
@@ -60,10 +69,13 @@ export default function AdminHomePage() {
         return;
       }
 
-      const res = await apiFetch("/api/v1/admin/transfer-recovery-summary");
+      const [summaryRes, coverageRes] = await Promise.all([
+        apiFetch("/api/v1/admin/transfer-recovery-summary"),
+        apiFetch("/api/v1/admin/calendar/coverage"),
+      ]);
 
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
+      if (!summaryRes.ok) {
+        if (summaryRes.status === 401 || summaryRes.status === 403) {
           router.replace("/login");
           return;
         }
@@ -71,7 +83,12 @@ export default function AdminHomePage() {
         return;
       }
 
-      const data: TransferRecoverySummary = await res.json();
+      if (coverageRes.ok) {
+        const covData: CoverageData = await coverageRes.json();
+        setCoverage(covData);
+      }
+
+      const data: TransferRecoverySummary = await summaryRes.json();
       setSummary(data);
     } catch {
       // Ignore fetch errors — retry on next action.
@@ -383,6 +400,49 @@ export default function AdminHomePage() {
               </Card>
             )}
 
+            {/* ── Calendar Coverage Warning ──────────────────────────── */}
+            {coverage && coverage.unconfirmed_count > 0 && (
+              <Card
+                accent="warn"
+                style={{
+                  padding: "var(--s-6)",
+                  marginBottom: "var(--s-6)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-3)",
+                    marginBottom: "var(--s-3)",
+                  }}
+                >
+                  <Icon name="alert-triangle" size={20} />
+                  <h2 style={{ margin: 0 }}>Calendar coverage</h2>
+                  <Pill tone="warn">
+                    {coverage.unconfirmed_count} unconfirmed
+                  </Pill>
+                </div>
+                <p className="t-body-sm" style={{ marginBottom: "var(--s-3)" }}>
+                  <strong>{coverage.unconfirmed_count} unconfirmed weekday(s)</strong>{" "}
+                  in the next 30 days
+                  {coverage.earliest_unconfirmed_date && (
+                    <> (earliest: {formatDate(coverage.earliest_unconfirmed_date)})</>
+                  )}
+                  . Each weekday must have either a session record or an
+                  explicit non-trading-day marker. Unconfirmed dates block the
+                  A&rarr;B operating phase transition.
+                </p>
+                <Btn
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => router.push("/admin/calendar")}
+                >
+                  Open trading calendar
+                </Btn>
+              </Card>
+            )}
+
             {/* ── Standard Dashboard Content ─────────────────────────── */}
             <div
               style={{
@@ -437,6 +497,18 @@ export default function AdminHomePage() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00+05:30");
+  return d.toLocaleDateString("en-IN", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+}
 
 function formatDateTime(iso: string): string {
   try {

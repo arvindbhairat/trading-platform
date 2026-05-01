@@ -150,6 +150,55 @@ public static class TradingCalendarEndpoints
         .RequireAuthorization()
         .WithTags(Tag);
 
+        // GET /api/v1/admin/calendar/coverage — calendar coverage check
+        // REQ-CALENDAR-007: detects weekdays in the next 30 days that have
+        // neither a session record nor a non-trading-day marker.
+        admin.MapGet("/coverage", async (
+            ITradingCalendarRepository repo,
+            CancellationToken ct) =>
+        {
+            // Today in Asia/Kolkata (IST)
+            var istNow = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, IstTimeZone.Instance);
+            var today = DateOnly.FromDateTime(istNow);
+            var fromDate = today.ToString("yyyy-MM-dd");
+            var toDate = today.AddDays(30).ToString("yyyy-MM-dd");
+
+            // Fetch all entries in the 31-day window (today + 30).
+            var entries = await repo.GetAllAsync(fromDate, toDate, null, ct);
+            var coveredDates = new HashSet<string>(
+                entries.Select(e => e.SessionDate));
+
+            var unconfirmedDates = new List<string>();
+
+            for (int i = 0; i <= 30; i++)
+            {
+                var date = today.AddDays(i);
+
+                // Only weekdays (Monday through Friday).
+                if (date.DayOfWeek >= DayOfWeek.Monday &&
+                    date.DayOfWeek <= DayOfWeek.Friday)
+                {
+                    var dateStr = date.ToString("yyyy-MM-dd");
+                    if (!coveredDates.Contains(dateStr))
+                    {
+                        unconfirmedDates.Add(dateStr);
+                    }
+                }
+            }
+
+            return Results.Ok(new
+            {
+                unconfirmed_count = unconfirmedDates.Count,
+                earliest_unconfirmed_date = unconfirmedDates.FirstOrDefault(),
+                unconfirmed_dates = unconfirmedDates,
+                checked_from = fromDate,
+                checked_to = toDate
+            });
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
         // DELETE /api/v1/admin/calendar/{id} — delete a calendar entry
         admin.MapDelete("/{id}", async (
             string id,

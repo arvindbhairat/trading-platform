@@ -1,3 +1,4 @@
+using SignalStack.Api.Admin;
 using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
 
@@ -13,18 +14,23 @@ namespace SignalStack.Api.PhaseEnforcement;
 /// Current checks:
 /// - Tester ceiling exceeded (REQ-LEGAL-003): approved active users > ceiling
 ///   indicates a direct DB bypass of the approval-flow ceiling enforcement.
+/// - Calendar coverage (REQ-CALENDAR-007): unconfirmed weekdays in the next
+///   30 days must be resolved before A->B transition is permitted.
 /// </summary>
 public sealed class PhaseConstraintService
 {
     private readonly ISysConfigRepository _sysConfig;
     private readonly IUserRepository _userRepo;
+    private readonly ITradingCalendarRepository _calendarRepo;
 
     public PhaseConstraintService(
         ISysConfigRepository sysConfig,
-        IUserRepository userRepo)
+        IUserRepository userRepo,
+        ITradingCalendarRepository calendarRepo)
     {
         _sysConfig = sysConfig;
         _userRepo = userRepo;
+        _calendarRepo = calendarRepo;
     }
 
     /// <summary>
@@ -56,6 +62,48 @@ public sealed class PhaseConstraintService
                 SuggestedAction =
                     "Review the user list and deactivate excess accounts " +
                     "to bring the count within the ceiling."
+            });
+        }
+
+        // REQ-CALENDAR-007: Calendar coverage check.
+        // Any unconfirmed weekday in the next 30 days blocks A->B transition.
+        var istNow = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.UtcNow, IstTimeZone.Instance);
+        var today = DateOnly.FromDateTime(istNow);
+        var fromDate = today.ToString("yyyy-MM-dd");
+        var toDate = today.AddDays(30).ToString("yyyy-MM-dd");
+
+        var allEntries = await _calendarRepo.GetAllAsync(fromDate, toDate, null, ct);
+        var coveredDates = new HashSet<string>(
+            allEntries.Select(e => e.SessionDate));
+
+        var unconfirmedDates = new List<string>();
+        for (int i = 0; i <= 30; i++)
+        {
+            var date = today.AddDays(i);
+            if (date.DayOfWeek >= DayOfWeek.Monday &&
+                date.DayOfWeek <= DayOfWeek.Friday)
+            {
+                var dateStr = date.ToString("yyyy-MM-dd");
+                if (!coveredDates.Contains(dateStr))
+                {
+                    unconfirmedDates.Add(dateStr);
+                }
+            }
+        }
+
+        if (unconfirmedDates.Count > 0)
+        {
+            violations.Add(new PhaseConstraintViolation
+            {
+                Constraint = "calendar_coverage",
+                Severity = "critical",
+                Message =
+                    $"{unconfirmedDates.Count} unconfirmed weekday(s) in " +
+                    $"the next 30 days (earliest: {unconfirmedDates[0]}).",
+                SuggestedAction =
+                    "Add session records or non-trading-day markers for all " +
+                    "unconfirmed weekdays on the Trading Calendar page."
             });
         }
 
