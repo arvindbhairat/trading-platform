@@ -128,6 +128,28 @@ public sealed class MongoUserRepository : IUserRepository
             cancellationToken: ct);
     }
 
+    // REQ-LEGAL-004/008, REQ-PRIVACY-003/007: records legal document acceptance.
+    public async Task UpdateLegalAcceptanceAsync(
+        string userId,
+        string? acceptedTosVersion,
+        string? acceptedPrivacyVersion,
+        string? acceptedTesterAcknowledgementVersion,
+        bool acceptedMinorDeclaration,
+        DateTime acceptedAt,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<UserDocument>.Filter.Eq(u => u.UserId, userId);
+        var update = Builders<UserDocument>.Update
+            .Set(u => u.AcceptedTosVersion, acceptedTosVersion)
+            .Set(u => u.AcceptedPrivacyVersion, acceptedPrivacyVersion)
+            .Set(u => u.AcceptedTesterAcknowledgementVersion, acceptedTesterAcknowledgementVersion)
+            .Set(u => u.AcceptedMinorDeclaration, acceptedMinorDeclaration)
+            .Set(u => u.LegalAcceptedAt, acceptedAt)
+            .Set(u => u.UpdatedAt, acceptedAt);
+
+        await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
     // REQ-ROLE-005: atomically creates or promotes the user to admin + approved.
     public async Task UpsertAdminOnSignInAsync(
         string userId,

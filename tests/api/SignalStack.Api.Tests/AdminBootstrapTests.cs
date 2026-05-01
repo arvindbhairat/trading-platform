@@ -50,6 +50,11 @@ public sealed class AdminBootstrapTests : IClassFixture<AuthTestApiFactory>
         await userRepo.UpsertAdminOnSignInAsync(
             userId, "admin@signalstack.test", "Admin Session", "google");
 
+        // P2-T14: mark legal documents as accepted so session/status does not
+        // return "pending_acknowledgement" before the FYERS check.
+        await userRepo.UpdateLegalAcceptanceAsync(
+            userId, "v1", "v1", "v1", true, DateTime.UtcNow);
+
         using var client = _factory.CreateClient();
         var token = ForgeToken(userId, "admin@signalstack.test");
         client.DefaultRequestHeaders.Authorization =

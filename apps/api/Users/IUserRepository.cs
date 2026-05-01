@@ -80,6 +80,20 @@ public interface IUserRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// REQ-LEGAL-004/008, REQ-PRIVACY-003/007: records the user's acceptance
+    /// of the current legal document versions.  Sets all five fields atomically
+    /// and updates <c>updated_at</c>.
+    /// </summary>
+    Task UpdateLegalAcceptanceAsync(
+        string userId,
+        string? acceptedTosVersion,
+        string? acceptedPrivacyVersion,
+        string? acceptedTesterAcknowledgementVersion,
+        bool acceptedMinorDeclaration,
+        DateTime acceptedAt,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// REQ-RECOVERY-005: admin-assisted rebind — replaces all linked identities
     /// with a single new primary identity and clears the old provider/key.
     /// Only the OAuth identity binding changes; all other state is preserved.

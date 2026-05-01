@@ -83,7 +83,7 @@ function AuthCallbackContent() {
           router.replace("/deactivated");
           break;
         case "pending_acknowledgement":
-          router.replace("/login?error=acknowledgement_required");
+          router.replace("/accept-legal");
           break;
         case "active":
         default:

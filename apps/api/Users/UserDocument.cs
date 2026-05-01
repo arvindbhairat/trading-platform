@@ -69,6 +69,30 @@ public sealed class UserDocument
     [BsonIgnoreIfNull]
     public List<LinkedIdentity>? LinkedIdentities { get; init; }
 
+    // REQ-LEGAL-004/008, REQ-PRIVACY-003: accepted legal document versions.
+    // Null when the user has not yet accepted the respective document.
+    // Compared against sys_config legal.*.current_version on session/status.
+    [BsonElement("accepted_tos_version")]
+    [BsonIgnoreIfNull]
+    public string? AcceptedTosVersion { get; set; }
+
+    [BsonElement("accepted_privacy_version")]
+    [BsonIgnoreIfNull]
+    public string? AcceptedPrivacyVersion { get; set; }
+
+    [BsonElement("accepted_tester_acknowledgement_version")]
+    [BsonIgnoreIfNull]
+    public string? AcceptedTesterAcknowledgementVersion { get; set; }
+
+    // REQ-PRIVACY-007: minor self-declaration (user affirms they are 18+).
+    [BsonElement("accepted_minor_declaration")]
+    public bool AcceptedMinorDeclaration { get; set; }
+
+    // Timestamp of the most recent legal acceptance batch (REQ-LEGAL-004).
+    [BsonElement("legal_accepted_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? LegalAcceptedAt { get; set; }
+
     [BsonElement("created_at")]
     public required DateTime CreatedAt { get; init; }
 

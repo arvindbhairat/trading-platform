@@ -2,9 +2,11 @@ using System.Collections.Concurrent;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
+using MongoDB.Bson;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Sessions;
+using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
 
 namespace SignalStack.Api.Auth;
@@ -367,6 +369,10 @@ public static class AuthEndpoints
         // Returns the portal session state for the authenticated user.
         // REQ-SESSION-007/010/011/012/013: drives the frontend routing to the
         // correct lifecycle screen (fyers_required, pending_approval, active, …).
+        // P2-T14 wires the legal-acceptance check: approved users who have not
+        // accepted the current legal document versions see "pending_acknowledgement"
+        // before they can proceed to FYERS or the dashboard (REQ-LEGAL-004/008,
+        // REQ-PRIVACY-003/007).
         // P2-T7 wires the FYERS-token check: approved users without a valid token
         // see "fyers_required"; approved users with a dirty token see "fyers_dirty"
         // (admin sees non-blocking warning per REQ-SESSION-009); approved users
@@ -375,14 +381,16 @@ public static class AuthEndpoints
             HttpContext context,
             ISessionRepository sessionRepo,
             IUserRepository userRepo,
-            IFyersTokenRepository fyersTokenRepo) =>
+            IFyersTokenRepository fyersTokenRepo,
+            ISysConfigRepository configRepo) =>
         {
+            var ct = context.RequestAborted;
             var jti = context.User.FindFirst("jti")?.Value ?? "";
-            var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
+            var session = await sessionRepo.FindBySessionTokenAsync(jti, ct);
             if (session is null)
                 return Results.Unauthorized();
 
-            var user = await userRepo.FindByUserIdAsync(session.UserId, context.RequestAborted);
+            var user = await userRepo.FindByUserIdAsync(session.UserId, ct);
 
             // REQ-ROLE-004 / REQ-SESSION-012: unapproved users see the approval-pending screen.
             if (user is null || user.Status == UserApprovalState.PendingApproval)
@@ -400,6 +408,27 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "deactivated",
+                    expires_at = session.ExpiresAt.ToString("o")
+                });
+            }
+
+            // REQ-LEGAL-004/008, REQ-PRIVACY-003/007: legal acceptance check.
+            // Approved users must accept all current legal versions before they
+            // can proceed to FYERS configuration or the dashboard.
+            var tosVersion = await GetSysConfigStringAsync(configRepo, "legal.tos.current_version", ct);
+            var privacyVersion = await GetSysConfigStringAsync(configRepo, "legal.privacy.current_version", ct);
+            var testerAckVersion = await GetSysConfigStringAsync(configRepo, "legal.tester_acknowledgement.current_version", ct);
+
+            var tosMatch = string.IsNullOrEmpty(tosVersion) || user.AcceptedTosVersion == tosVersion;
+            var privacyMatch = string.IsNullOrEmpty(privacyVersion) || user.AcceptedPrivacyVersion == privacyVersion;
+            var ackMatch = string.IsNullOrEmpty(testerAckVersion) || user.AcceptedTesterAcknowledgementVersion == testerAckVersion;
+            var minorDeclared = user.AcceptedMinorDeclaration;
+
+            if (!tosMatch || !privacyMatch || !ackMatch || !minorDeclared)
+            {
+                return Results.Ok(new
+                {
+                    state = "pending_acknowledgement",
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -752,6 +781,130 @@ public static class AuthEndpoints
             });
         }).RequireAuthorization();
 
+        // GET /api/v1/auth/legal/versions
+        // REQ-LEGAL-004/008, REQ-PRIVACY-003: returns the current legal document
+        // versions from sys_config so the accept-legal page can display them.
+        // Unauthenticated — the accept-legal page needs this before the user has
+        // completed legal acceptance (but after JWT issuance).
+        auth.MapGet("/legal/versions", async (
+            ISysConfigRepository configRepo,
+            HttpContext context) =>
+        {
+            var ct = context.RequestAborted;
+            var tos = await GetSysConfigStringAsync(configRepo, "legal.tos.current_version", ct);
+            var privacy = await GetSysConfigStringAsync(configRepo, "legal.privacy.current_version", ct);
+            var testerAck = await GetSysConfigStringAsync(configRepo, "legal.tester_acknowledgement.current_version", ct);
+
+            return Results.Ok(new
+            {
+                tos_version = tos ?? "v1",
+                privacy_version = privacy ?? "v1",
+                tester_acknowledgement_version = testerAck ?? "v1"
+            });
+        }).RequireAuthorization();
+
+        // POST /api/v1/auth/accept-legal
+        // REQ-LEGAL-004/008, REQ-PRIVACY-003/007: records the user's acceptance
+        // of all current legal document versions.  Validates that the submitted
+        // versions match sys_config, writes audit events for each acceptance,
+        // and updates the user document.
+        // CSRF-protected via the global CsrfMiddleware.
+        auth.MapPost("/accept-legal", async (
+            HttpContext context,
+            IUserRepository userRepo,
+            ISysConfigRepository configRepo,
+            IAuditEventRepository auditRepo) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null)
+                return Results.Unauthorized();
+
+            var body = await context.Request.ReadFromJsonAsync<AcceptLegalRequest>(
+                cancellationToken: context.RequestAborted);
+            if (body is null)
+                return Results.BadRequest(new { error = "invalid_body" });
+
+            // Validate that submitted versions match sys_config.
+            var ct = context.RequestAborted;
+            var tosVersion = await GetSysConfigStringAsync(configRepo, "legal.tos.current_version", ct);
+            var privacyVersion = await GetSysConfigStringAsync(configRepo, "legal.privacy.current_version", ct);
+            var testerAckVersion = await GetSysConfigStringAsync(configRepo, "legal.tester_acknowledgement.current_version", ct);
+
+            if (body.AcceptedTosVersion != (tosVersion ?? "v1"))
+                return Results.BadRequest(new { error = "tos_version_mismatch" });
+
+            if (body.AcceptedPrivacyVersion != (privacyVersion ?? "v1"))
+                return Results.BadRequest(new { error = "privacy_version_mismatch" });
+
+            if (body.AcceptedTesterAcknowledgementVersion != (testerAckVersion ?? "v1"))
+                return Results.BadRequest(new { error = "tester_acknowledgement_version_mismatch" });
+
+            // REQ-PRIVACY-003: privacy consent must be a distinct affirmative checkbox.
+            if (string.IsNullOrWhiteSpace(body.AcceptedPrivacyVersion))
+                return Results.BadRequest(new { error = "privacy_consent_required" });
+
+            // REQ-PRIVACY-007: minor self-declaration is required.
+            if (!body.AcceptedMinorDeclaration)
+                return Results.BadRequest(new { error = "minor_declaration_required" });
+
+            var now = DateTime.UtcNow;
+
+            // Write audit events for each acceptance (REQ-LEGAL-004/008, REQ-PRIVACY-003).
+            await auditRepo.RecordAsync(
+                userId, "legal_tos_accepted", now,
+                details: new Dictionary<string, object?>
+                {
+                    ["version"] = body.AcceptedTosVersion,
+                    ["document"] = "terms_of_service"
+                },
+                cancellationToken: ct);
+
+            await auditRepo.RecordAsync(
+                userId, "legal_privacy_accepted", now,
+                details: new Dictionary<string, object?>
+                {
+                    ["version"] = body.AcceptedPrivacyVersion,
+                    ["document"] = "privacy_policy"
+                },
+                cancellationToken: ct);
+
+            await auditRepo.RecordAsync(
+                userId, "legal_tester_acknowledgement_accepted", now,
+                details: new Dictionary<string, object?>
+                {
+                    ["version"] = body.AcceptedTesterAcknowledgementVersion,
+                    ["document"] = "tester_acknowledgement"
+                },
+                cancellationToken: ct);
+
+            await auditRepo.RecordAsync(
+                userId, "legal_minor_declaration_submitted", now,
+                details: new Dictionary<string, object?>
+                {
+                    ["declared_minor"] = !body.AcceptedMinorDeclaration,
+                    ["declared_adult"] = body.AcceptedMinorDeclaration
+                },
+                cancellationToken: ct);
+
+            // Update the user document.
+            await userRepo.UpdateLegalAcceptanceAsync(
+                userId,
+                body.AcceptedTosVersion,
+                body.AcceptedPrivacyVersion,
+                body.AcceptedTesterAcknowledgementVersion,
+                body.AcceptedMinorDeclaration,
+                now,
+                ct);
+
+            return Results.Ok(new { accepted = true });
+        }).RequireAuthorization();
+
         // Testing / development only: GET /api/v1/auth/test-token
         // Issues a JWT, upserts the test user as approved, and creates a session record
         // so subsequent tests exercise the "approved" path through session/status.
@@ -771,6 +924,17 @@ public static class AuthEndpoints
                     testUserId, "test@example.com", "Test User", "test",
                     context.RequestAborted);
                 await userRepo.SetApprovedAsync(testUserId, context.RequestAborted);
+
+                // P2-T14: mark legal documents as accepted so session/status does not
+                // return "pending_acknowledgement" before the FYERS check.
+                await userRepo.UpdateLegalAcceptanceAsync(
+                    testUserId,
+                    acceptedTosVersion: "v1",
+                    acceptedPrivacyVersion: "v1",
+                    acceptedTesterAcknowledgementVersion: "v1",
+                    acceptedMinorDeclaration: true,
+                    acceptedAt: DateTime.UtcNow,
+                    ct: context.RequestAborted);
 
                 var (jwt, jti, issuedAt, expiresAt) = jwtService.IssueTokenWithMeta(
                     testUserId, "test@example.com", "Test User", "test");
@@ -832,6 +996,17 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    // REQ-LEGAL-004/008, REQ-PRIVACY-003/007: helper to read a string value from sys_config.
+    internal static async Task<string?> GetSysConfigStringAsync(
+        ISysConfigRepository configRepo, string key, CancellationToken ct)
+    {
+        var doc = await configRepo.GetByKeyAsync(key, ct);
+        if (doc is null || !doc.Contains("value"))
+            return null;
+        var val = doc["value"];
+        return val.IsString ? val.AsString : val.ToString();
+    }
 }
 
 // Avoids a runtime dependency on System.IdentityModel.Tokens.Jwt just for the constant.
@@ -868,3 +1043,10 @@ internal static class EmailMask
         return maskedLocal + domain;
     }
 }
+
+// REQ-LEGAL-004/008, REQ-PRIVACY-003/007: request body for POST /auth/accept-legal.
+internal sealed record AcceptLegalRequest(
+    string AcceptedTosVersion,
+    string AcceptedPrivacyVersion,
+    string AcceptedTesterAcknowledgementVersion,
+    bool AcceptedMinorDeclaration);

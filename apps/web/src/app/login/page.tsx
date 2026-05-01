@@ -113,7 +113,8 @@ export default function LoginPage() {
               marginBottom: 0,
             }}
           >
-            By signing in you agree to the platform terms and privacy policy.
+            After signing in, you will be asked to review and accept the
+            platform terms, privacy policy, and tester acknowledgement.
           </p>
         </Card>
       </div>

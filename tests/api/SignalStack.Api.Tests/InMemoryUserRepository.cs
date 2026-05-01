@@ -188,6 +188,27 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    public Task UpdateLegalAcceptanceAsync(
+        string userId,
+        string? acceptedTosVersion,
+        string? acceptedPrivacyVersion,
+        string? acceptedTesterAcknowledgementVersion,
+        bool acceptedMinorDeclaration,
+        DateTime acceptedAt,
+        CancellationToken ct = default)
+    {
+        if (_byUserId.TryGetValue(userId, out var doc))
+        {
+            doc.AcceptedTosVersion = acceptedTosVersion;
+            doc.AcceptedPrivacyVersion = acceptedPrivacyVersion;
+            doc.AcceptedTesterAcknowledgementVersion = acceptedTesterAcknowledgementVersion;
+            doc.AcceptedMinorDeclaration = acceptedMinorDeclaration;
+            doc.LegalAcceptedAt = acceptedAt;
+            doc.UpdatedAt = acceptedAt;
+        }
+        return Task.CompletedTask;
+    }
+
     public Task<UserDocument> RebindIdentityAsync(
         string targetUserId, string newProvider, string newProviderKey, string newEmail,
         CancellationToken ct = default)
