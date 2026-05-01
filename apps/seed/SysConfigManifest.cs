@@ -155,6 +155,10 @@ public static class SysConfigManifest
         new("legal.tester_acknowledgement.current_version","legal",      "string",  "v1",   "Current tester acknowledgement version identifier.",                                                                "REQ-LEGAL-004"),
         new("legal.disclaimer.long_version",           "legal",          "string",  "v1",   "Current long-form disclaimer version identifier.",                                                                  "REQ-LEGAL-007"),
 
+        // ── migrations ────────────────────────────────────────────────────
+        new("migrations.dual_read_window.active",        "migrations",     "boolean","false","When true, per-symbol DDL changes accept both old and new schema read paths during fleet-wide migration (REQ-MIGRATION-005).", "REQ-MIGRATION-005"),
+        new("migrations.dual_read_window.acknowledged",  "migrations",     "boolean","false","Admin acknowledgement that a batched migration has been verified complete and the dual-read window may be closed (REQ-MIGRATION-005).", "REQ-MIGRATION-005"),
+
         // ── Per-deployment keys ─────────────────────────────────────────
 
         // REQ-LEGAL-007: seeded per deployment with environment-specific values
