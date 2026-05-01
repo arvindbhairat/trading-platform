@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import React, { useState, type ReactNode, type CSSProperties } from "react";
+import Link from "next/link";
 
 // ---------------------------------------------------------------------------
 // Icon — Lucide-style SVG icons, 24x24 viewBox
@@ -367,30 +368,39 @@ export function LegalFooter() {
         borderTop: "1px solid var(--line-1)",
         background: "var(--bg-1)",
         display: "flex",
-        justifyContent: "space-between",
+        flexWrap: "wrap",
         alignItems: "center",
-        gap: "12px",
+        gap: "8px 16px",
         flexShrink: 0,
       }}
     >
-      <span>
+      <span style={{ flex: "1 1 auto", minWidth: "200px", lineHeight: 1.5 }}>
         Signal Stack is in private evaluation and is not registered with SEBI.
         All outputs are tools-generated from your own configured scans.
         You are the sole decision-maker.
       </span>
-      <a
-        href="#"
+      <span
         style={{
-          color: "var(--brand-300)",
-          textDecoration: "none",
-          whiteSpace: "nowrap",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          flexWrap: "wrap",
         }}
       >
-        Full disclaimer →
-      </a>
+        <Link href="/legal/tos" style={linkStyle}>Terms of Service</Link>
+        <Link href="/legal/privacy" style={linkStyle}>Privacy Policy</Link>
+        <Link href="/legal/disclaimer" style={linkStyle}>Disclaimer</Link>
+        <Link href="/legal/tester-acknowledgement" style={linkStyle}>Tester Acknow.</Link>
+      </span>
     </div>
   );
 }
+
+const linkStyle: React.CSSProperties = {
+  color: "var(--brand-300)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+};
 
 // ---------------------------------------------------------------------------
 // TopBar — app header
