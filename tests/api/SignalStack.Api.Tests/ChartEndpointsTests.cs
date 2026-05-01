@@ -238,4 +238,157 @@ public sealed class ChartEndpointsTests : IClassFixture<TestApiFactory>
         Assert.Equal(398, result[0].Low);    // Min Low
         Assert.Equal(416, result[0].Close);  // Last session Close
     }
+
+    // ── Rolling timeframe endpoint tests (REQ-TIMEFRAME-001/003/006) ──
+
+    [Fact]
+    public async Task GetChartData_with_timeframe_rolling3_returns_3_session_candle()
+    {
+        var symbol = "ROLL3";
+        var ohlcvRepo = new InMemoryOhlcvRepository();
+        ohlcvRepo.SeedDaily(symbol,
+            new OhlcvRecord(new DateOnly(2024, 1, 1), 100, 105, 99,  104, 100_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 2), 104, 108, 102, 107, 110_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 3), 107, 112, 106, 110, 120_000));
+
+        using var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IOhlcvRepository>(ohlcvRepo);
+                services.AddSingleton<ISymbolTableMapping>(
+                    new InMemorySymbolTableMapping((symbol, "ROLL3")));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        using var resp = await client.GetAsync(
+            $"/api/v1/chart/{symbol}?timeframe=rolling3&to=2024-01-03");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var result = await resp.Content.ReadFromJsonAsync<List<OhlcvRecord>>();
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(100, result[0].Open);   // Oldest session Open (REQ-TIMEFRAME-003)
+        Assert.Equal(112, result[0].High);   // Max High
+        Assert.Equal(99,  result[0].Low);    // Min Low
+        Assert.Equal(110, result[0].Close);  // Most recent Close (REQ-TIMEFRAME-003)
+    }
+
+    [Fact]
+    public async Task GetChartData_with_timeframe_rolling5_returns_5_session_candle()
+    {
+        var symbol = "ROLL5";
+        var ohlcvRepo = new InMemoryOhlcvRepository();
+        ohlcvRepo.SeedDaily(symbol,
+            new OhlcvRecord(new DateOnly(2024, 1, 1), 200, 205, 198, 203, 50_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 2), 203, 208, 201, 206, 60_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 3), 206, 210, 204, 209, 70_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 4), 209, 215, 207, 213, 80_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 5), 213, 218, 210, 216, 90_000));
+
+        using var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IOhlcvRepository>(ohlcvRepo);
+                services.AddSingleton<ISymbolTableMapping>(
+                    new InMemorySymbolTableMapping((symbol, "ROLL5")));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        using var resp = await client.GetAsync(
+            $"/api/v1/chart/{symbol}?timeframe=rolling5&to=2024-01-05");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var result = await resp.Content.ReadFromJsonAsync<List<OhlcvRecord>>();
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(200, result[0].Open);
+        Assert.Equal(218, result[0].High);
+        Assert.Equal(198, result[0].Low);
+        Assert.Equal(216, result[0].Close);
+    }
+
+    [Fact]
+    public async Task GetChartData_with_timeframe_rolling7_returns_7_session_candle()
+    {
+        var symbol = "ROLL7";
+        var ohlcvRepo = new InMemoryOhlcvRepository();
+        ohlcvRepo.SeedDaily(symbol,
+            new OhlcvRecord(new DateOnly(2024, 1, 1), 300, 305, 298, 303, 10_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 2), 303, 308, 301, 306, 11_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 3), 306, 310, 304, 309, 12_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 4), 309, 315, 307, 313, 13_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 5), 313, 318, 310, 316, 14_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 6), 316, 320, 314, 318, 15_000),
+            new OhlcvRecord(new DateOnly(2024, 1, 7), 318, 322, 315, 320, 16_000));
+
+        using var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IOhlcvRepository>(ohlcvRepo);
+                services.AddSingleton<ISymbolTableMapping>(
+                    new InMemorySymbolTableMapping((symbol, "ROLL7")));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        using var resp = await client.GetAsync(
+            $"/api/v1/chart/{symbol}?timeframe=rolling7&to=2024-01-07");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var result = await resp.Content.ReadFromJsonAsync<List<OhlcvRecord>>();
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(300, result[0].Open);
+        Assert.Equal(322, result[0].High);
+        Assert.Equal(298, result[0].Low);
+        Assert.Equal(320, result[0].Close);
+    }
+
+    [Fact]
+    public async Task GetChartData_with_invalid_timeframe_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        using var resp = await client.GetAsync(
+            "/api/v1/chart/RELIANCE?timeframe=invalid&from=2024-01-01&to=2024-01-31");
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetChartData_with_alias_d_returns_daily_data()
+    {
+        var symbol = "ALIAS";
+        var ohlcvRepo = new InMemoryOhlcvRepository();
+        ohlcvRepo.SeedDaily(symbol,
+            new OhlcvRecord(new DateOnly(2024, 1, 1), 500, 505, 498, 503, 30_000));
+
+        using var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IOhlcvRepository>(ohlcvRepo);
+                services.AddSingleton<ISymbolTableMapping>(
+                    new InMemorySymbolTableMapping((symbol, "ALIAS")));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        using var resp = await client.GetAsync(
+            $"/api/v1/chart/{symbol}?timeframe=d&from=2024-01-01&to=2024-01-31");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var result = await resp.Content.ReadFromJsonAsync<List<OhlcvRecord>>();
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(500, result[0].Open);
+    }
 }

@@ -34,12 +34,18 @@ interface OhlcvRecord {
   volume: number;
 }
 
-type Timeframe = "daily" | "weekly" | "monthly";
+type Timeframe = "daily" | "weekly" | "monthly" | "rolling3" | "rolling5" | "rolling7";
 
-const TIMEFRAMES: { id: Timeframe; label: string }[] = [
+const STANDARD_TIMEFRAMES: { id: Timeframe; label: string }[] = [
   { id: "daily", label: "1D" },
   { id: "weekly", label: "1W" },
   { id: "monthly", label: "1M" },
+];
+
+const ROLLING_TIMEFRAMES: { id: Timeframe; label: string }[] = [
+  { id: "rolling3", label: "3R" },
+  { id: "rolling5", label: "5R" },
+  { id: "rolling7", label: "7R" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -68,10 +74,8 @@ export default function ChartPage() {
 
   const loadHistoricalData = useCallback(async (sym: string, tf: Timeframe) => {
     try {
-      // Build the timeframe query param expected by the chart endpoint.
-      const tfParam = tf === "daily" ? "daily" : tf === "weekly" ? "weekly" : "monthly";
       const res = await apiFetch(
-        `/api/v1/chart/${encodeURIComponent(sym)}?timeframe=${tfParam}`
+        `/api/v1/chart/${encodeURIComponent(sym)}?timeframe=${tf}`
       );
       if (!res.ok) return;
 
@@ -352,9 +356,28 @@ export default function ChartPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 14 }}>
           {/* Chart */}
           <Card style={{ padding: 16 }}>
-            {/* Timeframe selector */}
-            <div style={{ display: "flex", gap: 6, marginBottom: "var(--s-4)" }}>
-              {TIMEFRAMES.map((tf) => (
+            {/* Timeframe selector: standard + rolling */}
+            <div style={{ display: "flex", gap: 6, marginBottom: "var(--s-4)", alignItems: "center" }}>
+              {STANDARD_TIMEFRAMES.map((tf) => (
+                <button
+                  key={tf.id}
+                  onClick={() => setTimeframe(tf.id)}
+                  style={{
+                    padding: "5px 12px",
+                    background: timeframe === tf.id ? "var(--bg-4)" : "transparent",
+                    border: "1px solid var(--line-1)",
+                    color: timeframe === tf.id ? "var(--fg-1)" : "var(--fg-2)",
+                    fontSize: 12,
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  {tf.label}
+                </button>
+              ))}
+              <div style={{ width: 1, height: 18, background: "var(--line-2)", margin: "0 2px" }} />
+              {ROLLING_TIMEFRAMES.map((tf) => (
                 <button
                   key={tf.id}
                   onClick={() => setTimeframe(tf.id)}

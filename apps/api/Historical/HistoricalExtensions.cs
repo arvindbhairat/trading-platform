@@ -1,3 +1,5 @@
+using SignalStack.Api.Admin;
+
 namespace SignalStack.Api.Historical;
 
 /// <summary>
@@ -6,6 +8,7 @@ namespace SignalStack.Api.Historical;
 /// Registers:
 /// - <see cref="ISymbolTableMapping"/> / <see cref="SymbolTableMappingService"/> — single shared mapping (REQ-HIST-011)
 /// - <see cref="IOhlcvRepository"/> / <see cref="SqlOhlcvRepository"/> — SQL Server OHLCV queries
+/// - <see cref="ITimeframeService"/> / <see cref="TimeframeService"/> — shared timeframe resolution (REQ-TIMEFRAME-004)
 ///
 /// REQ-HIST-003/004: table names constructed from <c>sql_table_name_suffix</c> via the mapping service.
 /// </summary>
@@ -15,6 +18,11 @@ public static class HistoricalExtensions
         this IServiceCollection services,
         string? sqlConnectionString)
     {
+        // Shared timeframe resolution — single source of truth for all timeframe definitions.
+        // REQ-TIMEFRAME-004: charting, signals, backtesting, and EODSR all use this service.
+        // REQ-CALENDAR-003: calendar-aware via ITradingCalendarRepository.
+        services.AddSingleton<ITimeframeService, TimeframeService>();
+
         // Symbol-table mapping — single shared service for all SQL Server table name resolution.
         // REQ-HIST-011: Every consumer must use this service.
         services.AddSingleton<ISymbolTableMapping, SymbolTableMappingService>();

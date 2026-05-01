@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.PrivacyRequest;
@@ -90,6 +91,12 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             ReplaceService<IPrivacyRequestRepository>(services,
                 new ServiceDescriptor(typeof(IPrivacyRequestRepository),
                     typeof(InMemoryPrivacyRequestRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed trading calendar repository with an in-memory
+            // implementation for timeframe and calendar tests (REQ-TIMEFRAME-004).
+            ReplaceService<ITradingCalendarRepository>(services,
+                new ServiceDescriptor(typeof(ITradingCalendarRepository),
+                    typeof(InMemoryTradingCalendarRepository), ServiceLifetime.Singleton));
         });
     }
 

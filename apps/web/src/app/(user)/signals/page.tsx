@@ -62,6 +62,9 @@ const TIMEFRAMES = [
   { id: "daily", label: "Daily" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
+  { id: "rolling3", label: "3-day Rolling" },
+  { id: "rolling5", label: "5-day Rolling" },
+  { id: "rolling7", label: "7-day Rolling" },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────

@@ -28,7 +28,11 @@ public sealed class SignalSubscriptionDocument
     [BsonElement("signal_type_id")]
     public required string SignalTypeId { get; init; }
 
-    /// <summary>Configured timeframe: "daily", "weekly", "monthly".</summary>
+    /// <summary>
+    /// Configured timeframe. Valid values per REQ-TIMEFRAME-001/REQ-TIMEFRAME-004:
+    /// "daily", "weekly", "monthly", "rolling3", "rolling5", "rolling7".
+    /// Rolling timeframes are evaluated on demand from D_ tables (REQ-TIMEFRAME-006).
+    /// </summary>
     [BsonElement("timeframe")]
     public string Timeframe { get; set; } = "daily";
 
