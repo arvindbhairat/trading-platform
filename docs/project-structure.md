@@ -263,16 +263,25 @@ tests/
 
 ---
 
-## `packages/` — Shared packages (PLANNED)
+## `packages/` — Shared packages
 
-Not yet scaffolded. When created, packages here are referenced by `apps/*` projects to avoid duplication.
+Packages are referenced by `apps/*` projects to avoid duplication.
 
 ```
 packages/
-├── shared-types/    ← Cross-app DTOs, request/response contracts, domain enums
-├── ui/              ← Shared React components, design tokens, layout primitives
-├── config/          ← Shared config loaders, Azure App Configuration integration, env validation
-└── testing/         ← Shared test helpers, fixtures, mocks, integration utilities
+├── config/
+│   └── SignalStack.Configuration/   ← Shared config loaders, Azure App Configuration, env validation,
+│                                        LKG cache, bootstrap, logging/redaction, ledger write-lock
+├── market-data/
+│   └── SignalStack.MarketData/      ← Market Data Provider (MDP) interface contract, DTOs
+│                                        (OhlcvRecord, QuoteRecord), provider type enum, and
+│                                        provider-resolution service from admin config
+├── migrations/
+│   ├── SignalStack.Migrations/       ← Mongo.Migration migrations (collection catalogue, indexes)
+│   └── SignalStack.SqlMigrations/    ← FluentMigrator migrations for SQL Server historical schema
+├── shared-types/    ← PLANNED: Cross-app DTOs, request/response contracts, domain enums
+├── ui/              ← PLANNED: Shared React components, design tokens, layout primitives
+└── testing/         ← PLANNED: Shared test helpers, fixtures, mocks, integration utilities
 ```
 
 Do not put application business logic in packages. Packages are for types, utilities, and shared infrastructure that have no domain opinions.
@@ -508,6 +517,7 @@ All three enforce the same non-negotiable guardrails. When in doubt, read `CLAUD
 | Worker utility / observability | `apps/worker/Lib/` |
 | Worker bootstrap config | `apps/worker/Config/` |
 | Cross-app DTO / contract | `packages/shared-types/` (when created) |
+| Market Data Provider interface / DTO | `packages/market-data/SignalStack.MarketData/` |
 | Shared React primitive | `packages/ui/` (when created) |
 | Azure IaC | `infra/azure/` |
 | Local dev container change | `infra/docker/` |

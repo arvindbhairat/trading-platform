@@ -1,7 +1,7 @@
 {
   "current_phase": "P3",
   "current_version": "v0.4",
-  "current_task_id": "P3-T8",
+  "current_task_id": "P3-T9",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -51,10 +51,10 @@
     "P3-T4",
     "P3-T5",
     "P3-T6",
-    "P3-T7"
+    "P3-T7",
+    "P3-T8"
   ],
   "pending_tasks": [
-    "P3-T8",
     "P3-T9",
     "P3-T10",
     "P3-T11",
@@ -251,6 +251,9 @@
       "REQ-CONFIG-005a",
       "REQ-CONFIG-005",
       "REQ-CONFIG-007",
+      "REQ-CONFIG-009",
+      "REQ-CONFIG-010",
+      "REQ-CONFIG-011",
       "REQ-RECOVERY-001",
       "REQ-RECOVERY-002",
       "REQ-RECOVERY-003",
@@ -269,9 +272,6 @@
       "REQ-AUTH-014",
       "REQ-SESSION-009",
       "REQ-CONFIG-004",
-      "REQ-CONFIG-009",
-      "REQ-CONFIG-010",
-      "REQ-CONFIG-011",
       "REQ-MIGRATION-002",
       "REQ-MIGRATION-004",
       "REQ-MIGRATION-006",
@@ -336,7 +336,10 @@
       "REQ-UNIV-020",
       "REQ-UNIV-021",
       "REQ-UNIV-021a",
-      "REQ-UNIV-021b"
+      "REQ-UNIV-021b",
+      "REQ-MARKET-002a",
+      "REQ-MARKET-002b",
+      "REQ-MKTPROV-005"
     ],
     "P4": [],
     "P5": [],
@@ -346,5 +349,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T22:30:00Z"
+  "last_updated": "2026-05-01T22:45:00Z"
 }
