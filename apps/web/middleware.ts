@@ -39,6 +39,9 @@ export function middleware(request: NextRequest) {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  // REQ-LEGAL-002: Phase A — noindex all portal pages to prevent SEO indexing.
+  response.headers.set("X-Robots-Tag", "noindex");
+
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
   return response;

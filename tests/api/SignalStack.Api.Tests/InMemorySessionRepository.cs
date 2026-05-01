@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MongoDB.Bson;
 using SignalStack.Api.Sessions;
 
 namespace SignalStack.Api.Tests;
@@ -66,6 +67,7 @@ public sealed class InMemorySessionRepository : ISessionRepository
     public Task UpdateStepUpAsync(
         string sessionToken,
         DateTime stepUpAuthenticatedAt,
+        ObjectId stepUpEventId,
         CancellationToken cancellationToken = default)
     {
         if (_byToken.TryGetValue(sessionToken, out var doc))

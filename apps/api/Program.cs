@@ -8,6 +8,7 @@ using SignalStack.Api.SysConfig;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
+using SignalStack.Api.PhaseEnforcement;
 using SignalStack.Api.Pld;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
@@ -47,6 +48,9 @@ builder.Services.AddFyersTokenManagement();
 
 // PLD WebSocket session lease — REQ-SESSION-014
 builder.Services.AddPldWebSocketServices();
+
+// Phase A constraint enforcement services — REQ-LEGAL-002
+builder.Services.AddPhaseConstraintServices();
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -137,6 +141,11 @@ app.UseMiddleware<SessionValidationMiddleware>();
 
 // CSRF enforcement on authenticated mutations — REQ-SEC-001 defence-in-depth.
 app.UseMiddleware<CsrfMiddleware>();
+
+// Phase A constraint enforcement — REQ-LEGAL-002.
+// Blocks billing/payment endpoints with HTTP 403 during Phase A;
+// passes through when phase is B or C.
+app.UseMiddleware<PhaseEnforcementMiddleware>();
 
 app.Use(async (context, next) =>
 {
