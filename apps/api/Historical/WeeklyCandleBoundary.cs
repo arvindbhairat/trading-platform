@@ -96,21 +96,21 @@ public static class WeeklyCandleBoundary
         // Group by ISO year + ISO week.
         var weekGroups = new List<(int IsoYear, int IsoWeek, List<OhlcvRecord> Records)>();
         List<OhlcvRecord>? currentGroup = null;
-        var currentKey = (-1, -1);
+        int lastIsoYear = -1, lastIsoWeek = -1;
 
         foreach (var record in dailyRecords)
         {
             var (isoYear, isoWeek) = GetIsoWeek(record.Date);
-            var key = (isoYear, isoWeek);
 
-            if (key != currentKey)
+            if (isoYear != lastIsoYear || isoWeek != lastIsoWeek)
             {
                 if (currentGroup is not null)
                 {
-                    weekGroups.Add((currentKey.isoYear, currentKey.isoWeek, currentGroup));
+                    weekGroups.Add((lastIsoYear, lastIsoWeek, currentGroup));
                 }
                 currentGroup = [record];
-                currentKey = key;
+                lastIsoYear = isoYear;
+                lastIsoWeek = isoWeek;
             }
             else
             {
@@ -121,7 +121,7 @@ public static class WeeklyCandleBoundary
         // Don't forget the last group.
         if (currentGroup is not null)
         {
-            weekGroups.Add((currentKey.isoYear, currentKey.isoWeek, currentGroup));
+            weekGroups.Add((lastIsoYear, lastIsoWeek, currentGroup));
         }
 
         return weekGroups

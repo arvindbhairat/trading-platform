@@ -112,6 +112,30 @@ public sealed class MongoSysConfigRepository : ISysConfigRepository
         return await cursor.ToListAsync(ct);
     }
 
+    public async Task<decimal> GetDecimalAsync(string key, decimal defaultValue = 0m, CancellationToken ct = default)
+    {
+        var doc = await FindByKeyAsync(key, ct);
+        if (doc is null || !doc.Contains("value")) return defaultValue;
+
+        var raw = doc["value"];
+        return raw.IsInt32 ? (decimal)raw.AsInt32
+             : raw.IsInt64 ? (decimal)raw.AsInt64
+             : raw.IsDouble ? (decimal)raw.AsDouble
+             : defaultValue;
+    }
+
+    public async Task<long> GetLongAsync(string key, long defaultValue = 0, CancellationToken ct = default)
+    {
+        var doc = await FindByKeyAsync(key, ct);
+        if (doc is null || !doc.Contains("value")) return defaultValue;
+
+        var raw = doc["value"];
+        return raw.IsInt32 ? raw.AsInt32
+             : raw.IsInt64 ? raw.AsInt64
+             : raw.IsDouble ? (long)raw.AsDouble
+             : defaultValue;
+    }
+
     private async Task<BsonDocument?> FindByKeyAsync(string key, CancellationToken ct)
     {
         return await _sysConfig

@@ -16,6 +16,7 @@ using SignalStack.Api.Sessions;
 using SignalStack.Api.Universe;
 using SignalStack.Api.Users;
 using SignalStack.Api.Historical;
+using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -79,6 +80,9 @@ builder.Services.AddSignalSubscriptionManagement();
 // Historical OHLCV data services — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a
 // Registers ISymbolTableMapping (single shared mapping) and IOhlcvRepository (SQL Server).
 builder.Services.AddHistoricalServices(sqlConnectionString);
+
+// Backtesting engine + result persistence — P4-T3 / REQ-STRAT-011b/023
+builder.Services.AddBacktestingServices(sqlConnectionString);
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -254,6 +258,9 @@ app.MapTradingCalendarEndpoints();
 
 // Chart data endpoints — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a
 app.MapChartEndpoints();
+
+// Backtest endpoints — P4-T3 / REQ-STRAT-011b/023
+app.MapGroup("/api/v1/backtest").RequireAuthorization().MapBacktestingEndpoints();
 
 // Initialize historical services: load symbol-to-table-name mapping from symbol master.
 // REQ-HIST-011: mapping is loaded in memory at startup.

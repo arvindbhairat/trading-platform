@@ -18,20 +18,14 @@ public static class ChartEndpoints
         var group = app.MapGroup("/api/v1/chart");
 
         // GET /api/v1/chart/{symbol}?timeframe=daily&from=2024-01-01&to=2024-12-31
-        group.MapGet("/{symbol}", GetChartDataAsync)
-            .WithName("GetChartData")
-            .WithOpenApi();
+        group.MapGet("/{symbol}", GetChartDataAsync);
 
         // GET /api/v1/chart/{symbol}/last  — most recent candle date
-        group.MapGet("/{symbol}/last", GetLastCandleDateAsync)
-            .WithName("GetLastCandleDate")
-            .WithOpenApi();
+        group.MapGet("/{symbol}/last", GetLastCandleDateAsync);
 
         // GET /api/v1/chart/{symbol}/rolling?window=5&to=2024-12-31
         // Kept for backward compatibility; callers should prefer ?timeframe=rolling5.
-        group.MapGet("/{symbol}/rolling", GetRollingCandleAsync)
-            .WithName("GetRollingCandle")
-            .WithOpenApi();
+        group.MapGet("/{symbol}/rolling", GetRollingCandleAsync);
     }
 
     /// <summary>

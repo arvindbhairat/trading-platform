@@ -36,4 +36,14 @@ public interface ISysConfigRepository
 
     // Returns the list of distinct categories present in sys_config.
     Task<List<string>> ListCategoriesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads a decimal value from sys_config by key. Returns the default if the key is not found.
+    /// </summary>
+    Task<decimal> GetDecimalAsync(string key, decimal defaultValue = 0m, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads a long value from sys_config by key. Returns the default if the key is not found.
+    /// </summary>
+    Task<long> GetLongAsync(string key, long defaultValue = 0, CancellationToken ct = default);
 }

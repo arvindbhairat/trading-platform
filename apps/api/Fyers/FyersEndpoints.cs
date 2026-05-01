@@ -249,7 +249,9 @@ public static class FyersEndpoints
                 var httpClient = httpClientFactory.CreateClient("FyersApi");
                 var response = await httpClient.SendAsync(request, context.RequestAborted);
                 var body = await response.Content.ReadAsStringAsync(context.RequestAborted);
-                return Results.Content(body, "application/json", response.StatusCode);
+                context.Response.StatusCode = (int)response.StatusCode;
+                context.Response.ContentType = "application/json";
+                return Results.Text(body);
             }
             catch (HttpRequestException ex)
             {
