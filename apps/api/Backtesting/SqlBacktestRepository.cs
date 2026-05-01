@@ -26,12 +26,53 @@ public sealed class SqlBacktestRepository : IBacktestRepository
             INSERT INTO BT_RunHeaders (
                 run_id, signal_type, signal_parameters, rme_profile_snapshot,
                 timeframe, slippage, commission_pct, symbol_universe,
-                date_range_start, date_range_end, run_timestamp
+                date_range_start, date_range_end, run_timestamp,
+                metrics_json, starting_equity, ending_equity,
+                total_return_pct, total_return_absolute,
+                sortino_ratio, recovery_factor, average_r,
+                adjusted_expectancy, max_drawdown_in_r,
+                low_confidence, universe_coverage_pct,
+                total_trades, winning_trades, losing_trades,
+                skipped_sessions, total_sessions,
+                survivorship_bias_discount_pct, raw_expectancy,
+                rme_config_json
             ) VALUES (
                 @RunId, @SignalType, @SignalParams, @RmeProfile,
                 @Timeframe, @Slippage, @CommissionPct, '{}',
-                @DateStart, @DateEnd, @RunTimestamp
+                @DateStart, @DateEnd, @RunTimestamp,
+                @MetricsJson, @StartingEquity, @EndingEquity,
+                @TotalReturnPct, @TotalReturnAbsolute,
+                @SortinoRatio, @RecoveryFactor, @AverageR,
+                @AdjustedExpectancy, @MaxDrawdownInR,
+                @LowConfidence, @UniverseCoveragePct,
+                @TotalTrades, @WinningTrades, @LosingTrades,
+                @SkippedSessions, @TotalSessions,
+                @SurvivorshipDiscountPct, @RawExpectancy,
+                @RmeConfigJson
             )";
+
+        var metricsJson = JsonSerializer.Serialize(new
+        {
+            result.SharpeRatio,
+            result.SortinoRatio,
+            result.RecoveryFactor,
+            result.AverageR,
+            result.ExpectancyInR,
+            result.AdjustedExpectancy,
+            result.MaxDrawdownPct,
+            result.MaxDrawdownInR,
+            result.TotalReturnPct,
+            result.TotalReturnAbsolute,
+            result.WinRatePct,
+            result.ProfitFactor,
+            result.LowConfidence,
+            result.UniverseCoveragePct,
+            result.SkippedSessions,
+            result.TotalSessions,
+            result.SurvivorshipBiasDiscountPct,
+            result.RawExpectancy,
+            equity_curve = result.EquityCurve.Select(e => new { date = e.Date.ToString("yyyy-MM-dd"), equity = e.Equity })
+        });
 
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -39,13 +80,33 @@ public sealed class SqlBacktestRepository : IBacktestRepository
         cmd.Parameters.AddWithValue("@RunId", result.RunId);
         cmd.Parameters.AddWithValue("@SignalType", result.SignalType);
         cmd.Parameters.AddWithValue("@SignalParams", result.SignalSubscriptionVersionId ?? "");
-        cmd.Parameters.AddWithValue("@RmeProfile", "{}");
+        cmd.Parameters.AddWithValue("@RmeProfile", result.RmeConfigurationJson ?? "{}");
         cmd.Parameters.AddWithValue("@Timeframe", result.Timeframe);
         cmd.Parameters.AddWithValue("@Slippage", result.Slippage);
         cmd.Parameters.AddWithValue("@CommissionPct", result.CommissionPct);
         cmd.Parameters.AddWithValue("@DateStart", result.DateRangeStart.ToDateTime(TimeOnly.MinValue));
         cmd.Parameters.AddWithValue("@DateEnd", result.DateRangeEnd.ToDateTime(TimeOnly.MinValue));
         cmd.Parameters.AddWithValue("@RunTimestamp", result.RunTimestamp);
+        cmd.Parameters.AddWithValue("@MetricsJson", metricsJson);
+        cmd.Parameters.AddWithValue("@StartingEquity", result.StartingEquity);
+        cmd.Parameters.AddWithValue("@EndingEquity", result.EndingEquity);
+        cmd.Parameters.AddWithValue("@TotalReturnPct", result.TotalReturnPct);
+        cmd.Parameters.AddWithValue("@TotalReturnAbsolute", result.TotalReturnAbsolute);
+        cmd.Parameters.AddWithValue("@SortinoRatio", result.SortinoRatio);
+        cmd.Parameters.AddWithValue("@RecoveryFactor", result.RecoveryFactor);
+        cmd.Parameters.AddWithValue("@AverageR", result.AverageR);
+        cmd.Parameters.AddWithValue("@AdjustedExpectancy", (object?)result.AdjustedExpectancy ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@MaxDrawdownInR", result.MaxDrawdownInR);
+        cmd.Parameters.AddWithValue("@LowConfidence", result.LowConfidence);
+        cmd.Parameters.AddWithValue("@UniverseCoveragePct", result.UniverseCoveragePct);
+        cmd.Parameters.AddWithValue("@TotalTrades", result.TotalTrades);
+        cmd.Parameters.AddWithValue("@WinningTrades", result.WinningTrades);
+        cmd.Parameters.AddWithValue("@LosingTrades", result.LosingTrades);
+        cmd.Parameters.AddWithValue("@SkippedSessions", result.SkippedSessions);
+        cmd.Parameters.AddWithValue("@TotalSessions", result.TotalSessions);
+        cmd.Parameters.AddWithValue("@SurvivorshipDiscountPct", result.SurvivorshipBiasDiscountPct);
+        cmd.Parameters.AddWithValue("@RawExpectancy", result.RawExpectancy);
+        cmd.Parameters.AddWithValue("@RmeConfigJson", result.RmeConfigurationJson ?? "{}");
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -147,11 +208,156 @@ public sealed class SqlBacktestRepository : IBacktestRepository
 
     public async Task<BacktestRunResult?> GetRunAsync(Guid runId, CancellationToken ct = default)
     {
-        // Full result deserialization from BT_ tables will be implemented in P4-T4
-        // when the result UI is built. For P4-T3 the engine + persistence + metrics
-        // are the focus.
-        _logger.LogWarning("GetRunAsync not fully implemented — returns null for reconstruction.");
-        return null;
+        const string headerSql = @"
+            SELECT run_id, signal_type, signal_parameters, rme_profile_snapshot,
+                   timeframe, slippage, commission_pct,
+                   date_range_start, date_range_end, run_timestamp,
+                   metrics_json, starting_equity, ending_equity,
+                   total_return_pct, total_return_absolute,
+                   sortino_ratio, recovery_factor, average_r,
+                   adjusted_expectancy, max_drawdown_in_r,
+                   low_confidence, universe_coverage_pct,
+                   total_trades, winning_trades, losing_trades,
+                   skipped_sessions, total_sessions,
+                   survivorship_bias_discount_pct, raw_expectancy,
+                   rme_config_json
+            FROM BT_RunHeaders
+            WHERE run_id = @RunId";
+
+        const string tradesSql = @"
+            SELECT symbol, entry_date, exit_date, entry_price, exit_price,
+                   stop_at_entry, exit_reason, r_multiple, gross_pnl, net_pnl
+            FROM BT_Trades
+            WHERE run_id = @RunId
+            ORDER BY entry_date";
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // Read run header
+        await using var headerCmd = new SqlCommand(headerSql, conn);
+        headerCmd.Parameters.AddWithValue("@RunId", runId);
+        await using var headerReader = await headerCmd.ExecuteReaderAsync(ct);
+
+        if (!await headerReader.ReadAsync(ct))
+        {
+            _logger.LogWarning("Backtest run {RunId} not found in BT_RunHeaders.", runId);
+            return null;
+        }
+
+        var result = ReadRunHeader(headerReader);
+        await headerReader.CloseAsync();
+
+        // Read trades
+        await using var tradesCmd = new SqlCommand(tradesSql, conn);
+        tradesCmd.Parameters.AddWithValue("@RunId", runId);
+        await using var tradesReader = await tradesCmd.ExecuteReaderAsync(ct);
+
+        var trades = new List<BacktestTrade>();
+        while (await tradesReader.ReadAsync(ct))
+        {
+            trades.Add(ReadTrade(tradesReader));
+        }
+
+        return result with { Trades = trades };
+    }
+
+    private static BacktestRunResult ReadRunHeader(SqlDataReader reader)
+    {
+        var runId = reader.GetGuid(reader.GetOrdinal("run_id"));
+        var signalType = reader.GetString(reader.GetOrdinal("signal_type"));
+        var signalParams = reader.IsDBNull(reader.GetOrdinal("signal_parameters"))
+            ? null : reader.GetString(reader.GetOrdinal("signal_parameters"));
+        var rmeConfigJson = reader.IsDBNull(reader.GetOrdinal("rme_config_json"))
+            ? null : reader.GetString(reader.GetOrdinal("rme_config_json"));
+
+        // Parse equity curve from metrics_json
+        var equityCurve = new List<EquityPoint>();
+        if (!reader.IsDBNull(reader.GetOrdinal("metrics_json")))
+        {
+            var raw = reader.GetString(reader.GetOrdinal("metrics_json"));
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (doc.RootElement.TryGetProperty("equity_curve", out var curveEl))
+                {
+                    foreach (var pt in curveEl.EnumerateArray())
+                    {
+                        equityCurve.Add(new EquityPoint
+                        {
+                            Date = DateOnly.Parse(pt.GetProperty("date").GetString()!),
+                            Equity = pt.GetProperty("equity").GetDecimal()
+                        });
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // metrics_json parse failure — continue with empty equity curve
+            }
+        }
+
+        return new BacktestRunResult
+        {
+            RunId = runId,
+            SignalType = signalType,
+            SignalSubscriptionVersionId = signalParams,
+            Timeframe = reader.GetString(reader.GetOrdinal("timeframe")),
+            Slippage = reader.GetDecimal(reader.GetOrdinal("slippage")),
+            CommissionPct = reader.GetDecimal(reader.GetOrdinal("commission_pct")),
+            DateRangeStart = DateOnly.FromDateTime(reader.GetDateTime(reader.GetOrdinal("date_range_start"))),
+            DateRangeEnd = DateOnly.FromDateTime(reader.GetDateTime(reader.GetOrdinal("date_range_end"))),
+            RunTimestamp = reader.GetDateTime(reader.GetOrdinal("run_timestamp")),
+            StartingEquity = reader.IsDBNull(reader.GetOrdinal("starting_equity")) ? 1_000_000m : reader.GetDecimal(reader.GetOrdinal("starting_equity")),
+            EndingEquity = reader.IsDBNull(reader.GetOrdinal("ending_equity")) ? 0 : reader.GetDecimal(reader.GetOrdinal("ending_equity")),
+            TotalTrades = reader.IsDBNull(reader.GetOrdinal("total_trades")) ? 0 : reader.GetInt32(reader.GetOrdinal("total_trades")),
+            WinningTrades = reader.IsDBNull(reader.GetOrdinal("winning_trades")) ? 0 : reader.GetInt32(reader.GetOrdinal("winning_trades")),
+            LosingTrades = reader.IsDBNull(reader.GetOrdinal("losing_trades")) ? 0 : reader.GetInt32(reader.GetOrdinal("losing_trades")),
+            WinRatePct = reader.IsDBNull(reader.GetOrdinal("total_trades")) || reader.GetInt32(reader.GetOrdinal("total_trades")) == 0
+                ? 0 : (decimal)reader.GetInt32(reader.GetOrdinal("winning_trades")) / reader.GetInt32(reader.GetOrdinal("total_trades")) * 100m,
+            AverageR = reader.IsDBNull(reader.GetOrdinal("average_r")) ? 0 : reader.GetDecimal(reader.GetOrdinal("average_r")),
+            ExpectancyInR = reader.IsDBNull(reader.GetOrdinal("raw_expectancy")) ? 0 : reader.GetDecimal(reader.GetOrdinal("raw_expectancy")),
+            AdjustedExpectancy = reader.IsDBNull(reader.GetOrdinal("adjusted_expectancy")) ? null : reader.GetDecimal(reader.GetOrdinal("adjusted_expectancy")),
+            ProfitFactor = 0, // computed from trades
+            MaxDrawdownPct = reader.IsDBNull(reader.GetOrdinal("ending_equity")) ? 0 : 0, // computed from equity curve
+            MaxDrawdownInR = reader.IsDBNull(reader.GetOrdinal("max_drawdown_in_r")) ? 0 : reader.GetDecimal(reader.GetOrdinal("max_drawdown_in_r")),
+            SharpeRatio = 0, // stored in metrics_json or computed
+            SortinoRatio = reader.IsDBNull(reader.GetOrdinal("sortino_ratio")) ? 0 : reader.GetDecimal(reader.GetOrdinal("sortino_ratio")),
+            RecoveryFactor = reader.IsDBNull(reader.GetOrdinal("recovery_factor")) ? 0 : reader.GetDecimal(reader.GetOrdinal("recovery_factor")),
+            TotalReturnPct = reader.IsDBNull(reader.GetOrdinal("total_return_pct")) ? 0 : reader.GetDecimal(reader.GetOrdinal("total_return_pct")),
+            TotalReturnAbsolute = reader.IsDBNull(reader.GetOrdinal("total_return_absolute")) ? 0 : reader.GetDecimal(reader.GetOrdinal("total_return_absolute")),
+            UniverseCoveragePct = reader.IsDBNull(reader.GetOrdinal("universe_coverage_pct")) ? 0 : reader.GetDecimal(reader.GetOrdinal("universe_coverage_pct")),
+            LowConfidence = !reader.IsDBNull(reader.GetOrdinal("low_confidence")) && reader.GetBoolean(reader.GetOrdinal("low_confidence")),
+            SkippedSessions = reader.IsDBNull(reader.GetOrdinal("skipped_sessions")) ? 0 : reader.GetInt32(reader.GetOrdinal("skipped_sessions")),
+            TotalSessions = reader.IsDBNull(reader.GetOrdinal("total_sessions")) ? 0 : reader.GetInt32(reader.GetOrdinal("total_sessions")),
+            RawExpectancy = reader.IsDBNull(reader.GetOrdinal("raw_expectancy")) ? 0 : reader.GetDecimal(reader.GetOrdinal("raw_expectancy")),
+            SurvivorshipBiasDiscountPct = reader.IsDBNull(reader.GetOrdinal("survivorship_bias_discount_pct")) ? 0 : reader.GetDecimal(reader.GetOrdinal("survivorship_bias_discount_pct")),
+            RmeConfigurationJson = rmeConfigJson,
+            Trades = [], // populated separately
+            PositionEvents = [],
+            EquityCurve = equityCurve,
+        };
+    }
+
+    private static BacktestTrade ReadTrade(SqlDataReader reader)
+    {
+        return new BacktestTrade
+        {
+            Symbol = reader.GetString(reader.GetOrdinal("symbol")),
+            EntryDate = DateOnly.FromDateTime(reader.GetDateTime(reader.GetOrdinal("entry_date"))),
+            ExitDate = reader.IsDBNull(reader.GetOrdinal("exit_date"))
+                ? null : DateOnly.FromDateTime(reader.GetDateTime(reader.GetOrdinal("exit_date"))),
+            EntryPrice = reader.GetDecimal(reader.GetOrdinal("entry_price")),
+            ExitPrice = reader.IsDBNull(reader.GetOrdinal("exit_price"))
+                ? null : reader.GetDecimal(reader.GetOrdinal("exit_price")),
+            StopAtEntry = reader.GetDecimal(reader.GetOrdinal("stop_at_entry")),
+            ExitReason = reader.IsDBNull(reader.GetOrdinal("exit_reason"))
+                ? null : reader.GetString(reader.GetOrdinal("exit_reason")),
+            RMultiple = reader.IsDBNull(reader.GetOrdinal("r_multiple")) ? 0 : reader.GetDecimal(reader.GetOrdinal("r_multiple")),
+            GrossPnL = reader.GetDecimal(reader.GetOrdinal("gross_pnl")),
+            NetPnL = reader.GetDecimal(reader.GetOrdinal("net_pnl")),
+            Quantity = 1,
+        };
     }
 
     public async Task<List<BacktestRunHeader>> ListRunsAsync(

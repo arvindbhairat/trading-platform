@@ -97,6 +97,13 @@ export default function SignalsPage() {
   const [versionsForId, setVersionsForId] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionDto[]>([]);
 
+  // Backtest panel.
+  const [btPanelForId, setBtPanelForId] = useState<string | null>(null);
+  const [btDateStart, setBtDateStart] = useState("");
+  const [btDateEnd, setBtDateEnd] = useState("");
+  const [btEquity, setBtEquity] = useState("");
+  const [btRunning, setBtRunning] = useState(false);
+
   // New version form.
   const [showNewVersion, setShowNewVersion] = useState<string | null>(null);
   const [newRmeJson, setNewRmeJson] = useState("");
@@ -349,6 +356,56 @@ export default function SignalsPage() {
     }
   }
 
+  // ── Run backtest ─────────────────────────────────────────────────────
+
+  async function handleRunBacktest(subId: string) {
+    if (!btDateStart || !btDateEnd) {
+      setNotification({ type: "error", message: "Please select date range." });
+      return;
+    }
+
+    setBtRunning(true);
+    setNotification(null);
+
+    try {
+      const body: Record<string, unknown> = {
+        date_range_start: btDateStart,
+        date_range_end: btDateEnd,
+      };
+
+      if (btEquity && parseFloat(btEquity) > 0) {
+        body.starting_equity = parseFloat(btEquity);
+      }
+
+      const res = await apiFetch(`/api/v1/backtest/run-from-subscription/${subId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setNotification({ type: "error", message: errBody.error ?? "Backtest failed" });
+        setBtRunning(false);
+        return;
+      }
+
+      const data = await res.json();
+      setNotification({ type: "success", message: "Backtest completed!" });
+      setBtPanelForId(null);
+      setBtRunning(false);
+
+      // Navigate to results page
+      router.push(`/backtest/${data.run_id}`);
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Backtest failed",
+      });
+      setBtRunning(false);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
@@ -511,6 +568,20 @@ export default function SignalsPage() {
                           Pause
                         </Btn>
                       )}
+                      <Btn size="sm" icon="bar-chart" variant="secondary" onClick={() => {
+                        setBtPanelForId(btPanelForId === sub.id ? null : sub.id);
+                        if (btPanelForId !== sub.id) {
+                          // Default date range: past 3 years
+                          const end = new Date();
+                          const start = new Date();
+                          start.setFullYear(start.getFullYear() - 3);
+                          setBtDateStart(start.toISOString().slice(0, 10));
+                          setBtDateEnd(end.toISOString().slice(0, 10));
+                          setBtEquity("");
+                        }
+                      }}>
+                        Backtest
+                      </Btn>
                       <button
                         onClick={() => {
                           if (isShowingVersions) {
@@ -651,6 +722,77 @@ export default function SignalsPage() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Backtest panel */}
+                  {btPanelForId === sub.id && (
+                    <div style={{ marginTop: "var(--s-4)", paddingTop: "var(--s-4)", borderTop: "1px solid var(--border-1)" }}>
+                      <h4 style={{ marginBottom: "var(--s-3)" }}>Run Backtest</h4>
+                      <p className="t-body-sm" style={{ marginBottom: "var(--s-3)", color: "var(--t-2)" }}>
+                        Configure the backtest date range and starting equity. The subscription&apos;s signal type,
+                        timeframe, and current RME version will be used. Starting equity defaults to the platform
+                        default from sys_config.
+                      </p>
+                      <div style={{ display: "flex", gap: "var(--s-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <Field label="Date range start">
+                          <input
+                            type="date"
+                            value={btDateStart}
+                            onChange={(e) => setBtDateStart(e.target.value)}
+                            style={{
+                              background: "var(--bg-1)",
+                              border: "1px solid var(--border-1)",
+                              color: "var(--t-0)",
+                              padding: "var(--s-2) var(--s-3)",
+                              borderRadius: "var(--rad-1)",
+                              fontFamily: "var(--font-sans)",
+                              fontSize: "var(--fs-sm)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Date range end">
+                          <input
+                            type="date"
+                            value={btDateEnd}
+                            onChange={(e) => setBtDateEnd(e.target.value)}
+                            style={{
+                              background: "var(--bg-1)",
+                              border: "1px solid var(--border-1)",
+                              color: "var(--t-0)",
+                              padding: "var(--s-2) var(--s-3)",
+                              borderRadius: "var(--rad-1)",
+                              fontFamily: "var(--font-sans)",
+                              fontSize: "var(--fs-sm)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Starting equity (optional)">
+                          <input
+                            type="number"
+                            value={btEquity}
+                            onChange={(e) => setBtEquity(e.target.value)}
+                            placeholder="Default"
+                            style={{
+                              background: "var(--bg-1)",
+                              border: "1px solid var(--border-1)",
+                              color: "var(--t-0)",
+                              padding: "var(--s-2) var(--s-3)",
+                              borderRadius: "var(--rad-1)",
+                              fontFamily: "var(--font-sans)",
+                              fontSize: "var(--fs-sm)",
+                              width: "160px",
+                            }}
+                          />
+                        </Field>
+                        <Btn
+                          icon="bar-chart"
+                          onClick={() => handleRunBacktest(sub.id)}
+                          disabled={btRunning || !btDateStart || !btDateEnd}
+                        >
+                          {btRunning ? "Running…" : "Run Backtest"}
+                        </Btn>
                       </div>
                     </div>
                   )}

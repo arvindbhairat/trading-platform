@@ -1,4 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
+using MongoDB.Bson;
+using SignalStack.Api.Signals;
+using SignalStack.Api.SysConfig;
 
 namespace SignalStack.Api.Backtesting;
 
@@ -18,17 +22,20 @@ public static class BacktestEndpoints
         group.MapPost("/run", RunBacktestAsync);
         group.MapGet("/runs", ListRunsAsync);
         group.MapGet("/runs/{runId:guid}", GetRunAsync);
+        group.MapPost("/run-from-subscription/{subscriptionId}", RunFromSubscriptionAsync);
         return group;
     }
 
     /// <summary>
     /// POST /api/v1/backtest/run
     /// Launches a backtest with the given parameters.
+    /// Default starting equity from sys_config when not explicitly provided (REQ-BTSTORE-006a).
     /// </summary>
     public static async Task<Results<Ok<BacktestRunResponse>, BadRequest<string>, NotFound<string>>> RunBacktestAsync(
         RunBacktestRequest request,
         BacktestEngine engine,
         IBacktestRepository repository,
+        ISysConfigRepository sysConfig,
         ILogger<BacktestEngine> logger,
         CancellationToken ct)
     {
@@ -46,8 +53,15 @@ public static class BacktestEndpoints
             return TypedResults.BadRequest("DateRangeStart must be before DateRangeEnd.");
         }
 
-        // Validate starting equity — REQ-BTSTORE-006a
-        if (request.StartingEquity <= 0)
+        // Default starting equity from sys_config — REQ-BTSTORE-006a
+        var startingEquity = request.StartingEquity;
+        if (startingEquity <= 0)
+        {
+            startingEquity = await sysConfig.GetDecimalAsync(
+                "strategies.backtest.default_starting_equity_inr", 1_000_000m, ct);
+        }
+
+        if (startingEquity <= 0)
         {
             return TypedResults.BadRequest("Starting equity must be greater than zero.");
         }
@@ -71,7 +85,7 @@ public static class BacktestEndpoints
             CommissionPct = request.CommissionPct,
             DateRangeStart = request.DateRangeStart,
             DateRangeEnd = request.DateRangeEnd,
-            StartingEquity = request.StartingEquity,
+            StartingEquity = startingEquity,
             RmeConfigurationJson = request.RmeConfigurationJson,
             SignalParametersJson = request.SignalParametersJson,
         };
@@ -121,6 +135,102 @@ public static class BacktestEndpoints
             return TypedResults.NotFound($"Backtest run {runId} not found.");
 
         return TypedResults.Ok(MapToResponse(result));
+    }
+
+    /// <summary>
+    /// POST /api/v1/backtest/run-from-subscription/{subscriptionId}
+    /// Runs a backtest using an existing Signal Subscription's configuration.
+    /// REQ-BTSTORE-003: version pinning — uses the subscription's current live RME version.
+    /// REQ-BTSTORE-006a: default starting equity from sys_config.
+    /// </summary>
+    public static async Task<Results<Ok<BacktestRunResponse>, BadRequest<string>, NotFound<string>>> RunFromSubscriptionAsync(
+        string subscriptionId,
+        RunFromSubscriptionRequest request,
+        BacktestEngine engine,
+        IBacktestRepository repository,
+        ISignalSubscriptionRepository subRepo,
+        ISysConfigRepository sysConfig,
+        HttpContext context,
+        ILogger<BacktestEngine> logger,
+        CancellationToken ct)
+    {
+        if (!ObjectId.TryParse(subscriptionId, out var oid))
+            return TypedResults.BadRequest("Invalid subscription ID.");
+
+        var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        if (string.IsNullOrWhiteSpace(userId))
+            return TypedResults.BadRequest("User not authenticated.");
+
+        // Load subscription
+        var sub = await subRepo.GetByIdAndUserAsync(oid, userId, ct);
+        if (sub is null)
+            return TypedResults.NotFound("Subscription not found.");
+
+        if (sub.Status == SubscriptionStatus.Paused)
+            return TypedResults.BadRequest("Cannot run backtest on a paused subscription.");
+
+        // Validate evaluator
+        if (!Evaluators.TryGetValue(sub.SignalTypeId, out var evaluator))
+        {
+            return TypedResults.NotFound(
+                $"Unknown signal type '{sub.SignalTypeId}'. " +
+                $"Available: {string.Join(", ", Evaluators.Keys)}");
+        }
+
+        // Validate date range
+        if (request.DateRangeEnd <= request.DateRangeStart)
+        {
+            return TypedResults.BadRequest("DateRangeEnd must be after DateRangeStart.");
+        }
+
+        // Default starting equity from sys_config — REQ-BTSTORE-006a
+        var startingEquity = request.StartingEquity > 0
+            ? request.StartingEquity
+            : await sysConfig.GetDecimalAsync(
+                "strategies.backtest.default_starting_equity_inr", 1_000_000m, ct);
+
+        // Resolve the RME config from the subscription's live version — REQ-BTSTORE-003 version pinning
+        var liveVersion = sub.CurrentVersionIndex >= 0 && sub.CurrentVersionIndex < sub.Versions.Count
+            ? sub.Versions[sub.CurrentVersionIndex]
+            : null;
+
+        var rmeConfigJson = liveVersion?.RmeConfiguration?.ToJson() ?? "{}";
+
+        var options = new BacktestOptions
+        {
+            SignalTypeId = sub.SignalTypeId,
+            SignalSubscriptionVersionId = liveVersion?.VersionId.ToString(),
+            Timeframe = request.Timeframe ?? sub.Timeframe,
+            Slippage = request.Slippage > 0 ? request.Slippage : 0.001m,
+            CommissionPct = request.CommissionPct > 0 ? request.CommissionPct : 0.0001m,
+            DateRangeStart = request.DateRangeStart,
+            DateRangeEnd = request.DateRangeEnd,
+            StartingEquity = startingEquity,
+            RmeConfigurationJson = rmeConfigJson,
+            SignalParametersJson = sub.Parameters?.ToJson(),
+        };
+
+        try
+        {
+            var result = await engine.RunAsync(options, evaluator, ct);
+
+            // Persist results
+            await repository.SaveRunHeaderAsync(result, ct);
+            await repository.SaveTradesAsync(result.RunId, result.Trades, ct);
+            await repository.SavePositionEventsAsync(result.RunId, result.PositionEvents, ct);
+            await repository.SavePortfolioPerformanceAsync(result, ct);
+
+            logger.LogInformation(
+                "Backtest {RunId} from subscription {SubId}: {Trades} trades, expectancy={Expectancy:F4}R",
+                result.RunId, subscriptionId, result.TotalTrades, result.ExpectancyInR);
+
+            return TypedResults.Ok(MapToResponse(result));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Backtest from subscription {SubId} failed.", subscriptionId);
+            return TypedResults.BadRequest($"Backtest failed: {ex.Message}");
+        }
     }
 
     private static BacktestRunResponse MapToResponse(BacktestRunResult result)
@@ -242,4 +352,14 @@ public sealed record EquityPointResponse
 {
     public required DateOnly Date { get; init; }
     public decimal Equity { get; init; }
+}
+
+public sealed record RunFromSubscriptionRequest
+{
+    public required DateOnly DateRangeStart { get; init; }
+    public required DateOnly DateRangeEnd { get; init; }
+    public string? Timeframe { get; init; }
+    public decimal StartingEquity { get; init; }
+    public decimal Slippage { get; init; }
+    public decimal CommissionPct { get; init; }
 }

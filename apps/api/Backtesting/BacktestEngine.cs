@@ -282,6 +282,7 @@ public sealed class BacktestEngine
             StartingEquity = options.StartingEquity,
             EndingEquity = rawMetrics.EndingEquity,
             RunTimestamp = runTimestamp,
+            RmeConfigurationJson = options.RmeConfigurationJson,
             Trades = finalTrades,
             PositionEvents = finalPositionEvents,
             EquityCurve = equityCurve,

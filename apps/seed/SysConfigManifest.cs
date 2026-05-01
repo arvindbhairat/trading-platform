@@ -117,6 +117,7 @@ public static class SysConfigManifest
         new("strategies.backtest.low_confidence_skip_threshold_pct","strategies","number","5","Backtest low-confidence skip threshold percentage.",                                                               "REQ-STRAT-023"),
         new("strategies.backtest.survivorship_bias_discount_pct","strategies","number","15","Survivorship-bias discount percentage in backtest results.",                                                       "REQ-STRAT-011b"),
         new("strategies.backtest.draft_expiry_days",   "strategies",     "number",  "7",    "Days after which a draft backtest expires.",                                                                        "REQ-BTSTORE-009a"),
+        new("strategies.backtest.default_starting_equity_inr","strategies","number",  "1000000","Default starting equity for backtest runs. REQ-BTSTORE-006a.",                                                    "REQ-BTSTORE-006a"),
 
         // ── operations ────────────────────────────────────────────────────
         new("operations.phase.current",                "operations",     "string",  "A",    "Current operating phase.",                                                                                           "REQ-LEGAL-001"),
