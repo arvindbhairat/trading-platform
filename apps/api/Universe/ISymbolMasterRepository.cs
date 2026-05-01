@@ -60,4 +60,15 @@ public interface ISymbolMasterRepository
     /// downstream references. REQ-UNIV-020 — approved rename path.
     /// </summary>
     Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates the symbol-validity-probe health tracking fields on a symbol master
+    /// document. Only non-null parameters are applied. REQ-UNIV-021/021a.
+    /// </summary>
+    Task UpdateSymbolHealthAsync(
+        ObjectId id,
+        int? consecutiveFailureCount = null,
+        DateTime? lastSuccessfulProbeAt = null,
+        DateTime? lastUnknownSymbolAt = null,
+        CancellationToken ct = default);
 }

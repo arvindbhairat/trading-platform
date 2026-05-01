@@ -129,4 +129,30 @@ public sealed class MongoSymbolMasterRepository : ISymbolMasterRepository
             .Set(s => s.UpdatedAt, DateTime.UtcNow);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    public async Task UpdateSymbolHealthAsync(
+        ObjectId id,
+        int? consecutiveFailureCount = null,
+        DateTime? lastSuccessfulProbeAt = null,
+        DateTime? lastUnknownSymbolAt = null,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<SymbolMasterDocument>.Filter.Eq(s => s.Id, id);
+        var updateDefs = new List<UpdateDefinition<SymbolMasterDocument>>
+        {
+            Builders<SymbolMasterDocument>.Update.Set(s => s.UpdatedAt, DateTime.UtcNow)
+        };
+
+        if (consecutiveFailureCount.HasValue)
+            updateDefs.Add(Builders<SymbolMasterDocument>.Update.Set(s => s.ConsecutiveFailureCount, consecutiveFailureCount.Value));
+
+        if (lastSuccessfulProbeAt.HasValue)
+            updateDefs.Add(Builders<SymbolMasterDocument>.Update.Set(s => s.LastSuccessfulProbeAt, lastSuccessfulProbeAt.Value));
+
+        if (lastUnknownSymbolAt.HasValue)
+            updateDefs.Add(Builders<SymbolMasterDocument>.Update.Set(s => s.LastUnknownSymbolAt, lastUnknownSymbolAt.Value));
+
+        var combined = Builders<SymbolMasterDocument>.Update.Combine(updateDefs);
+        await _collection.UpdateOneAsync(filter, combined, cancellationToken: ct);
+    }
 }

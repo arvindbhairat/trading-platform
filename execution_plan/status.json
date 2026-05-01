@@ -1,7 +1,7 @@
 {
   "current_phase": "P3",
   "current_version": "v0.4",
-  "current_task_id": "P3-T6",
+  "current_task_id": "P3-T8",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -49,11 +49,11 @@
     "P3-T2",
     "P3-T3",
     "P3-T4",
-    "P3-T5"
+    "P3-T5",
+    "P3-T6",
+    "P3-T7"
   ],
   "pending_tasks": [
-    "P3-T6",
-    "P3-T7",
     "P3-T8",
     "P3-T9",
     "P3-T10",
@@ -326,11 +326,17 @@
       "REQ-UNIV-013",
       "REQ-UNIV-014",
       "REQ-UNIV-015",
+      "REQ-UNIV-015a",
+      "REQ-UNIV-015b",
+      "REQ-UNIV-015c",
       "REQ-UNIV-016",
       "REQ-UNIV-017",
       "REQ-UNIV-018",
       "REQ-UNIV-019",
-      "REQ-UNIV-020"
+      "REQ-UNIV-020",
+      "REQ-UNIV-021",
+      "REQ-UNIV-021a",
+      "REQ-UNIV-021b"
     ],
     "P4": [],
     "P5": [],
@@ -340,5 +346,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T21:45:00Z"
+  "last_updated": "2026-05-01T22:30:00Z"
 }

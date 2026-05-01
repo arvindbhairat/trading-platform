@@ -59,7 +59,9 @@ builder.Services.AddPhaseConstraintServices();
 builder.Services.AddPrivacyRequestManagement();
 
 // Symbol master + universe state management — P3-T2 / REQ-UNIV-001..010, REQ-HIST-005..008a
-builder.Services.AddUniverseManagement();
+// SQL Server connection string for sync health checking — P3-T6 / REQ-UNIV-015a
+var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
+builder.Services.AddUniverseManagement(sqlConnectionString);
 
 // Trading calendar management — P3-T3 / REQ-CALENDAR-001..006
 builder.Services.AddTradingCalendarManagement();

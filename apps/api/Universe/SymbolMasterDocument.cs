@@ -48,6 +48,22 @@ public sealed class SymbolMasterDocument
     [BsonElement("scan_excluded")]
     public bool ScanExcluded { get; set; }
 
+    // ── Symbol Validity Probe health tracking (REQ-UNIV-021/021a) ──────────
+
+    /// <summary>Consecutive unknown-symbol probe failures. Reset to 0 on success. REQ-UNIV-021a.</summary>
+    [BsonElement("consecutive_failure_count")]
+    public int ConsecutiveFailureCount { get; set; }
+
+    /// <summary>UTC timestamp of the most recent successful probe. Null if never probed. REQ-UNIV-021a.</summary>
+    [BsonElement("last_successful_probe_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? LastSuccessfulProbeAt { get; set; }
+
+    /// <summary>UTC timestamp of the most recent unknown-symbol probe failure. Null if none. REQ-UNIV-021a.</summary>
+    [BsonElement("last_unknown_symbol_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? LastUnknownSymbolAt { get; set; }
+
     [BsonElement("created_at")]
     public required DateTime CreatedAt { get; init; }
 

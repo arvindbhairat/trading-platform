@@ -84,6 +84,8 @@ interface DiffRenameCandidate {
   old_symbol: string;
   new_symbol: string;
   isin: string;
+  company_name: string;
+  industry: string;
 }
 
 interface DiffPreviewData {
@@ -104,6 +106,58 @@ interface RenameResolution {
   company_name: string;
   industry: string;
   resolution: "approved" | "rejected";
+}
+
+interface SyncHealthEntry {
+  symbol: string;
+  company_name: string;
+  is_archived: boolean;
+  scan_excluded: boolean;
+  sql_table_name_suffix: string;
+  last_candle_date: string | null;
+  most_recent_session: string | null;
+  out_of_sync: boolean;
+}
+
+interface SyncHealthData {
+  symbols: SyncHealthEntry[];
+  out_of_sync_count: number;
+  total_active: number;
+  most_recent_session: string | null;
+}
+
+interface HdsJobRun {
+  id: string;
+  job_type: string;
+  triggered_by: string;
+  started_at: string | null;
+  ended_at: string | null;
+  outcome: string;
+  symbols_processed: number;
+  symbols: string[];
+  errors: string[];
+}
+
+interface HdsStatusData {
+  current_run: HdsJobRun | null;
+  recent_runs: HdsJobRun[];
+  is_running: boolean;
+}
+
+interface WorkQueueItem {
+  id: string;
+  type: "probe_flag";
+  symbol: string;
+  company_name: string;
+  isin: string;
+  details: {
+    consecutive_failure_count: number;
+    flag_threshold: number;
+    last_successful_probe_at: string | null;
+    last_unknown_symbol_at: string | null;
+  };
+  created_at: string;
+  high_confidence: boolean;
 }
 
 type Step = "idle" | "preview" | "commit";
@@ -138,6 +192,21 @@ export default function AdminUniversePage() {
 
   // Age indicator.
   const [staleWarning, setStaleWarning] = useState<string | null>(null);
+
+  // ── Sync health state (P3-T6 / REQ-UNIV-015a) ─────────────────────────
+  const [syncHealth, setSyncHealth] = useState<SyncHealthData | null>(null);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  const [reseeding, setReseeding] = useState(false);
+
+  // ── HDS status state (P3-T6 / REQ-UNIV-015c) ──────────────────────────
+  const [hdsStatus, setHdsStatus] = useState<HdsStatusData | null>(null);
+  const [hdsPollInterval, setHdsPollInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Work queue state (P3-T7 / REQ-UNIV-021b) ─────────────────────────
+  const [workQueue, setWorkQueue] = useState<WorkQueueItem[]>([]);
+  const [loadingWorkQueue, setLoadingWorkQueue] = useState(false);
+  const [probeEnabled, setProbeEnabled] = useState(true);
+  const [resolvingItem, setResolvingItem] = useState<string | null>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────
 
@@ -197,6 +266,185 @@ export default function AdminUniversePage() {
     fetchSymbols();
     fetchUploads();
   }, [fetchSymbols, fetchUploads]);
+
+  // ── Sync health (REQ-UNIV-015a) ──────────────────────────────────────
+
+  const fetchSyncHealth = useCallback(async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+      setLoadingHealth(true);
+      const res = await apiFetch("/api/v1/admin/universe/sync-health");
+      if (!res.ok) return;
+      const data: SyncHealthData = await res.json();
+      setSyncHealth(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingHealth(false);
+    }
+  }, []);
+
+  // ── HDS status polling (REQ-UNIV-015c) ───────────────────────────────
+
+  const fetchHdsStatus = useCallback(async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await apiFetch("/api/v1/admin/universe/hds-status");
+      if (!res.ok) return;
+      const data: HdsStatusData = await res.json();
+      setHdsStatus(data);
+
+      // If a run was in progress but is now complete, refresh sync health.
+      if (!data.is_running && hdsStatus?.is_running) {
+        fetchSyncHealth();
+      }
+
+      // Stop polling when no run is active.
+      if (!data.is_running && hdsPollInterval) {
+        clearInterval(hdsPollInterval);
+        setHdsPollInterval(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [hdsStatus?.is_running, hdsPollInterval, fetchSyncHealth]);
+
+  // Start HDS polling when a reseed is triggered or commit creates new symbols.
+  const startHdsPolling = useCallback(() => {
+    if (hdsPollInterval) return; // Already polling.
+    const interval = setInterval(() => {
+      fetchHdsStatus();
+    }, 5000); // Poll every 5 seconds.
+    setHdsPollInterval(interval);
+    fetchHdsStatus(); // Immediate first fetch.
+  }, [hdsPollInterval, fetchHdsStatus]);
+
+  // ── Work queue (P3-T7 / REQ-UNIV-021b) ──────────────────────────────
+
+  const fetchWorkQueue = useCallback(async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+      setLoadingWorkQueue(true);
+      const res = await apiFetch("/api/v1/admin/universe/work-queue");
+      if (!res.ok) return;
+      const data = await res.json();
+      setWorkQueue(data.items ?? []);
+      setProbeEnabled(data.probe_enabled ?? true);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingWorkQueue(false);
+    }
+  }, []);
+
+  async function handleResolveItem(
+    itemId: string,
+    symbol: string,
+    resolution: "approve_rename" | "mark_delisting" | "dismiss",
+    newSymbol?: string,
+    reason?: string,
+  ) {
+    setResolvingItem(itemId);
+    setNotification(null);
+
+    try {
+      const token = getToken();
+      if (!token) { router.replace("/login"); return; }
+
+      const res = await apiFetch(`/api/v1/admin/universe/work-queue/${itemId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol,
+          resolution,
+          new_symbol: newSymbol,
+          reason,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNotification({ type: "error", message: err.error ?? "Resolution failed" });
+        return;
+      }
+
+      const result = await res.json();
+      setNotification({ type: "success", message: `Symbol "${symbol}" ${result.status}.` });
+      fetchWorkQueue();
+      fetchSymbols();
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Resolution failed",
+      });
+    } finally {
+      setResolvingItem(null);
+    }
+  }
+
+  // Clean up polling on unmount.
+  useEffect(() => {
+    return () => {
+      if (hdsPollInterval) clearInterval(hdsPollInterval);
+    };
+  }, [hdsPollInterval]);
+
+  // Also fetch sync health, HDS status, and work queue on initial load.
+  useEffect(() => {
+    fetchSyncHealth();
+    fetchHdsStatus();
+    fetchWorkQueue();
+  }, [fetchSyncHealth, fetchHdsStatus, fetchWorkQueue]);
+
+  // ── Reseed (REQ-UNIV-015b) ───────────────────────────────────────────
+
+  async function handleReseed() {
+    setReseeding(true);
+    setNotification(null);
+
+    try {
+      const token = getToken();
+      if (!token) { router.replace("/login"); return; }
+
+      const res = await apiFetch("/api/v1/admin/universe/reseed", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNotification({
+          type: "error",
+          message: err.error ?? "Reseed failed",
+        });
+        setReseeding(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.status === "reseed_triggered") {
+        setNotification({
+          type: "success",
+          message: `Reseed triggered for ${data.symbols_reseeded} out-of-sync symbols.`,
+        });
+        startHdsPolling();
+      } else if (data.status === "all_synced") {
+        setNotification({
+          type: "success",
+          message: "All symbols are already in sync.",
+        });
+      }
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Reseed failed",
+      });
+    } finally {
+      setReseeding(false);
+    }
+  }
 
   // ── Upload / Preview ────────────────────────────────────────────────
 
@@ -366,13 +614,22 @@ export default function AdminUniversePage() {
         return;
       }
 
-      setNotification({ type: "success", message: "Universe sync committed successfully." });
+      const commitResult = await res.json();
+      setNotification({
+        type: "success",
+        message: `Universe sync committed successfully.${commitResult.hds_triggered ? ` HDS auto-triggered for ${commitResult.new_symbols?.length ?? 0} new symbols.` : ""}`,
+      });
       setStep("idle");
       setPreview(null);
       setSelectedFile(null);
       setShowUploadForm(false);
       fetchSymbols();
       fetchUploads();
+
+      // Start HDS polling if new symbols were added (REQ-UNIV-014).
+      if (commitResult.hds_triggered) {
+        startHdsPolling();
+      }
     } catch (err) {
       setNotification({
         type: "error",
@@ -468,7 +725,7 @@ export default function AdminUniversePage() {
               variant="ghost"
               icon="refresh"
               size="sm"
-              onClick={() => { fetchSymbols(); fetchUploads(); }}
+              onClick={() => { fetchSymbols(); fetchUploads(); fetchSyncHealth(); fetchHdsStatus(); fetchWorkQueue(); }}
             >
               Refresh
             </Btn>
@@ -532,6 +789,213 @@ export default function AdminUniversePage() {
             <span className="t-body-sm">{staleWarning}</span>
           </Card>
         )}
+
+        {/* ── Sync Health + Out-of-Sync Reseed — REQ-UNIV-015a/015b ── */}
+        {syncHealth && (
+          <Card
+            accent={syncHealth.out_of_sync_count > 0 ? "warn" : "up"}
+            style={{
+              padding: "var(--s-4) var(--s-6)",
+              marginBottom: "var(--s-6)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+              <Icon
+                name={syncHealth.out_of_sync_count > 0 ? "alert-triangle" : "circle-check"}
+                size={20}
+              />
+              <div>
+                <span className="t-body-sm">
+                  <strong>{syncHealth.total_active}</strong> active symbols
+                  — <strong>{syncHealth.out_of_sync_count}</strong> out of sync
+                  {syncHealth.most_recent_session
+                    ? ` (last completed session: ${syncHealth.most_recent_session})`
+                    : " (no trading sessions recorded)"}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "var(--s-3)", alignItems: "center" }}>
+              {loadingHealth && (
+                <span className="t-body-sm" style={{ color: "var(--t-3)" }}>
+                  Refreshing…
+                </span>
+              )}
+              <Btn
+                variant="ghost"
+                icon="refresh"
+                size="sm"
+                onClick={() => { fetchSyncHealth(); fetchHdsStatus(); }}
+                disabled={loadingHealth}
+              >
+                Refresh
+              </Btn>
+              {syncHealth.out_of_sync_count > 0 && (
+                <Btn
+                  variant="primary"
+                  icon="play"
+                  size="sm"
+                  onClick={handleReseed}
+                  disabled={reseeding || (hdsStatus?.is_running ?? false)}
+                >
+                  {reseeding
+                    ? "Triggering reseed…"
+                    : hdsStatus?.is_running
+                      ? "HDS in progress…"
+                      : `Reseed all (${syncHealth.out_of_sync_count})`}
+                </Btn>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* ── HDS Progress Indicator — REQ-UNIV-015c ──────────────── */}
+        {hdsStatus?.is_running && hdsStatus.current_run && (
+          <Card
+            accent="brand"
+            style={{
+              padding: "var(--s-4) var(--s-6)",
+              marginBottom: "var(--s-6)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s-3)",
+            }}
+          >
+            <Icon name="activity" size={18} />
+            <div>
+              <span className="t-body-sm">
+                <strong>HistoricDataSeed in progress</strong>
+                {" — "}
+                {hdsStatus.current_run.triggered_by === "universe_upload"
+                  ? "Auto-triggered from universe upload"
+                  : "Manual reseed triggered by admin"}
+                {hdsStatus.current_run.symbols.length > 0 && (
+                  <>
+                    {" — "}
+                    {hdsStatus.current_run.symbols_processed} symbol
+                    {hdsStatus.current_run.symbols_processed !== 1 ? "s" : ""}:{" "}
+                    {hdsStatus.current_run.symbols.slice(0, 5).join(", ")}
+                    {hdsStatus.current_run.symbols.length > 5
+                      ? ` +${hdsStatus.current_run.symbols.length - 5} more`
+                      : ""}
+                  </>
+                )}
+                {hdsStatus.current_run.started_at && (
+                  <>
+                    {" — "}
+                    started{" "}
+                    {formatAge(hdsStatus.current_run.started_at)}
+                  </>
+                )}
+              </span>
+            </div>
+            <div style={{ marginLeft: "auto" }}>
+              <Btn
+                variant="ghost"
+                icon="refresh"
+                size="sm"
+                onClick={() => fetchHdsStatus()}
+              >
+                Refresh
+              </Btn>
+            </div>
+          </Card>
+        )}
+
+        {/* ── Completed HDS run notification ───────────────────────── */}
+        {hdsStatus && !hdsStatus.is_running && hdsStatus.recent_runs.length > 0 && hdsStatus.recent_runs[0]?.outcome === "success" && (
+          <Card
+            accent="up"
+            style={{
+              padding: "var(--s-3) var(--s-6)",
+              marginBottom: "var(--s-6)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s-3)",
+            }}
+          >
+            <Icon name="circle-check" size={16} />
+            <span className="t-body-sm">
+              Latest HDS run completed successfully{" "}
+              {hdsStatus.recent_runs[0].ended_at
+                ? `(${formatAge(hdsStatus.recent_runs[0].ended_at)})`
+                : ""}
+              . Sync health has been refreshed.
+            </span>
+          </Card>
+        )}
+
+        {/* ── Probe disabled banner — REQ-UNIV-021 ──────────────────── */}
+        {!probeEnabled && (
+          <Card
+            accent="warn"
+            style={{
+              padding: "var(--s-4) var(--s-6)",
+              marginBottom: "var(--s-6)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s-3)",
+            }}
+          >
+            <Icon name="alert-triangle" size={18} />
+            <span className="t-body-sm">
+              <strong>Symbol change detection is paused.</strong> Enable{" "}
+              <code>operations.universe.symbol_probe_enabled</code> in the{" "}
+              <a href="/admin/config" style={{ color: "var(--brand-500)" }}>
+                Config
+              </a>{" "}
+              to resume automatic symbol validity probing.
+            </span>
+          </Card>
+        )}
+
+        {/* ── Work Queue — REQ-UNIV-021b ────────────────────────────── */}
+        <Card style={{ marginBottom: "var(--s-6)" }}>
+          <div
+            style={{
+              padding: "var(--s-4) var(--s-5)",
+              borderBottom: "1px solid var(--border-1)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+              <h2 style={{ margin: 0 }}>Work queue</h2>
+              {workQueue.length > 0 && (
+                <Pill tone="warn">{workQueue.length} item{workQueue.length !== 1 ? "s" : ""}</Pill>
+              )}
+            </div>
+            {loadingWorkQueue && (
+              <span className="t-body-sm" style={{ color: "var(--t-3)" }}>
+                Loading…
+              </span>
+            )}
+          </div>
+          <div style={{ padding: "var(--s-5)" }}>
+            {workQueue.length === 0 ? (
+              <p className="t-body-sm" style={{ color: "var(--t-3)" }}>
+                No items requiring attention.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
+                {workQueue.map((item) => (
+                  <WorkQueueItemCard
+                    key={item.id}
+                    item={item}
+                    resolving={resolvingItem === item.id}
+                    onResolve={(resolution, newSymbol, reason) =>
+                      handleResolveItem(item.id, item.symbol, resolution, newSymbol, reason)
+                    }
+                    setResolving={(id) => setResolvingItem(id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
 
         {/* ── CSV Upload Form ──────────────────────────────────────── */}
         {showUploadForm && (
@@ -1000,6 +1464,7 @@ export default function AdminUniversePage() {
                       <th style={{ padding: "var(--s-2) var(--s-3)" }}>Company</th>
                       <th style={{ padding: "var(--s-2) var(--s-3)" }}>Industry</th>
                       <th style={{ padding: "var(--s-2) var(--s-3)" }}>Status</th>
+                      <th style={{ padding: "var(--s-2) var(--s-3)" }}>Sync health</th>
                       <th style={{ padding: "var(--s-2) var(--s-3)" }}>Suffix</th>
                     </tr>
                   </thead>
@@ -1034,6 +1499,24 @@ export default function AdminUniversePage() {
                           ) : (
                             <Pill tone="up">active</Pill>
                           )}
+                        </td>
+                        <td style={{ padding: "var(--s-2) var(--s-3)" }}>
+                          {(() => {
+                            const health = syncHealth?.symbols?.find(
+                              (h) => h.symbol === s.symbol
+                            );
+                            if (!health || s.is_archived) {
+                              return <span className="t-body-sm" style={{ color: "var(--t-4)" }}>—</span>;
+                            }
+                            if (health.out_of_sync) {
+                              return (
+                                <Pill tone="warn">
+                                  out of sync
+                                </Pill>
+                              );
+                            }
+                            return <Pill tone="up">synced</Pill>;
+                          })()}
                         </td>
                         <td
                           style={{
@@ -1181,5 +1664,137 @@ export default function AdminUniversePage() {
         </Card>
       </div>
     </Shell>
+  );
+}
+
+// ── Work Queue Item Card ───────────────────────────────────────────────
+
+function WorkQueueItemCard({
+  item,
+  resolving,
+  onResolve,
+  setResolving,
+}: {
+  item: WorkQueueItem;
+  resolving: boolean;
+  onResolve: (resolution: "approve_rename" | "mark_delisting" | "dismiss", newSymbol?: string, reason?: string) => Promise<void>;
+  setResolving: (id: string | null) => void;
+}) {
+  const [action, setAction] = useState<"approve_rename" | "mark_delisting" | "dismiss" | null>(null);
+  const [newSymbol, setNewSymbol] = useState(item.symbol);
+  const [reason, setReason] = useState("");
+
+  return (
+    <Card
+      accent={item.high_confidence ? "brand" : undefined}
+      style={{ padding: "var(--s-4) var(--s-5)" }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)", flexWrap: "wrap" }}>
+          <Pill tone="warn">Probe flag</Pill>
+          {item.high_confidence && <Pill tone="brand">High confidence</Pill>}
+          <span style={{ fontFamily: "var(--ff-mono)", fontSize: "var(--fs-sm)", fontWeight: 600 }}>
+            {item.symbol}
+          </span>
+          <span className="t-body-sm" style={{ color: "var(--t-2)" }}>
+            {item.company_name}
+          </span>
+        </div>
+        <span className="t-body-sm" style={{ color: "var(--t-3)" }}>
+          {item.details.consecutive_failure_count} consecutive failures
+          (threshold: {item.details.flag_threshold})
+        </span>
+      </div>
+
+      {/* Action buttons (shown when no action is selected) */}
+      {!action && (
+        <div style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-3)" }}>
+          <Btn size="sm" variant="primary" onClick={() => setAction("approve_rename")}>
+            Approve rename
+          </Btn>
+          <Btn size="sm" variant="secondary" onClick={() => setAction("mark_delisting")}>
+            Archive symbol
+          </Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setAction("dismiss")}>
+            Dismiss
+          </Btn>
+        </div>
+      )}
+
+      {/* Approve rename form */}
+      {action === "approve_rename" && (
+        <div style={{ marginTop: "var(--s-3)", display: "flex", alignItems: "flex-end", gap: "var(--s-3)", flexWrap: "wrap" }}>
+          <div>
+            <label className="t-body-sm" style={{ display: "block", marginBottom: "var(--s-1)", color: "var(--t-2)" }}>
+              New symbol
+            </label>
+            <TextInput
+              value={newSymbol}
+              onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
+              style={{ maxWidth: "200px" }}
+            />
+          </div>
+          <Btn
+            size="sm"
+            variant="primary"
+            disabled={resolving || !newSymbol.trim()}
+            onClick={() => onResolve("approve_rename", newSymbol.trim())}
+          >
+            {resolving ? "Renaming…" : "Confirm rename"}
+          </Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setAction(null)}>
+            Cancel
+          </Btn>
+        </div>
+      )}
+
+      {/* Mark delisting form */}
+      {action === "mark_delisting" && (
+        <div style={{ marginTop: "var(--s-3)", display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+          <span className="t-body-sm">
+            Archive <strong>{item.symbol}</strong>? This will remove it from the active universe.
+          </span>
+          <Btn
+            size="sm"
+            variant="danger"
+            disabled={resolving}
+            onClick={() => onResolve("mark_delisting")}
+          >
+            {resolving ? "Archiving…" : "Confirm archive"}
+          </Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setAction(null)}>
+            Cancel
+          </Btn>
+        </div>
+      )}
+
+      {/* Dismiss form */}
+      {action === "dismiss" && (
+        <div style={{ marginTop: "var(--s-3)", display: "flex", alignItems: "flex-end", gap: "var(--s-3)", flexWrap: "wrap" }}>
+          <div>
+            <label className="t-body-sm" style={{ display: "block", marginBottom: "var(--s-1)", color: "var(--t-2)" }}>
+              Reason (required)
+            </label>
+            <TextInput
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why is this being dismissed?"
+              style={{ maxWidth: "300px" }}
+            />
+          </div>
+          <Btn
+            size="sm"
+            variant="primary"
+            disabled={resolving || !reason.trim()}
+            onClick={() => onResolve("dismiss", undefined, reason.trim())}
+          >
+            {resolving ? "Dismissing…" : "Dismiss"}
+          </Btn>
+          <Btn size="sm" variant="ghost" onClick={() => setAction(null)}>
+            Cancel
+          </Btn>
+        </div>
+      )}
+    </Card>
   );
 }

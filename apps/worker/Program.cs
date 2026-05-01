@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Universe;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -8,6 +9,7 @@ using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Observability;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
+using SignalStack.Worker.Workers;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -47,6 +49,12 @@ builder.Services.AddSingleton<SeedVersionStartupGuard>();
 // Symbol master suffix collision check (REQ-HIST-008a): fails fast if duplicate
 // sql_table_name_suffix values exist in the symbol master.
 builder.Services.AddSingleton<SymbolMasterCollisionGuard>();
+
+// Universe management services: symbol master, sync health (noop fallback), probe.
+builder.Services.AddUniverseManagement();
+
+// Symbol Validity Probe worker (REQ-UNIV-021/021a/021b).
+builder.Services.AddHostedService<SymbolProbeWorker>();
 
 var host = builder.Build();
 

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
+using MongoDB.Driver;
+using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Api.SysConfig;
 
@@ -169,6 +171,51 @@ public static class UniverseSyncEndpoints
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error });
 
+            // Auto-trigger HDS for net-new symbols (REQ-UNIV-014).
+            string? hdsJobRunId = null;
+            if (result.NewSymbols.Count > 0)
+            {
+                try
+                {
+                    var jobRuns = context.RequestServices
+                        .GetRequiredService<IMongoDatabase>()
+                        .GetCollection<BsonDocument>("job_runs");
+
+                    var now = DateTime.UtcNow;
+                    var newSuffixes = result.NewSymbols
+                        .Select(s => SqlTableNameSuffixGenerator.Generate(s))
+                        .ToList();
+
+                    var hdsJobRun = new BsonDocument
+                    {
+                        ["job_type"] = "HDS",
+                        ["trigger_source"] = "manual",
+                        ["triggered_by"] = "universe_upload",
+                        ["scheduled_run_time"] = now,
+                        ["started_at"] = now,
+                        ["outcome"] = "started",
+                        ["symbols_processed"] = result.NewSymbols.Count,
+                        ["symbols"] = BsonArray.Create(result.NewSymbols),
+                        ["suffixes"] = BsonArray.Create(newSuffixes),
+                        ["errors"] = new BsonArray(),
+                        ["upload_id"] = result.UploadId!.ToString(),
+                        ["created_by"] = adminId,
+                        ["created_at"] = now
+                    };
+
+                    await jobRuns.InsertOneAsync(hdsJobRun, cancellationToken: ct);
+                    hdsJobRunId = hdsJobRun["_id"].AsObjectId.ToString();
+                }
+                catch (Exception hdsEx)
+                {
+                    // Log but don't fail the commit — the upload result already records hds_triggered.
+                    var logger = context.RequestServices
+                        .GetRequiredService<ILogger<UniverseSyncService>>();                    logger.LogWarning(hdsEx,
+                        "Failed to auto-trigger HDS job for new symbols in upload {UploadId}",
+                        result.UploadId);
+                }
+            }
+
             // Record audit event.
             var auditDetails = new Dictionary<string, object?>
             {
@@ -180,6 +227,9 @@ public static class UniverseSyncEndpoints
                 ["rename_resolutions"] = string.Join(",",
                     request.RenameResolutions.Select(r => $"{r.OldSymbol}->{r.NewSymbol}:{r.Resolution}"))
             };
+
+            if (hdsJobRunId is not null)
+                auditDetails["hds_job_run_id"] = hdsJobRunId;
 
             if (!string.IsNullOrWhiteSpace(request.Justification))
                 auditDetails["justification"] = request.Justification;
@@ -194,7 +244,8 @@ public static class UniverseSyncEndpoints
                 upload_id = result.UploadId!.ToString(),
                 new_symbols = result.NewSymbols,
                 archived_symbols = result.ArchivedSymbols,
-                hds_triggered = result.NewSymbols.Count > 0
+                hds_triggered = result.NewSymbols.Count > 0,
+                hds_job_run_id = hdsJobRunId
             });
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
@@ -273,6 +324,410 @@ public static class UniverseSyncEndpoints
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
 
+        // GET /api/v1/admin/universe/sync-health — data sync health for all active symbols.
+        // REQ-UNIV-015a: compares most recent candle date in SQL Server D_ table
+        // against the most recent completed trading session.
+        admin.MapGet("/sync-health", async (
+            ISymbolMasterRepository symbolRepo,
+            ISyncHealthRepository healthRepo,
+            ITradingCalendarRepository calendarRepo,
+            CancellationToken ct) =>
+        {
+            var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
+            if (symbols.Count == 0)
+                return Results.Ok(new { symbols = Array.Empty<object>(), out_of_sync_count = 0 });
+
+            // Get the most recent completed trading session from the calendar.
+            var sessions = await calendarRepo.GetSessionsAsync(
+                fromDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-90)).ToString("yyyy-MM-dd"),
+                ct: ct);
+
+            // Sessions are ordered ascending; the last one is the most recent.
+            var mostRecentSession = sessions.Count > 0
+                ? DateOnly.Parse(sessions[^1].SessionDate)
+                : (DateOnly?)null;
+
+            // Get sync health from SQL Server for all active symbol suffixes.
+            var suffixes = symbols.Select(s => s.SqlTableNameSuffix).Distinct().ToList();
+            var healthResults = await healthRepo.GetSyncHealthAsync(suffixes, ct);
+            var healthBySuffix = healthResults.ToDictionary(h => h.Suffix);
+
+            var symbolHealthList = symbols.Select(s =>
+            {
+                var health = healthBySuffix.GetValueOrDefault(s.SqlTableNameSuffix);
+                var lastCandleDate = health?.LastCandleDate;
+
+                // A symbol is out of sync if:
+                // - No candle data exists (lastCandleDate is null), OR
+                // - The most recent candle date is before the most recent completed session
+                bool outOfSync = true;
+                if (lastCandleDate.HasValue && mostRecentSession.HasValue)
+                {
+                    outOfSync = DateOnly.FromDateTime(lastCandleDate.Value) < mostRecentSession.Value;
+                }
+
+                return new
+                {
+                    symbol = s.Symbol,
+                    company_name = s.CompanyName,
+                    is_archived = s.IsArchived,
+                    scan_excluded = s.ScanExcluded,
+                    sql_table_name_suffix = s.SqlTableNameSuffix,
+                    last_candle_date = lastCandleDate?.ToString("yyyy-MM-dd"),
+                    most_recent_session = mostRecentSession?.ToString("yyyy-MM-dd"),
+                    out_of_sync = outOfSync
+                };
+            }).ToList();
+
+            var outOfSyncCount = symbolHealthList.Count(s => s.out_of_sync);
+
+            return Results.Ok(new
+            {
+                symbols = symbolHealthList,
+                out_of_sync_count = outOfSyncCount,
+                total_active = symbols.Count,
+                most_recent_session = mostRecentSession?.ToString("yyyy-MM-dd")
+            });
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
+        // POST /api/v1/admin/universe/reseed — trigger HDS reseed for all out-of-sync symbols.
+        // REQ-UNIV-015b: one-click reseed invoking HistoricDataSeed scoped to out-of-sync symbols.
+        admin.MapPost("/reseed", async (
+            HttpContext context,
+            ISymbolMasterRepository symbolRepo,
+            ISyncHealthRepository healthRepo,
+            ITradingCalendarRepository calendarRepo,
+            IMongoDatabase database,
+            ILogger<UniverseSyncService> logger,
+            CancellationToken ct) =>
+        {
+            var adminId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(adminId))
+                return Results.Unauthorized();
+
+            // Find out-of-sync symbols (same logic as sync-health endpoint).
+            var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
+            if (symbols.Count == 0)
+                return Results.Ok(new { status = "no_symbols", symbols_reseeded = 0 });
+
+            var sessions = await calendarRepo.GetSessionsAsync(
+                fromDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-90)).ToString("yyyy-MM-dd"),
+                ct: ct);
+            var mostRecentSession = sessions.Count > 0
+                ? DateOnly.Parse(sessions[^1].SessionDate)
+                : (DateOnly?)null;
+
+            var suffixes = symbols.Select(s => s.SqlTableNameSuffix).Distinct().ToList();
+            var healthResults = await healthRepo.GetSyncHealthAsync(suffixes, ct);
+            var healthBySuffix = healthResults.ToDictionary(h => h.Suffix);
+
+            var outOfSyncSymbols = symbols.Where(s =>
+            {
+                var health = healthBySuffix.GetValueOrDefault(s.SqlTableNameSuffix);
+                if (health is null || health.LastCandleDate is null || mostRecentSession is null)
+                    return true;
+                return DateOnly.FromDateTime(health.LastCandleDate.Value) < mostRecentSession.Value;
+            }).ToList();
+
+            if (outOfSyncSymbols.Count == 0)
+                return Results.Ok(new { status = "all_synced", symbols_reseeded = 0 });
+
+            var symbolNames = outOfSyncSymbols.Select(s => s.Symbol).ToList();
+            var symbolSuffixes = outOfSyncSymbols.Select(s => s.SqlTableNameSuffix).ToList();
+
+            // Check if an HDS reseed is already running.
+            var jobRuns = database.GetCollection<BsonDocument>("job_runs");
+            var activeFilter = Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("job_type", "HDS"),
+                Builders<BsonDocument>.Filter.In("outcome", BsonArray.Create(new[] { "running", "started" })));
+            var activeRun = await jobRuns.Find(activeFilter).FirstOrDefaultAsync(ct);
+            if (activeRun is not null)
+            {
+                var activeRunId = activeRun["_id"].AsObjectId;
+                var activeStartedAt = activeRun.GetValue("started_at", BsonNull.Value) switch
+                {
+                    BsonDateTime bdt => bdt.ToUniversalTime(),
+                    _ => (DateTime?)null
+                };
+                return Results.Conflict(new
+                {
+                    error = "An HDS job is already running.",
+                    job_run_id = activeRunId.ToString(),
+                    started_at = activeStartedAt?.ToString("o")
+                });
+            }
+
+            var now = DateTime.UtcNow;
+
+            // Create the job_runs record. REQ-UNIV-015b: triggered_by: manual_reseed.
+            var jobRunDoc = new BsonDocument
+            {
+                ["job_type"] = "HDS",
+                ["trigger_source"] = "manual",
+                ["triggered_by"] = "manual_reseed",
+                ["scheduled_run_time"] = now,
+                ["started_at"] = now,
+                ["outcome"] = "started",
+                ["symbols_processed"] = outOfSyncSymbols.Count,
+                ["symbols"] = BsonArray.Create(symbolNames),
+                ["suffixes"] = BsonArray.Create(symbolSuffixes),
+                ["created_by"] = adminId,
+                ["created_at"] = now,
+                ["errors"] = new BsonArray()
+            };
+
+            await jobRuns.InsertOneAsync(jobRunDoc, cancellationToken: ct);
+
+            logger.LogInformation(
+                "HDS reseed triggered by admin {Admin} for {Count} out-of-sync symbols: {Symbols}",
+                adminId, outOfSyncSymbols.Count, string.Join(", ", symbolNames));
+
+            return Results.Ok(new
+            {
+                status = "reseed_triggered",
+                job_run_id = jobRunDoc["_id"].AsObjectId.ToString(),
+                symbols_reseeded = outOfSyncSymbols.Count,
+                symbols = symbolNames
+            });
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
+        // GET /api/v1/admin/universe/hds-status — status of the latest HDS job run.
+        // REQ-UNIV-015c: in-flight progress for HDS jobs triggered from the upload page.
+        admin.MapGet("/hds-status", async (
+            IMongoDatabase database,
+            CancellationToken ct) =>
+        {
+            var jobRuns = database.GetCollection<BsonDocument>("job_runs");
+
+            // Find the most recent HDS job triggered by universe_upload or manual_reseed.
+            var filterBuilder = Builders<BsonDocument>.Filter;
+            var filter = filterBuilder.And(
+                filterBuilder.Eq("job_type", "HDS"),
+                filterBuilder.In("triggered_by", BsonArray.Create(new[] { "universe_upload", "manual_reseed" })));
+
+            var latest = await jobRuns
+                .Find(filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("started_at"))
+                .Limit(5)
+                .ToListAsync(ct);
+
+            var mapped = latest.Select(r => new
+            {
+                id = r["_id"].AsObjectId.ToString(),
+                job_type = r.GetValue("job_type", "").AsString,
+                triggered_by = r.GetValue("triggered_by", "").AsString,
+                started_at = r.GetValue("started_at", BsonNull.Value) switch
+                {
+                    BsonDateTime bdt => bdt.ToUniversalTime().ToString("o"),
+                    _ => null
+                },
+                ended_at = r.GetValue("ended_at", BsonNull.Value) switch
+                {
+                    BsonDateTime bdt => bdt.ToUniversalTime().ToString("o"),
+                    _ => null
+                },
+                outcome = r.GetValue("outcome", "").AsString,
+                symbols_processed = r.GetValue("symbols_processed", BsonNull.Value)?.AsInt32 ?? 0,
+                symbols = r.GetValue("symbols", BsonNull.Value) switch
+                {
+                    BsonArray arr => arr.Select(s => s.AsString).ToList(),
+                    _ => new List<string>()
+                },
+                errors = r.GetValue("errors", BsonNull.Value) switch
+                {
+                    BsonArray arr => arr.Select(e => e.AsString).ToList(),
+                    _ => new List<string>()
+                }
+            }).ToList();
+
+            var currentRun = mapped.FirstOrDefault(r => r.outcome == "started" || r.outcome == "running");
+
+            return Results.Ok(new
+            {
+                current_run = currentRun,
+                recent_runs = mapped,
+                is_running = currentRun is not null
+            });
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
+        // GET /api/v1/admin/universe/work-queue — admin work queue (REQ-UNIV-021b).
+        // Returns probe-flagged symbols plus pending rename candidates.
+        admin.MapGet("/work-queue", async (
+            ISymbolMasterRepository symbolRepo,
+            ISysConfigRepository configRepo,
+            IUniverseUploadRepository uploadRepo,
+            CancellationToken ct) =>
+        {
+            // Read flag threshold from sys_config.
+            var thresholdDoc = await configRepo.GetByKeyAsync(
+                "operations.universe.symbol_probe_flag_threshold_days", ct);
+            var flagThreshold = thresholdDoc?.GetValue("value", 2) is BsonValue bv && bv.IsInt32
+                ? bv.AsInt32 : 2;
+
+            // Check if probe is enabled.
+            var enabledDoc = await configRepo.GetByKeyAsync(
+                "operations.universe.symbol_probe_enabled", ct);
+            var probeEnabled = enabledDoc?.GetValue("value", true) is BsonValue bv2
+                && bv2.IsBoolean && bv2.AsBoolean;
+
+            // Get all active symbols — check for probe flags.
+            var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
+
+            var items = new List<object>();
+
+            foreach (var sym in symbols.Where(s => s.ConsecutiveFailureCount >= flagThreshold))
+            {
+                // Check if this symbol was also flagged as a rename candidate
+                // in a recent upload (REQ-UNIV-020 detection).
+                var latestUpload = await uploadRepo.GetLatestAsync(ct);
+                var hadRenameFlag = latestUpload?.RenameResolutions
+                    .Any(r => r.OldSymbol == sym.Symbol) ?? false;
+
+                items.Add(new
+                {
+                    id = sym.Id.ToString(),
+                    type = "probe_flag",
+                    symbol = sym.Symbol,
+                    company_name = sym.CompanyName,
+                    isin = sym.Isin,
+                    details = new
+                    {
+                        consecutive_failure_count = sym.ConsecutiveFailureCount,
+                        flag_threshold = flagThreshold,
+                        last_successful_probe_at = sym.LastSuccessfulProbeAt?.ToString("o"),
+                        last_unknown_symbol_at = sym.LastUnknownSymbolAt?.ToString("o")
+                    },
+                    created_at = sym.LastUnknownSymbolAt?.ToString("o")
+                        ?? sym.UpdatedAt.ToString("o"),
+                    high_confidence = hadRenameFlag
+                });
+            }
+
+            return Results.Ok(new { items, probe_enabled = probeEnabled });
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
+        // POST /api/v1/admin/universe/work-queue/{id}/resolve — resolve a probe flag.
+        // REQ-UNIV-021b: approve_rename, mark_delisting, or dismiss.
+        admin.MapPost("/work-queue/{id}/resolve", async (
+            string id,
+            WorkQueueResolveRequest request,
+            HttpContext context,
+            ISymbolMasterRepository symbolRepo,
+            IAuditEventRepository auditRepo,
+            CancellationToken ct) =>
+        {
+            var adminId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(adminId))
+                return Results.Unauthorized();
+
+            if (!ObjectId.TryParse(id, out var objectId))
+                return Results.BadRequest(new { error = "Invalid symbol ID." });
+
+            var symbol = await symbolRepo.FindBySymbolAsync(request.Symbol, ct);
+            if (symbol is null)
+                return Results.NotFound(new { error = "Symbol not found." });
+
+            switch (request.Resolution)
+            {
+                case "approve_rename":
+                    if (string.IsNullOrWhiteSpace(request.NewSymbol))
+                        return Results.BadRequest(new { error = "new_symbol is required for approve_rename." });
+
+                    await symbolRepo.RenameSymbolAsync(symbol.Id, request.NewSymbol, ct);
+                    await symbolRepo.UpdateSymbolHealthAsync(
+                        symbol.Id, consecutiveFailureCount: 0, ct: ct);
+
+                    await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
+                        new Dictionary<string, object?>
+                        {
+                            ["resolution"] = "approve_rename",
+                            ["symbol"] = request.Symbol,
+                            ["new_symbol"] = request.NewSymbol,
+                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount
+                        }, ct);
+
+                    return Results.Ok(new { status = "renamed", symbol = request.Symbol, new_symbol = request.NewSymbol });
+
+                case "mark_delisting":
+                    await symbolRepo.UpdateMetadataAsync(symbol.Id, isArchived: true, ct: ct);
+                    await symbolRepo.UpdateSymbolHealthAsync(
+                        symbol.Id, consecutiveFailureCount: 0, ct: ct);
+
+                    await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
+                        new Dictionary<string, object?>
+                        {
+                            ["resolution"] = "mark_delisting",
+                            ["symbol"] = request.Symbol,
+                            ["reason"] = request.Reason ?? "",
+                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount
+                        }, ct);
+
+                    // Note: symbol_archived_with_open_position notification is deferred to P5-T16.
+                    return Results.Ok(new { status = "archived", symbol = request.Symbol });
+
+                case "dismiss":
+                    await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
+                        new Dictionary<string, object?>
+                        {
+                            ["resolution"] = "dismiss",
+                            ["symbol"] = request.Symbol,
+                            ["reason"] = request.Reason ?? "",
+                            ["failure_count_not_reset"] = true
+                        }, ct);
+
+                    return Results.Ok(new { status = "dismissed", symbol = request.Symbol });
+
+                default:
+                    return Results.BadRequest(new
+                    {
+                        error = "Invalid resolution. Must be 'approve_rename', 'mark_delisting', or 'dismiss'."
+                    });
+            }
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
+        // POST /api/v1/admin/universe/probe — manually trigger a symbol validity probe.
+        // REQ-UNIV-021: manual trigger path.
+        admin.MapPost("/probe", async (
+            HttpContext context,
+            SymbolProbeService probeService,
+            CancellationToken ct) =>
+        {
+            var adminId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(adminId))
+                return Results.Unauthorized();
+
+            var summary = await probeService.RunProbeAsync("manual", adminId, ct);
+
+            if (summary is null)
+                return Results.Ok(new
+                {
+                    status = "disabled",
+                    message = "Symbol probe is disabled. Enable via operations.universe.symbol_probe_enabled in sys_config."
+                });
+
+            return Results.Ok(new
+            {
+                status = "completed",
+                job_run_id = summary.JobRunId,
+                total_symbols = summary.TotalSymbols,
+                success_count = summary.SuccessCount,
+                transient_count = summary.TransientCount,
+                unknown_count = summary.UnknownCount
+            });
+        })
+        .RequireAuthorization(policy => policy.RequireRole("admin"))
+        .WithTags(Tag);
+
         return app;
     }
 }
@@ -331,4 +786,20 @@ public sealed record CommitRenameResolution
     public required string Resolution { get; init; }
     public string? CompanyName { get; init; }
     public string? Industry { get; init; }
+}
+
+/// <summary>Request body for POST /api/v1/admin/universe/work-queue/{id}/resolve.</summary>
+public sealed record WorkQueueResolveRequest
+{
+    /// <summary>The symbol value to resolve.</summary>
+    public required string Symbol { get; init; }
+
+    /// <summary>Resolution action: <c>approve_rename</c>, <c>mark_delisting</c>, or <c>dismiss</c>.</summary>
+    public required string Resolution { get; init; }
+
+    /// <summary>New symbol value (required for approve_rename).</summary>
+    public string? NewSymbol { get; init; }
+
+    /// <summary>Operator-supplied reason (required for dismiss, optional for others).</summary>
+    public string? Reason { get; init; }
 }
