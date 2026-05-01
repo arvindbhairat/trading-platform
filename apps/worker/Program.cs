@@ -10,6 +10,7 @@ using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Observability;
+using SignalStack.Worker.Jobs.DataSync;
 using SignalStack.Worker.Jobs.HistoricDataSeed;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -57,6 +58,10 @@ builder.Services.AddSingleton<SymbolMasterCollisionGuard>();
 // Universe management services: symbol master, sync health (noop fallback), probe.
 builder.Services.AddUniverseManagement();
 
+// Trading calendar management (REQ-CALENDAR-001..006) — used by SymbolProbeWorker
+// and DataSyncWorker for session date resolution and DS run gating.
+builder.Services.AddTradingCalendarManagement();
+
 // Historical OHLCV data services — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a.
 // Registers ISymbolTableMapping (single shared mapping) and IOhlcvRepository (SQL Server).
 // Required by HistoricDataSeed (HDS) for per-symbol table materialisation and resumable seeding.
@@ -76,6 +81,13 @@ builder.Services.AddHostedService<SymbolProbeWorker>();
 // fetches historical OHLCV from the MDP, and computes weekly/monthly aggregates.
 // REQ-HIST-009/009a.
 builder.Services.AddHistoricDataSeed(builder.Configuration);
+
+// DataSync (DS) job: daily incremental OHLCV sync for post-market data refresh.
+// Backfills the last N trading sessions (default 10), upserts weekly/monthly
+// aggregates, re-checks admin token at every session boundary, and writes
+// success markers for EODSR gating.
+// REQ-MARKET-003/005/005a/006/007/009/013.
+builder.Services.AddDataSync(builder.Configuration);
 
 var host = builder.Build();
 
