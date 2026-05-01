@@ -10,6 +10,7 @@ using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
 using SignalStack.Api.PhaseEnforcement;
 using SignalStack.Api.Pld;
+using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 using SignalStack.Configuration.Bootstrap;
@@ -51,6 +52,9 @@ builder.Services.AddPldWebSocketServices();
 
 // Phase A constraint enforcement services — REQ-LEGAL-002
 builder.Services.AddPhaseConstraintServices();
+
+// Data subject rights workflow — REQ-PRIVACY-004 (P2-T21)
+builder.Services.AddPrivacyRequestManagement();
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -196,6 +200,9 @@ app.MapAdminConfigEndpoints();
 
 // Admin user management endpoints — P2-T12 / REQ-ROLE-004, REQ-SESSION-012/013
 app.MapAdminUserEndpoints();
+
+// Admin privacy request (DSAR) endpoints — P2-T21 / REQ-PRIVACY-004
+app.MapAdminPrivacyRequestEndpoints();
 
 app.Run();
 

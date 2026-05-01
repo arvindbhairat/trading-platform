@@ -252,6 +252,32 @@ public sealed class MongoUserRepository : IUserRepository
         await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
 
+    // REQ-PRIVACY-004: erasure — redacts personal identifiers.
+    public async Task RedactPersonalDataAsync(
+        string userId, string ticketId, DateTime redactedAt, CancellationToken ct = default)
+    {
+        var redactedEmail = $"redacted-{ticketId}@dsar.local";
+        var redactedName = $"[REDACTED PER {ticketId}]";
+
+        var filter = Builders<UserDocument>.Filter.Eq(u => u.UserId, userId);
+        var update = Builders<UserDocument>.Update
+            .Set(u => u.Status, UserApprovalState.Deactivated)
+            .Set(u => u.Email, redactedEmail)
+            .Set(u => u.DisplayName, redactedName)
+            .Set(u => u.Provider, "redacted")
+            .Set(u => u.LinkedIdentities, null)
+            .Set(u => u.EquityBaseOverride, null)
+            .Set(u => u.EquityBaseOverrideUpdatedAt, null)
+            .Set(u => u.UpdatedAt, redactedAt);
+
+        // Preserve: CreatedAt, Role, LedgerSnapshotVersion,
+        // AcceptedTosVersion, AcceptedPrivacyVersion,
+        // AcceptedTesterAcknowledgementVersion, AcceptedMinorDeclaration,
+        // LegalAcceptedAt — these are retained as non-personal audit/consent facts.
+
+        await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
     // REQ-RECOVERY-005: admin-assisted rebind — changes the primary identity.
     public async Task<UserDocument> RebindIdentityAsync(
         string targetUserId, string newProvider, string newProviderKey, string newEmail,

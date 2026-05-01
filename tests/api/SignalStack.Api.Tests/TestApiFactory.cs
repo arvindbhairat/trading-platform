@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Audit;
 using SignalStack.Api.Fyers;
+using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
@@ -76,6 +78,18 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             ReplaceService<IFyersTokenRepository>(services,
                 new ServiceDescriptor(typeof(IFyersTokenRepository),
                     typeof(InMemoryFyersTokenRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed audit event repository with an in-memory
+            // implementation for DSAR integration tests (REQ-PRIVACY-004 / P2-T21).
+            ReplaceService<IAuditEventRepository>(services,
+                new ServiceDescriptor(typeof(IAuditEventRepository),
+                    typeof(InMemoryAuditEventRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed privacy request repository with an in-memory
+            // implementation for DSAR integration tests (REQ-PRIVACY-004 / P2-T21).
+            ReplaceService<IPrivacyRequestRepository>(services,
+                new ServiceDescriptor(typeof(IPrivacyRequestRepository),
+                    typeof(InMemoryPrivacyRequestRepository), ServiceLifetime.Singleton));
         });
     }
 

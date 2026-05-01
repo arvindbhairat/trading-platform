@@ -94,6 +94,15 @@ public interface IUserRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// REQ-PRIVACY-004: erasure — redacts personal identifiers from the user document
+    /// while preserving audit events, trade ledger records, and consent/ToS acceptance
+    /// facts. Sets status to deactivated, nulls/redacts email, display_name, provider,
+    /// and linked identities. Consent versions are preserved as non-personal audit facts.
+    /// </summary>
+    Task RedactPersonalDataAsync(
+        string userId, string ticketId, DateTime redactedAt, CancellationToken ct = default);
+
+    /// <summary>
     /// REQ-RECOVERY-005: admin-assisted rebind — replaces all linked identities
     /// with a single new primary identity and clears the old provider/key.
     /// Only the OAuth identity binding changes; all other state is preserved.

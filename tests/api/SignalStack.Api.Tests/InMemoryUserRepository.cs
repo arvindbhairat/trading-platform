@@ -209,6 +209,36 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    // REQ-PRIVACY-004: erasure — redacts personal identifiers.
+    public Task RedactPersonalDataAsync(
+        string userId, string ticketId, DateTime redactedAt, CancellationToken ct = default)
+    {
+        if (_byUserId.TryGetValue(userId, out var doc))
+        {
+            // Replace the document in-place since critical fields are init-only.
+            _byUserId[userId] = new UserDocument
+            {
+                Id = doc.Id,
+                UserId = doc.UserId,
+                Email = $"redacted-{ticketId}@dsar.local",
+                DisplayName = $"[REDACTED PER {ticketId}]",
+                Provider = "redacted",
+                Role = doc.Role,
+                Status = UserApprovalState.Deactivated,
+                LedgerSnapshotVersion = doc.LedgerSnapshotVersion,
+                LinkedIdentities = null,
+                AcceptedTosVersion = doc.AcceptedTosVersion,
+                AcceptedPrivacyVersion = doc.AcceptedPrivacyVersion,
+                AcceptedTesterAcknowledgementVersion = doc.AcceptedTesterAcknowledgementVersion,
+                AcceptedMinorDeclaration = doc.AcceptedMinorDeclaration,
+                LegalAcceptedAt = doc.LegalAcceptedAt,
+                CreatedAt = doc.CreatedAt,
+                UpdatedAt = redactedAt,
+            };
+        }
+        return Task.CompletedTask;
+    }
+
     public Task<UserDocument> RebindIdentityAsync(
         string targetUserId, string newProvider, string newProviderKey, string newEmail,
         CancellationToken ct = default)
