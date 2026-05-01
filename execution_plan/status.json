@@ -1,7 +1,7 @@
 {
   "current_phase": "P2",
   "current_version": "v0.3",
-  "current_task_id": "P2-T23",
+  "current_task_id": "P2-T18",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -41,10 +41,10 @@
     "P2-T17",
     "P2-T20",
     "P2-T21",
-    "P2-T22"
+    "P2-T22",
+    "P2-T23"
   ],
   "pending_tasks": [
-    "P2-T23",
     "P2-T18",
     "P2-T19",
     "P3-T1",
@@ -254,6 +254,7 @@
       "REQ-RECOVERY-001",
       "REQ-RECOVERY-002",
       "REQ-RECOVERY-003",
+      "REQ-RECOVERY-004",
       "REQ-RECOVERY-005",
       "REQ-RECOVERY-006",
       "REQ-AUTH-003",
@@ -303,5 +304,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T15:00:00Z"
+  "last_updated": "2026-05-01T15:30:00Z"
 }
