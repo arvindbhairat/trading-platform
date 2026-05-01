@@ -15,6 +15,7 @@ using SignalStack.Api.DataBreach;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Universe;
 using SignalStack.Api.Users;
+using SignalStack.Api.Historical;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -65,6 +66,10 @@ builder.Services.AddUniverseManagement(sqlConnectionString);
 
 // Trading calendar management — P3-T3 / REQ-CALENDAR-001..006
 builder.Services.AddTradingCalendarManagement();
+
+// Historical OHLCV data services — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a
+// Registers ISymbolTableMapping (single shared mapping) and IOhlcvRepository (SQL Server).
+builder.Services.AddHistoricalServices(sqlConnectionString);
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -186,7 +191,7 @@ app.Use(async (context, next) =>
   }
 });
 
-app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.3")));
+app.MapGet("/api/v1", () => Results.Ok(new ApiRootResponse(ApiServiceName, "v0.4")));
 app.MapHealthChecks("/api/v1/healthz");
 app.MapHealthChecks("/api/v1/readyz", new()
 {
@@ -228,6 +233,13 @@ app.MapUniverseSyncEndpoints();
 
 // Trading calendar endpoints — P3-T3 / REQ-CALENDAR-001..006
 app.MapTradingCalendarEndpoints();
+
+// Chart data endpoints — P3-T11 / REQ-HIST-001..011, REQ-HIST-010a
+app.MapChartEndpoints();
+
+// Initialize historical services: load symbol-to-table-name mapping from symbol master.
+// REQ-HIST-011: mapping is loaded in memory at startup.
+await app.InitializeHistoricalServicesAsync();
 
 app.Run();
 

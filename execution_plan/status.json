@@ -1,7 +1,7 @@
 {
   "current_phase": "P3",
   "current_version": "v0.4",
-  "current_task_id": "P3-T11",
+  "current_task_id": "P3-T12",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -54,10 +54,10 @@
     "P3-T7",
     "P3-T8",
     "P3-T9",
-    "P3-T10"
+    "P3-T10",
+    "P3-T11"
   ],
   "pending_tasks": [
-    "P3-T11",
     "P3-T12",
     "P3-T13",
     "P3-T14",
@@ -344,7 +344,16 @@
       "REQ-RATE-004",
       "REQ-RATE-011",
       "REQ-RATE-012",
-      "REQ-MARKET-002d"
+      "REQ-MARKET-002d",
+      "REQ-HIST-001",
+      "REQ-HIST-002",
+      "REQ-HIST-003",
+      "REQ-HIST-004",
+      "REQ-HIST-009",
+      "REQ-HIST-009a",
+      "REQ-HIST-010",
+      "REQ-HIST-010a",
+      "REQ-HIST-011"
     ],
     "P4": [],
     "P5": [],
@@ -354,5 +363,5 @@
     "P8": [],
     "P9": []
   },
-  "last_updated": "2026-05-01T23:02:00Z"
+  "last_updated": "2026-05-01T23:30:00Z"
 }
