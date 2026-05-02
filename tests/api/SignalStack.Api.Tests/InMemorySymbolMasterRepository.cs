@@ -88,6 +88,46 @@ public sealed class InMemorySymbolMasterRepository : ISymbolMasterRepository
         return Task.FromResult((long)query.Count());
     }
 
+    public Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default)
+    {
+        var doc = _bySymbol.Values.FirstOrDefault(s => s.Id == id);
+        if (doc is null) throw new InvalidOperationException($"Document with id '{id}' not found.");
+
+        // Remove old key and re-insert under new symbol.
+        _bySymbol.TryRemove(doc.Symbol, out _);
+        // Clone with updated symbol (Symbol is required init-only, so we replace).
+        var updated = new SymbolMasterDocument
+        {
+            Id = doc.Id,
+            Symbol = newSymbol,
+            Isin = doc.Isin,
+            CompanyName = doc.CompanyName,
+            Industry = doc.Industry,
+            Series = doc.Series,
+            SqlTableNameSuffix = doc.SqlTableNameSuffix,
+            LotSize = doc.LotSize,
+            IsArchived = doc.IsArchived,
+            ScanExcluded = doc.ScanExcluded,
+            CreatedAt = doc.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        _bySymbol.TryAdd(newSymbol, updated);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateSymbolHealthAsync(
+        ObjectId id,
+        int? consecutiveFailureCount = null,
+        DateTime? lastSuccessfulProbeAt = null,
+        DateTime? lastUnknownSymbolAt = null,
+        CancellationToken ct = default)
+    {
+        // Symbol health is tracked in the symbol_health collection, not symbol_master.
+        // This in-memory stub is a no-op since symbol health tracking requires a
+        // dedicated health repository that is not part of this interface's concern.
+        return Task.CompletedTask;
+    }
+
     public Task<bool> HasConflictAsync(string symbol, string isin, ObjectId? excludeId = null, CancellationToken ct = default)
     {
         var hasConflict = _bySymbol.Values.Any(s =>

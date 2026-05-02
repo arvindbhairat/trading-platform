@@ -18,6 +18,7 @@ using SignalStack.Api.Users;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
+using SignalStack.Api.Notifications;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -83,6 +84,10 @@ builder.Services.AddHistoricalServices(sqlConnectionString);
 
 // Backtesting engine + result persistence — P4-T3 / REQ-STRAT-011b/023
 builder.Services.AddBacktestingServices(sqlConnectionString);
+
+// Notification collection schema + writer paths — P5-T3 / REQ-NOTIFY-006
+// REQ-NOTIFY-004: synchronous persistence before Telegram delivery.
+builder.Services.AddNotificationServices();
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()

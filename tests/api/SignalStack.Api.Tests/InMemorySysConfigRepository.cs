@@ -57,4 +57,10 @@ public sealed class InMemorySysConfigRepository : ISysConfigRepository
 
     public Task<List<string>> ListCategoriesAsync(CancellationToken ct = default)
         => Task.FromResult(new List<string>());
+
+    public Task<decimal> GetDecimalAsync(string key, decimal defaultValue, CancellationToken ct = default)
+        => Task.FromResult(defaultValue);
+
+    public Task<long> GetLongAsync(string key, long defaultValue, CancellationToken ct = default)
+        => Task.FromResult(defaultValue);
 }

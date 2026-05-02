@@ -62,6 +62,17 @@ public sealed class InMemoryFyersTokenRepository : IFyersTokenRepository
         return Task.CompletedTask;
     }
 
+    public Task<string?> GetAccessTokenAsync(string userId, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            // In tests, use the access_token_ref directly as the token value.
+            var token = _tokens.FirstOrDefault(t =>
+                t.UserId == userId && t.Status == FyersTokenStatus.Active);
+            return Task.FromResult(token?.AccessTokenRef);
+        }
+    }
+
     public Task<bool> HasActiveTokenAsync(string userId, CancellationToken ct = default)
     {
         lock (_lock)

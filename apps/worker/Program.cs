@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Backtesting;
 using SignalStack.Api.Historical;
+using SignalStack.Api.Signals;
 using SignalStack.Api.Universe;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
@@ -11,7 +13,9 @@ using SignalStack.Worker.Hosting;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Observability;
 using SignalStack.Worker.Jobs.DataSync;
+using SignalStack.Worker.Jobs.EodSignalRunner;
 using SignalStack.Worker.Jobs.HistoricDataSeed;
+using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
 using SignalStack.Worker.Workers;
@@ -93,6 +97,24 @@ builder.Services.AddDataSync(builder.Configuration);
 // without a DataSync EOD success marker for the target trading session.
 // Registers IEodMarkerReader (reads DS markers from job_runs) and EodSequencingGate.
 builder.Services.AddEodSequencingGate();
+
+// Signal Subscription repository (REQ-STRAT-007a/007b, REQ-STRAT-017b).
+// Required by EODSR for reading active subscription state.
+builder.Services.AddSingleton<ISignalSubscriptionRepository, MongoSignalSubscriptionRepository>();
+
+// Built-in Signal evaluators (REQ-STRAT-025): registered for discovery by SignalEvaluatorRegistry.
+builder.Services.AddSingleton<IEntrySignalEvaluator, MaCrossoverEvaluator>();
+
+// Notification collection schema + writer paths — P5-T3 / REQ-NOTIFY-006
+// REQ-NOTIFY-004: synchronous persistence before Telegram delivery.
+// REQ-NOTIFY-007: producers write to notifications collection; no Telegram dispatch here.
+builder.Services.AddNotificationServices();
+
+// EOD Signal Runner (EODSR): post-market evaluation of user-subscribed Signal types.
+// REQ-STRAT-013/013a: single-pass per-symbol read + user-scoped evaluation.
+// REQ-STRAT-027: atomic-run semantics with db-retry.
+// REQ-STRAT-028: provenance fields on entry signals.
+builder.Services.AddEodSignalRunner(builder.Configuration);
 
 var host = builder.Build();
 
