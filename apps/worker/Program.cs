@@ -21,6 +21,9 @@ using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
 using SignalStack.Worker.Workers;
 
+// Load local .env file from repo root for development connection strings.
+DotNetEnv.Env.Load("../../.env");
+
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddSignalStackBootstrapConfiguration(WorkerTelemetry.ServiceName);

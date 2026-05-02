@@ -116,3 +116,68 @@ wsl bash -c "sudo apt update && sudo apt upgrade -y"
 ```
 
 These notes document the exact procedure performed on 2026-05-01.
+
+---
+
+## 6. Local Database Configuration
+
+The platform uses **MongoDB** and **SQL Server** for local development. Connection strings are configured via a `.env` file at the repo root.
+
+### Prerequisites
+
+- [MongoDB](https://www.mongodb.com/try/download/community) installed locally (default port 27017)
+- [SQL Server Express](https://go.microsoft.com/fwlink/?linkid=866662) (or full SQL Server) with the `SQLEXPRESS` instance name
+
+### Setup
+
+1. Copy or edit the `.env` file at the repo root:
+
+```bash
+# From C:\poc\
+notepad .env
+```
+
+Contents (already created):
+
+```env
+# Database connection strings for local development
+# Auto-loaded by DotNetEnv package in API and Worker projects.
+# No manual sourcing needed — just dotnet run.
+
+export ConnectionStrings__MongoDb="mongodb://localhost:27017/signalstack"
+export MongoDB__DatabaseName="signalstack"
+export ConnectionStrings__SqlServer="Server=localhost\SQLEXPRESS;Database=signalstack;Trusted_Connection=True;TrustServerCertificate=True;"
+```
+
+2. Create both databases (if they don't exist):
+
+```bash
+# Create SQL Server database
+sqlcmd -S localhost\SQLEXPRESS -Q "CREATE DATABASE signalstack"
+
+# MongoDB creates databases on first use — the application will create it automatically.
+```
+
+### How It Works
+
+Both `apps/api` and `apps/worker` load the `.env` file at startup via the `DotNetEnv` NuGet package (wired in `Program.cs`). The environment variables are read by .NET's configuration system using these keys:
+
+| Config Key | Env Var | Value |
+|---|---|---|
+| `ConnectionStrings:MongoDb` | `ConnectionStrings__MongoDb` | MongoDB connection string |
+| `MongoDB:DatabaseName` | `MongoDB__DatabaseName` | MongoDB database name |
+| `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | SQL Server connection string |
+
+The `.env` file is git-ignored (`*.env` rule in `.gitignore`) so secrets stay local.
+
+### Running
+
+```bash
+# API
+dotnet run --project apps/api
+
+# Worker
+dotnet run --project apps/worker
+```
+
+No manual sourcing or environment variable setup needed.

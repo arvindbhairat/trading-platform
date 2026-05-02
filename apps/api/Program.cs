@@ -26,6 +26,9 @@ using SignalStack.Migrations;
 const string ApiServiceName = "SignalStack.Api";
 const string AuthRateLimitPolicy = "auth-fixed-window";
 
+// Load local .env file from repo root for development connection strings.
+DotNetEnv.Env.Load("../../.env");
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddSignalStackBootstrapConfiguration(ApiServiceName);
