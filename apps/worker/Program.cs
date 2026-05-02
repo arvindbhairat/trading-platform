@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Admin;
 using SignalStack.Api.Backtesting;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Signals;

@@ -65,7 +65,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             "Fetching historical OHLCV for {Symbol} (FYERS: {FyersSymbol}) from {From} to {To}.",
             symbol, fyersSymbol, fromDate, toDate);
 
-        var result = await _throttle.ExecuteAsync(async ct =>
+        var result = await _throttle.ExecuteAsync<IReadOnlyList<OhlcvRecord>>(async ct =>
         {
             var token = await GetTokenAsync(ct);
             if (token is null)
@@ -106,7 +106,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             return body.Data.Candles
                 .Select(candle => MapCandle(symbol, candle))
                 .Where(r => r is not null)
-                .Select(r => r!.Value)
+                .OfType<OhlcvRecord>()
                 .ToList();
         }, cancellationToken);
 
@@ -190,13 +190,10 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
+                QuoteRecord? quote = null;
                 try
                 {
-                    var quote = await GetLatestQuoteAsync(symbol, cancellationToken);
-                    if (quote is not null)
-                    {
-                        yield return quote;
-                    }
+                    quote = await GetLatestQuoteAsync(symbol, cancellationToken);
                 }
                 catch (RateLimitExceededException)
                 {
@@ -209,13 +206,18 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 }
                 catch (OperationCanceledException)
                 {
-                    yield break;
+                    throw;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex,
                         "Error polling live price for {Symbol}. Continuing with next symbol.",
                         symbol);
+                }
+
+                if (quote is not null)
+                {
+                    yield return quote;
                 }
             }
 
@@ -227,7 +229,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             }
             catch (OperationCanceledException)
             {
-                yield break;
+                throw;
             }
         }
     }
@@ -248,7 +250,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
     private static OhlcvRecord? MapCandle(string symbol, FyersCandle candle)
     {
         // FYERS candle: [timestamp_epoch, open, high, low, close, volume]
-        if (candle.Length < 6)
+        if (candle.Count < 6)
             return null;
 
         var timestamp = candle[0];
@@ -314,7 +316,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
     }
 
     /// <summary>FYERS candle: [timestamp, open, high, low, close, volume].</summary>
-    private sealed record FyersCandle : List<long>;
+    private sealed class FyersCandle : List<long>;
 
     private sealed record FyersQuoteResponse
     {

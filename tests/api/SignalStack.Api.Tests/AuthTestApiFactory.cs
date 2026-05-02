@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Fyers;
+using SignalStack.Api.Historical;
 using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.SysConfig;
@@ -90,6 +92,21 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
             ReplaceService<IFyersTokenRepository>(services,
                 new ServiceDescriptor(typeof(IFyersTokenRepository),
                     typeof(InMemoryFyersTokenRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed symbol table mapping with an in-memory
+            // implementation so startup initialization does not require a live MongoDB.
+            // InitializeHistoricalServicesAsync skips initialization when it detects
+            // a non-SymbolTableMappingService implementation.
+            ReplaceService<ISymbolTableMapping>(services,
+                new ServiceDescriptor(typeof(ISymbolTableMapping),
+                    typeof(InMemorySymbolTableMapping), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed trading calendar repository with an in-memory
+            // implementation so PhaseConstraintService calendar coverage checks do not
+            // require a live MongoDB (REQ-CALENDAR-007).
+            ReplaceService<ITradingCalendarRepository>(services,
+                new ServiceDescriptor(typeof(ITradingCalendarRepository),
+                    typeof(InMemoryTradingCalendarRepository), ServiceLifetime.Singleton));
         });
     }
 

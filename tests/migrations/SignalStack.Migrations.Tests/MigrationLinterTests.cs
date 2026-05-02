@@ -1,3 +1,4 @@
+using MongoDB.Driver;
 using SignalStack.Migrations;
 using Xunit;
 
@@ -19,11 +20,12 @@ public sealed class MigrationLinterTests
     }
 
     [Fact]
-    public void OneWayMigration_with_empty_justification_fails()
+    public void OneWayMigrationAttribute_rejects_empty_justification()
     {
-        var result = MigrationLinter.ValidateMigration(typeof(OneWayEmptyJustification));
-        Assert.NotNull(result);
-        Assert.Contains("empty justification", result, StringComparison.OrdinalIgnoreCase);
+        // The attribute constructor itself rejects empty/whitespace justifications,
+        // so the linter never encounters this case.
+        Assert.Throws<ArgumentException>(() => new OneWayMigrationAttribute(""));
+        Assert.Throws<ArgumentException>(() => new OneWayMigrationAttribute("   "));
     }
 
     // ── Rule B: explicit rollback method ─────────────────────────────────────
@@ -62,12 +64,8 @@ public sealed class MigrationLinterTests
     private sealed class OneWayWithJustification : StubMigration
     {
         public override string Id => "TEST-ONEWAY-VALID";
-    }
-
-    [OneWayMigration("")]  // Empty justification — should fail.
-    private sealed class OneWayEmptyJustification : StubMigration
-    {
-        public override string Id => "TEST-ONEWAY-INVALID";
+        public override Task UpAsync(IMongoDatabase database, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     /// <summary>
@@ -76,6 +74,8 @@ public sealed class MigrationLinterTests
     private sealed class WithExplicitRollback : StubMigration
     {
         public override string Id => "TEST-ROLLBACK";
+        public override Task UpAsync(IMongoDatabase database, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
         // DownAsync is overridden (non-throwing no-op).
         public override Task DownAsync(IMongoDatabase database, CancellationToken cancellationToken)
             => Task.CompletedTask;
@@ -87,6 +87,8 @@ public sealed class MigrationLinterTests
     private sealed class WithoutRollback : StubMigration
     {
         public override string Id => "TEST-NO-ROLLBACK";
+        public override Task UpAsync(IMongoDatabase database, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     /// <summary>

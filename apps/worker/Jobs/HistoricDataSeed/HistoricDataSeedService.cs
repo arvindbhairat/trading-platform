@@ -125,7 +125,7 @@ public sealed class HistoricDataSeedService
             symbol, fromDate, today, lastDate?.ToString() ?? "(none)");
 
         // ── Step 4: Fetch historical daily OHLCV from the MDP ──────────────
-        IReadOnlyList<OhlcvRecord> providerRecords;
+        IReadOnlyList<SignalStack.MarketData.OhlcvRecord> providerRecords;
         try
         {
             providerRecords = await _marketDataProvider.FetchHistoricalOhlcvAsync(
@@ -206,7 +206,7 @@ public sealed class HistoricDataSeedService
     private async Task<int> BulkInsertDailyAsync(
         SqlConnection conn,
         string tableName,
-        IReadOnlyList<OhlcvRecord> records,
+        IReadOnlyList<SignalStack.MarketData.OhlcvRecord> records,
         CancellationToken ct)
     {
         // Use a staging approach: insert rows that don't already exist.

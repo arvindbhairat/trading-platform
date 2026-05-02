@@ -312,7 +312,7 @@ public sealed class DataSyncService
         }
 
         // ── Step 3: Fetch OHLCV data from the MDP ───────────────────────────
-        IReadOnlyList<OhlcvRecord> providerRecords;
+        IReadOnlyList<SignalStack.MarketData.OhlcvRecord> providerRecords;
         try
         {
             providerRecords = await _marketDataProvider.FetchHistoricalOhlcvAsync(
@@ -625,7 +625,7 @@ WHEN NOT MATCHED THEN
     /// Validates a single OHLCV candle per REQ-MARKET-013 rules.
     /// Returns null if valid, or an error description if invalid.
     /// </summary>
-    private static string? ValidateCandle(OhlcvRecord candle)
+    private static string? ValidateCandle(SignalStack.MarketData.OhlcvRecord candle)
     {
         if (candle.High < candle.Low)
             return $"High ({candle.High}) is less than Low ({candle.Low})";

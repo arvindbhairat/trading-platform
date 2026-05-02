@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SignalStack.MarketData;
 using SignalStack.Worker.Integrations.TrueData;
@@ -16,8 +18,7 @@ namespace SignalStack.Worker.Tests;
 /// </summary>
 public sealed class CrossProviderSwapTests
 {
-    private static readonly ILogger<TrueDataMarketDataProvider> Logger =
-        NullLogger<TrueDataMarketDataProvider>.Instance;
+
 
     // ── Provider resolution tests ──────────────────────────────────────────
 
@@ -26,7 +27,7 @@ public sealed class CrossProviderSwapTests
     {
         // REQ-MARKET-002d: the resolution service must be able to resolve
         // "truedata" as a valid provider, mapping to TrueData.
-        var resolution = new MarketDataProviderResolution(Logger);
+        var resolution = new MarketDataProviderResolution(NullLogger<MarketDataProviderResolution>.Instance);
 
         var resolved = resolution.Resolve("truedata");
 
@@ -36,7 +37,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public void Provider_resolution_is_case_insensitive()
     {
-        var resolution = new MarketDataProviderResolution(Logger);
+        var resolution = new MarketDataProviderResolution(NullLogger<MarketDataProviderResolution>.Instance);
 
         Assert.Equal(MarketDataProviderType.TrueData, resolution.Resolve("TrueData"));
         Assert.Equal(MarketDataProviderType.TrueData, resolution.Resolve("TRUEDATA"));
@@ -46,7 +47,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public void Provider_resolution_defaults_to_fyers_for_unknown()
     {
-        var resolution = new MarketDataProviderResolution(Logger);
+        var resolution = new MarketDataProviderResolution(NullLogger<MarketDataProviderResolution>.Instance);
 
         var resolved = resolution.Resolve("unknown_provider");
 
@@ -56,7 +57,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public void Provider_resolution_defaults_to_fyers_for_empty()
     {
-        var resolution = new MarketDataProviderResolution(Logger);
+        var resolution = new MarketDataProviderResolution(NullLogger<MarketDataProviderResolution>.Instance);
 
         Assert.Equal(MarketDataProviderType.Fyers, resolution.Resolve(null));
         Assert.Equal(MarketDataProviderType.Fyers, resolution.Resolve(""));
@@ -68,7 +69,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public void TrueData_stub_implements_IMarketDataProvider()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         // The stub must be usable through the shared interface.
         var mdp = provider as IMarketDataProvider;
@@ -82,7 +83,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_returns_canned_ohlcv()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var result = await provider.FetchHistoricalOhlcvAsync(
             "RELIANCE",
@@ -114,7 +115,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_filters_by_date_range()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var result = await provider.FetchHistoricalOhlcvAsync(
             "RELIANCE",
@@ -131,7 +132,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_returns_empty_for_unknown_symbol()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var result = await provider.FetchHistoricalOhlcvAsync(
             "UNKNOWN_SYMBOL",
@@ -145,7 +146,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_returns_empty_for_out_of_range_dates()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var result = await provider.FetchHistoricalOhlcvAsync(
             "RELIANCE",
@@ -159,7 +160,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_ohlcv_record_has_valid_data_shapes()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var result = await provider.FetchHistoricalOhlcvAsync(
             "RELIANCE",
@@ -191,7 +192,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_returns_canned_quote()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var quote = await provider.GetLatestQuoteAsync("RELIANCE");
 
@@ -206,7 +207,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_returns_null_for_unknown_symbol_quote()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var quote = await provider.GetLatestQuoteAsync("UNKNOWN_SYMBOL");
 
@@ -216,7 +217,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_quote_has_valid_timestamp()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var quote = await provider.GetLatestQuoteAsync("RELIANCE");
 
@@ -234,7 +235,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_subscribe_returns_canned_stream()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var symbols = new[] { "RELIANCE", "SBIN", "RELIANCE" };
         var results = new List<QuoteRecord>();
@@ -253,7 +254,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_subscribe_respects_cancellation()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // Pre-cancelled token.
 
@@ -272,7 +273,7 @@ public sealed class CrossProviderSwapTests
     [Fact]
     public async Task TrueData_stub_subscribe_returns_empty_for_null_symbols()
     {
-        var provider = new TrueDataMarketDataProvider(Logger);
+        var provider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         var results = new List<QuoteRecord>();
         await foreach (var quote in provider.SubscribeToLivePrices(Array.Empty<string>()))
@@ -292,7 +293,7 @@ public sealed class CrossProviderSwapTests
         // adapters identically through IMarketDataProvider. The shape of
         // OhlcvRecord and QuoteRecord is the same regardless of provider.
 
-        var trueDataProvider = new TrueDataMarketDataProvider(Logger);
+        var trueDataProvider = new TrueDataMarketDataProvider(NullLogger<TrueDataMarketDataProvider>.Instance);
 
         // Consumers access data through IMarketDataProvider, never through
         // concrete types. This test proves both adapters satisfy the contract.
@@ -331,6 +332,7 @@ public sealed class CrossProviderSwapTests
 
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
 
+        services.AddSingleton<ILogger<MarketDataProviderResolution>>(NullLogger<MarketDataProviderResolution>.Instance);
         services.AddSingleton<MarketDataProviderResolution>();
         services.AddSingleton<IMarketDataProvider>(sp =>
         {
@@ -383,6 +385,7 @@ public sealed class CrossProviderSwapTests
             {
                 if (file.Contains("\\obj\\") || file.Contains("/obj/")) continue;
                 if (file.Contains("\\bin\\") || file.Contains("/bin/")) continue;
+                if (file.Contains("\\Fyers\\") || file.Contains("/Fyers/")) continue;
 
                 // Skip MDP interface and record definitions themselves
                 var fileName = Path.GetFileName(file);

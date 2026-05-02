@@ -115,7 +115,7 @@ public sealed class TrueDataMarketDataProvider : IMarketDataProvider
         _logger.LogInformation(
             "TrueData stub: SubscribeToLivePrices starting (canned stream).");
 
-        foreach (var symbol in symbols)
+        foreach (var symbol in symbols.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (cancellationToken.IsCancellationRequested)
                 yield break;

@@ -203,6 +203,7 @@ export function Btn({
   disabled,
   full,
   type,
+  style,
 }: {
   variant?: BtnVariant;
   size?: BtnSize;
@@ -213,6 +214,7 @@ export function Btn({
   disabled?: boolean;
   full?: boolean;
   type?: "button" | "submit";
+  style?: CSSProperties;
 }) {
   const v = btnVariants[variant];
   const s = btnSizes[size];
@@ -241,6 +243,7 @@ export function Btn({
         opacity: disabled ? 0.4 : 1,
         width: full ? "100%" : "auto",
         transition: `background var(--dur-fast) var(--ease-out)`,
+        ...style,
       }}
     >
       {icon && <Icon name={icon} size={14} />}
