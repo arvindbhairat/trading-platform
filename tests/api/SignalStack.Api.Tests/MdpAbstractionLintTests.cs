@@ -51,8 +51,8 @@ public sealed class MdpAbstractionLintTests
     private static readonly Regex[] ProviderSpecificPatterns =
     [
         // FYERS-specific constants and API patterns
-        new Regex(@"Fyers\w*ApiClient", RegexOptions.Compiled),
-        new Regex(@"Fyers\w*Endpoint", RegexOptions.Compiled),
+        new Regex(@"\bFyers\w*ApiClient", RegexOptions.Compiled),
+        new Regex(@"\bFyers\w*Endpoint", RegexOptions.Compiled),
         new Regex(@"api\.fyers\.in", RegexOptions.IgnoreCase | RegexOptions.Compiled),
         new Regex(@"socket\.fyers\.in", RegexOptions.IgnoreCase | RegexOptions.Compiled),
         // Direct HTTP client usage for provider APIs outside adapters

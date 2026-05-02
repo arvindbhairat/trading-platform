@@ -15,6 +15,13 @@ vi.mock('../src/components/SessionExpiryBanner', () => ({
   default: () => null,
 }));
 
+// next/font/google functions need to be mocked in vitest's jsdom environment
+// since they depend on Next.js internals unavailable outside a full build.
+vi.mock('next/font/google', () => ({
+  Roboto: () => ({ variable: '--font-sans', className: 'mock-font-roboto' }),
+  JetBrains_Mono: () => ({ variable: '--font-mono', className: 'mock-font-jetbrains' }),
+}));
+
 // The Shell component renders browser UI (div with CSS variables). For static
 // render tests, we just verify the component renders without throwing.
 describe('Home page', () => {
