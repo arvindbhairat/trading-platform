@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
+using SignalStack.Worker.Integrations.Fyers;
 
 namespace SignalStack.Worker.Jobs.DataSync;
 
@@ -86,6 +87,16 @@ internal sealed class DataSyncWorker : BackgroundService
         var calendarRepo = services.GetRequiredService<ITradingCalendarRepository>();
         var dataSyncService = services.GetRequiredService<DataSyncService>();
         var jobRuns = database.GetCollection<BsonDocument>("job_runs");
+
+        // REQ-MARKET-016(b): shared-ingestion token loss → DS suspends.
+        var healthService = _serviceProvider.GetRequiredService<SharedTokenHealthService>();
+        if (healthService.IsDegraded)
+        {
+            _logger.LogWarning(
+                "DataSync: shared-ingestion token is degraded. " +
+                "Suspending sync cycle until token is restored (REQ-MARKET-016).");
+            return;
+        }
 
         // ── Step 1: Check for an existing pending DS job in job_runs ────────
         var pendingFilter = Builders<BsonDocument>.Filter.Eq("job_type", DsJobType)

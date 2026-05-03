@@ -92,6 +92,7 @@ builder.Services.AddHistoricalServices(sqlConnectionString);
 // Routes all FYERS API calls through the centralised throttling layer with
 // per-second, per-minute, and per-day limits from sys_config.
 builder.Services.AddFyersMarketDataProvider(builder.Configuration);
+builder.Services.AddSharedTokenHealthService();
 
 // Symbol Validity Probe worker (REQ-UNIV-021/021a/021b).
 builder.Services.AddHostedService<SymbolProbeWorker>();

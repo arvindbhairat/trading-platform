@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SignalStack.Api.Admin;
+using SignalStack.Worker.Integrations.Fyers;
 
 namespace SignalStack.Worker.Jobs.LiveMarketScan;
 
@@ -38,10 +39,24 @@ internal sealed class LiveMarketScanWorker : BackgroundService
             "LMDS worker started (poll interval: {Interval}s).",
             _options.Value.PollIntervalSeconds);
 
+        // Resolve singleton services once (no scope needed).
+        var healthService = _serviceProvider
+            .GetRequiredService<SharedTokenHealthService>();
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                // REQ-MARKET-016(a): shared-ingestion token loss → LMDS suspends.
+                if (healthService.IsDegraded)
+                {
+                    _logger.LogWarning(
+                        "LMDS: shared-ingestion token is degraded. " +
+                        "Suspending scan cycle until token is restored (REQ-MARKET-016).");
+                    await Task.Delay(pollInterval, stoppingToken);
+                    continue;
+                }
+
                 using var scope = _serviceProvider.CreateScope();
                 var scanService = scope.ServiceProvider
                     .GetRequiredService<LiveMarketScanService>();

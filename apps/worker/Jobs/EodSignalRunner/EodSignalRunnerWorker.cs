@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
+using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Jobs.EodSuccessMarker;
 
 namespace SignalStack.Worker.Jobs.EodSignalRunner;
@@ -70,6 +71,9 @@ internal sealed class EodSignalRunnerWorker : BackgroundService
     /// <summary>
     /// Main processing cycle: checks for pending EODSR jobs or auto-detects
     /// whether a run is needed, then executes.
+    ///
+    /// REQ-MARKET-016(c): if shared-ingestion token is degraded, records
+    /// <c>skipped_token_unavailable</c> and skips entry-signal evaluation.
     /// </summary>
     private async Task ProcessEodsrCycleAsync(CancellationToken ct)
     {
@@ -81,6 +85,32 @@ internal sealed class EodSignalRunnerWorker : BackgroundService
         var eodMarkerReader = services.GetRequiredService<IEodMarkerReader>();
         var eodSrService = services.GetRequiredService<EodSignalRunnerService>();
         var jobRuns = database.GetCollection<BsonDocument>("job_runs");
+
+        // REQ-MARKET-016(c): shared-ingestion token loss → EODSR suspends.
+        var healthService = _serviceProvider.GetRequiredService<SharedTokenHealthService>();
+        if (healthService.IsDegraded)
+        {
+            _logger.LogWarning(
+                "EODSR: shared-ingestion token is degraded. " +
+                "Recording skipped_token_unavailable (REQ-MARKET-016).");
+
+            var skipNow = DateTime.UtcNow;
+            var skippedDoc = new BsonDocument
+            {
+                ["job_type"] = EodsrJobType,
+                ["trigger_source"] = "auto_detected",
+                ["scheduled_run_time"] = skipNow,
+                ["started_at"] = skipNow,
+                ["ended_at"] = skipNow,
+                ["outcome"] = "skipped_token_unavailable",
+                ["completion_hint"] =
+                    "Shared-ingestion admin FYERS token is unavailable. " +
+                    "EODSR will not emit entry signals until the token is restored.",
+            };
+
+            await jobRuns.InsertOneAsync(skippedDoc, cancellationToken: ct);
+            return;
+        }
 
         // ── Step 1: Check for an existing pending EODSR job ──────────────────
         var pendingFilter = Builders<BsonDocument>.Filter.Eq("job_type", EodsrJobType)

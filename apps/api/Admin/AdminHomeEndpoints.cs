@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Auth;
@@ -13,6 +14,56 @@ public static class AdminHomeEndpoints
         this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/v1/admin");
+
+        // GET /api/v1/admin/degraded-mode
+        // Returns the current shared-ingestion token health state for the admin
+        // banner (REQ-MARKET-016). Reads from sys_config, which is updated by
+        // the worker's SharedTokenHealthService when the token degrades/recovers.
+        admin.MapGet("/degraded-mode", async (
+            IMongoDatabase database) =>
+        {
+            var sysConfig = database.GetCollection<BsonDocument>("sys_config");
+
+            var degradedDoc = await sysConfig
+                .Find(Builders<BsonDocument>.Filter.Eq("_id", "ops.degraded_mode.shared_ingestion_token"))
+                .FirstOrDefaultAsync();
+
+            var isDegraded = degradedDoc?.GetValue("value", BsonNull.Value)?.AsString == "true";
+
+            if (!isDegraded)
+            {
+                return Results.Ok(new DegradedModeResponse(
+                    IsDegraded: false,
+                    BannerMessage: null,
+                    LastSuccessfulTokenAt: null,
+                    DegradedReason: null));
+            }
+
+            var lastTokenDoc = await sysConfig
+                .Find(Builders<BsonDocument>.Filter.Eq("_id", "ops.degraded_mode.last_successful_token_at"))
+                .FirstOrDefaultAsync();
+
+            var reasonDoc = await sysConfig
+                .Find(Builders<BsonDocument>.Filter.Eq("_id", "ops.degraded_mode.degraded_reason"))
+                .FirstOrDefaultAsync();
+
+            var lastTokenAt = lastTokenDoc?.GetValue("value", BsonNull.Value)?.AsString;
+            var degradedReason = reasonDoc?.GetValue("value", BsonNull.Value)?.AsString;
+
+            var bannerMessage =
+                "Shared-ingestion suspended: admin FYERS token refresh failed — " +
+                "LMDS and DataSync are halted. " +
+                (lastTokenAt is not null
+                    ? $"Last successful token at {lastTokenAt}. "
+                    : "") +
+                "Re-authenticate to restore.";
+
+            return Results.Ok(new DegradedModeResponse(
+                IsDegraded: true,
+                BannerMessage: bannerMessage,
+                LastSuccessfulTokenAt: lastTokenAt,
+                DegradedReason: degradedReason));
+        });
 
         // GET /api/v1/admin/transfer-recovery-summary
         // Returns a summary of failed/skipped background job runs during the
@@ -152,4 +203,11 @@ public sealed record FailedJobEntry(
     string Outcome,
     List<string> Errors,
     string RunId
+);
+
+public sealed record DegradedModeResponse(
+    bool IsDegraded,
+    string? BannerMessage,
+    string? LastSuccessfulTokenAt,
+    string? DegradedReason
 );

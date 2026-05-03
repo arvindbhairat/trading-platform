@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MongoDB.Driver;
 using SignalStack.MarketData;
 using SignalStack.MarketData.Throttling;
 
@@ -40,26 +41,30 @@ public static class FyersMarketDataProviderExtensions
         var rateLimitSection = configuration.GetSection("integrations:fyers:rate_limit");
         services.AddMarketDataThrottle(ThrottleProviderKey, rateLimitSection);
 
-        // ── Step 2: Register the FYERS access token provider ───────────────
-        // For development/testing, reads FYERS_ACCESS_TOKEN from config/env.
-        // In production, this should be replaced with a Key Vault-backed provider
-        // that reads the admin FYERS token (P5-T14/P5-T15).
+        // ── Step 2: Register the admin FYERS access token provider ────────
+        // Reads the shared-ingestion admin token from the fyers_tokens MongoDB
+        // collection via SharedTokenHealthService. When the token is unavailable,
+        // the service transitions to degraded mode (REQ-MARKET-016).
+        // Falls back to FYERS_ACCESS_TOKEN env var for dev/test environments.
         services.AddSingleton<Func<Task<string?>>>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<FyersMarketDataProvider>>();
+            var healthService = sp.GetRequiredService<SharedTokenHealthService>();
             return () =>
             {
-                var token = configuration["FYERS_ACCESS_TOKEN"]
-                    ?? configuration["integrations:fyers:access_token"];
-                if (string.IsNullOrEmpty(token))
+                try
                 {
-                    logger.LogWarning(
-                        "FYERS_ACCESS_TOKEN is not configured. " +
-                        "The FYERS MDP adapter will fail at runtime. " +
-                        "Set FYERS_ACCESS_TOKEN env var or " +
-                        "integrations:fyers:access_token in config.");
+                    return healthService.GetTokenAsync();
                 }
-                return Task.FromResult(token);
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "SharedTokenHealthService unavailable. " +
+                        "Falling back to config-based FYERS_ACCESS_TOKEN.");
+                    var token = configuration["FYERS_ACCESS_TOKEN"]
+                        ?? configuration["integrations:fyers:access_token"];
+                    return Task.FromResult(token);
+                }
             };
         });
 
