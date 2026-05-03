@@ -68,6 +68,9 @@ builder.Services
 builder.Services.AddSingleton<IRmeEventConsumer, NoOpRmeEventConsumer>();
 builder.Services.AddSingleton<IPositionChannelRegistry, PositionChannelRegistry>();
 
+// RME module skeleton — sizing / stop / advisory interfaces (P6-T2, REQ-RME-001..005)
+builder.Services.AddRmeModule(builder.Configuration);
+
 // Sentinel startup check (REQ-CONFIG-010): fails fast if seeder was skipped.
 builder.Services.AddSingleton<SeedVersionStartupGuard>();
 
