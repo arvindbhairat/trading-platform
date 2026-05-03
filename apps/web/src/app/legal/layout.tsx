@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LegalFooter } from "@/components/primitives";
 
 export const metadata: Metadata = {
@@ -26,7 +27,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
           borderBottom: "1px solid var(--line-1)",
         }}
       >
-        <a
+        <Link
           href="/"
           style={{
             textDecoration: "none",
@@ -38,7 +39,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
           }}
         >
           Signal Stack
-        </a>
+        </Link>
         <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>/</span>
         <span style={{ color: "var(--fg-3)", fontSize: "14px" }}>Legal</span>
       </header>

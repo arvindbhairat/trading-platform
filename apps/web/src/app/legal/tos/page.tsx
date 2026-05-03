@@ -34,8 +34,8 @@ export default function TosPage() {
       <section style={sectionStyle}>
         <h2 style={h2style}>1. Acceptance of Terms</h2>
         <p style={pStyle}>
-          By accessing or using the Signal Stack platform ("the Platform"), you
-          agree to be bound by these Terms of Service ("Terms"). If you do not
+          By accessing or using the Signal Stack platform (&ldquo;the Platform&rdquo;), you
+          agree to be bound by these Terms of Service (&ldquo;Terms&rdquo;). If you do not
           agree to all of these Terms, you must not access or use the Platform.
         </p>
       </section>

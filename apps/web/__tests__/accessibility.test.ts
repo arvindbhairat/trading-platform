@@ -43,7 +43,7 @@ describe('Home page accessibility', () => {
     `);
     expect(
       results.violations,
-      `WCAG violations:\n${results.violations.map((v: any) => `  [${v.id}] ${v.description}`).join('\n')}`,
+      `WCAG violations:\n${results.violations.map((v) => `  [${v.id}] ${v.description}`).join('\n')}`,
     ).toHaveLength(0);
   });
 });
@@ -59,7 +59,7 @@ describe('Axe gate integrity', () => {
     document.body.innerHTML = `<main><h1>Test</h1></main>`;
     axe.configure({});
     const results = await axe.run(document, { runOnly: WCAG_TAGS });
-    const langViolation = results.violations.find((v: any) => v.id === 'html-has-lang');
+    const langViolation = results.violations.find((v: axe.Result) => v.id === 'html-has-lang');
     expect(langViolation).toBeDefined();
   });
 
@@ -67,7 +67,7 @@ describe('Axe gate integrity', () => {
     const results = await runAxe(`
       <main><img src="chart.png"/></main>
     `);
-    const altViolation = results.violations.find((v: any) => v.id === 'image-alt');
+    const altViolation = results.violations.find((v: axe.Result) => v.id === 'image-alt');
     expect(altViolation).toBeDefined();
   });
 });

@@ -269,7 +269,7 @@ export default function BacktestRunPage() {
         {run.rme_configuration_json && (
           <Card accent="brand" style={{ padding: "var(--s-3) var(--s-5)", marginBottom: "var(--s-5)" }}>
             <p className="t-body-sm" style={{ color: "var(--t-2)", margin: 0 }}>
-              <strong>Version pinned:</strong> RME profile snapshot from the subscription's current live version
+              <strong>Version pinned:</strong> RME profile snapshot from the subscription&rsquo;s current live version
               was used for this backtest run. {run.signal_subscription_version_id && (
                 <code style={{ fontSize: "var(--fs-xs)", color: "var(--t-1)" }}>
                   ID: {run.signal_subscription_version_id.slice(0, 16)}…
