@@ -1,0 +1,96 @@
+{
+  "$comment": "Configure these Online Archive policies in MongoDB Atlas before go-live. See docs/data-management.md §Admin Help Page. TTL indexes are created by M001 migration; Online Archive requires Atlas console or Atlas API configuration.",
+  "policies": [
+    {
+      "collection": "signal_runs",
+      "archiveField": "run_at",
+      "dateType": "DATE",
+      "thresholdDays": 90,
+      "archiveCondition": "run_at older than 90 days",
+      "note": "REQ-DATA-001; signal_runs active window 90 days per data-management.md"
+    },
+    {
+      "collection": "entry_signals",
+      "archiveField": "generated_at",
+      "dateType": "DATE",
+      "thresholdDays": 365,
+      "archiveCondition": "generated_at older than 12 months",
+      "note": "REQ-DATA-001; entry_signals active window 12 months per data-management.md"
+    },
+    {
+      "collection": "notifications",
+      "archiveField": "generated_at",
+      "dateType": "DATE",
+      "thresholdDays": 90,
+      "archiveCondition": "generated_at older than 90 days",
+      "note": "REQ-DATA-001; notifications active window 90 days per data-management.md"
+    },
+    {
+      "collection": "positions",
+      "archiveField": "closed_at",
+      "dateType": "DATE",
+      "thresholdDays": 365,
+      "archiveCondition": "closed_at present and older than 12 months — open positions (no closed_at) are never archived",
+      "customFilter": "{ \"closed_at\": { \"$exists\": true } }",
+      "note": "REQ-DATA-001; positions archive 12 months after close; must use custom filter to exclude open positions"
+    },
+    {
+      "collection": "rme_events",
+      "archiveField": "event_at",
+      "dateType": "DATE",
+      "thresholdDays": 730,
+      "archiveCondition": "event_at older than 24 months",
+      "note": "REQ-DATA-001; rme_events active window 24 months per data-management.md"
+    },
+    {
+      "collection": "trade_ledger",
+      "archiveField": "trade_at",
+      "dateType": "DATE",
+      "thresholdDays": 1095,
+      "archiveCondition": "trade_at older than 36 months",
+      "note": "REQ-DATA-001; trade_ledger immutable append-only; federated query endpoint required for FIFO calculations reaching archived records"
+    },
+    {
+      "collection": "intent_ledger",
+      "archiveField": "created_at",
+      "dateType": "DATE",
+      "thresholdDays": 365,
+      "archiveCondition": "created_at older than 12 months AND status in terminal state (matched, submission_failed, unresolved, orphan_ack)",
+      "customFilter": "{ \"status\": { \"$in\": [\"matched\", \"submission_failed\", \"unresolved\", \"orphan_ack\"] } }",
+      "note": "REQ-DATA-001; pending records older than 12 months are anomalous — surface to admin, do not archive"
+    },
+    {
+      "collection": "equity_curve",
+      "archiveField": "session_date",
+      "dateType": "DATE",
+      "thresholdDays": 1095,
+      "archiveCondition": "session_date older than 36 months",
+      "note": "REQ-DATA-001; equity_curve long-term retention; append-only records never modified after writing"
+    },
+    {
+      "collection": "rme_profile_recommendations",
+      "archiveField": "superseded_at",
+      "dateType": "DATE",
+      "thresholdDays": 365,
+      "archiveCondition": "superseded_at present and older than 12 months",
+      "customFilter": "{ \"superseded_at\": { \"$exists\": true } }",
+      "note": "REQ-DATA-001; current recommendation record is overwritten; superseded records archived after 12 months"
+    },
+    {
+      "collection": "audit_events",
+      "archiveField": "event_at",
+      "dateType": "DATE",
+      "thresholdDays": 730,
+      "archiveCondition": "event_at older than 24 months",
+      "note": "REQ-DATA-001; audit_events immutable compliance log; active window 24 months per data-management.md"
+    },
+    {
+      "collection": "job_runs",
+      "archiveField": "started_at",
+      "dateType": "DATE",
+      "thresholdDays": 90,
+      "archiveCondition": "started_at older than 90 days",
+      "note": "REQ-DATA-001; job_runs operational monitoring window 90 days per data-management.md"
+    }
+  ]
+}

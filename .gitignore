@@ -220,6 +220,16 @@ PublishScripts/
 !packages/config/SignalStack.Configuration/**
 packages/config/SignalStack.Configuration/bin/
 packages/config/SignalStack.Configuration/obj/
+!packages/migrations/
+!packages/migrations/SignalStack.SqlMigrations/
+!packages/migrations/SignalStack.SqlMigrations/**
+packages/migrations/SignalStack.SqlMigrations/bin/
+packages/migrations/SignalStack.SqlMigrations/obj/
+!packages/market-data/
+!packages/market-data/SignalStack.MarketData/
+!packages/market-data/SignalStack.MarketData/**
+packages/market-data/SignalStack.MarketData/bin/
+packages/market-data/SignalStack.MarketData/obj/
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
 # Uncomment if necessary however generally it will be regenerated when needed
