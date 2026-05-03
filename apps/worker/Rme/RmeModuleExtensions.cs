@@ -47,6 +47,11 @@ public static class RmeModuleExtensions
         // support, and OTEL telemetry (REQ-RME-006a/b/c/d).
         services.AddSingleton<IEquityBaseReader, EquityBaseReader>();
 
+        // ── P6-T8: Sizing models ──────────────────────────────────────────────
+        // FixedPercentageSizingModel — default sizing model (REQ-SIZING-005).
+        // Registered as singleton (stateless, thread-safe).
+        services.AddSingleton<ISizingModel, FixedPercentageSizingModel>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
@@ -72,26 +77,24 @@ public static class RmeModuleExtensions
 /// <summary>
 /// RME advisory service that uses <see cref="IEquityBaseReader"/> to read
 /// the user's equity base with snapshot consistency (REQ-RME-006d) and
-/// produces sizing recommendations.
-///
-/// Full sizing-model wiring (ATR, portfolio heat, drawdown-adjusted models)
-/// is added in P6-T8/P6-T9/P6-T10/P6-T11; for now the service applies the
-/// default risk-per-trade percentage as a flat sizing rule.
+/// dispatches to the configured <see cref="ISizingModel"/> for position sizing
+/// (P6-T8). Additional models (ATR, portfolio heat, drawdown-adjusted) are
+/// added in P6-T9/P6-T10/P6-T11.
 /// REQ-RME-004, REQ-RME-017, REQ-RME-018.
 /// </summary>
 internal sealed class RmeAdvisoryService : IRmeAdvisoryService
 {
     private readonly IEquityBaseReader _equityBaseReader;
-    private readonly IOptions<RmeModuleOptions> _options;
+    private readonly IEnumerable<ISizingModel> _sizingModels;
     private readonly ILogger<RmeAdvisoryService> _logger;
 
     public RmeAdvisoryService(
         IEquityBaseReader equityBaseReader,
-        IOptions<RmeModuleOptions> options,
+        IEnumerable<ISizingModel> sizingModels,
         ILogger<RmeAdvisoryService> logger)
     {
         _equityBaseReader = equityBaseReader ?? throw new ArgumentNullException(nameof(equityBaseReader));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _sizingModels = sizingModels ?? throw new ArgumentNullException(nameof(sizingModels));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -170,32 +173,53 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
                 AdvisoryMessage: equityResult.AdvisoryMessage);
         }
 
-        // ── Step 2: Compute default sizing ──────────────────────────────────
-        // Full sizing-model plug-in dispatch is wired in P6-T8/P6-T12.
-        // For now, apply the default risk-per-trade percentage as a flat rule.
-        var equityBase = equityResult.EquityBase;
-        var riskPct = (decimal)_options.Value.DefaultRiskPerTradePct / 100m;
-        var riskAmount = equityBase * riskPct;
+        // ── Step 2: Dispatch to the configured sizing model (P6-T8) ──────────
+        // Find the model by type; fall back to FixedPercentage if unknown or empty.
+        var model = _sizingModels.FirstOrDefault(m =>
+            string.Equals(m.Name, sizingModelType, StringComparison.OrdinalIgnoreCase))
+            ?? _sizingModels.OfType<FixedPercentageSizingModel>().FirstOrDefault();
 
-        var suggestedQuantity = entryPrice > 0
-            ? Math.Floor(riskAmount / entryPrice)
-            : 0m;
+        if (model is null)
+        {
+            _logger.LogError(
+                "RME: no sizing model found for type '{SizingModelType}' " +
+                "and no FixedPercentageSizingModel registered. Returning zero advisory.",
+                sizingModelType);
+
+            return new SizingAdvisory(
+                RecommendedQuantity: 0m,
+                RiskAmount: 0m,
+                StopPrice: 0m,
+                SizingModelUsed: sizingModelType,
+                StopTypeUsed: stopLossType,
+                AdvisoryMessage: "Sizing model unavailable — no matching model registered.");
+        }
+
+        var sizingInput = new SizingInput(
+            EntryPrice: entryPrice,
+            StopPrice: 0m, // Stop price wiring in P6-T12
+            AccountEquity: equityResult.EquityBase,
+            AvailableCapital: equityResult.EquityBase,
+            AdditionalInputs: null);
+
+        var result = model.Calculate(sizingInput);
 
         _logger.LogInformation(
             "RME: sizing recommendation for user {UserId} symbol {Symbol} — " +
-            "equity base: {EquityBase}, risk {RiskPct}% = risk amount ₹{RiskAmount}, " +
-            "suggested qty: {Qty} @ ₹{Price}. Source: {Source}. Override active: {Override}. " +
+            "model: {ModelName}, equity base: {EquityBase}, " +
+            "recommended qty: {Qty} @ price ₹{Price}. " +
+            "Source: {Source}. Override active: {Override}. " +
             "Snapshot consistent: {Consistent}.",
-            userId, symbol, equityBase, _options.Value.DefaultRiskPerTradePct,
-            riskAmount, suggestedQuantity, entryPrice,
+            userId, symbol, model.Name, equityResult.EquityBase,
+            result.RecommendedQuantity, entryPrice,
             equityResult.Source, equityResult.IsOverrideActive,
             equityResult.IsSnapshotConsistent);
 
         return new SizingAdvisory(
-            RecommendedQuantity: suggestedQuantity,
-            RiskAmount: riskAmount,
+            RecommendedQuantity: result.RecommendedQuantity,
+            RiskAmount: result.RiskAmount,
             StopPrice: 0m, // Stop price wiring in P6-T12
-            SizingModelUsed: sizingModelType,
+            SizingModelUsed: model.Name,
             StopTypeUsed: stopLossType,
             AdvisoryMessage: equityResult.AdvisoryMessage);
     }

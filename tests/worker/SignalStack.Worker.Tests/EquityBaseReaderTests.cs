@@ -451,9 +451,11 @@ public sealed class EquityBaseReaderTests : IDisposable
             MinRiskPerTradePct = 0.5,
         });
 
+        var sizingModel = new FixedPercentageSizingModel(options, NullLogger<FixedPercentageSizingModel>.Instance);
+
         var service = new RmeAdvisoryService(
             reader,
-            options,
+            new[] { sizingModel },
             NullLogger<RmeAdvisoryService>.Instance);
 
         // Act
@@ -464,7 +466,7 @@ public sealed class EquityBaseReaderTests : IDisposable
 
         // Assert — equity base = 200000, risk = 1% → risk amount = 2000
         Assert.Equal(200000m * 0.01m, advisory.RiskAmount);
-        Assert.Equal("fixed_percentage", advisory.SizingModelUsed);
+        Assert.Equal("FixedPercentage", advisory.SizingModelUsed);
         Assert.Equal("fixed_stop", advisory.StopTypeUsed);
     }
 
@@ -487,10 +489,11 @@ public sealed class EquityBaseReaderTests : IDisposable
 
         var reader = CreateReader(db.Object);
         var options = Options.Create(new RmeModuleOptions { DefaultRiskPerTradePct = 1.0 });
+        var sizingModel = new FixedPercentageSizingModel(options, NullLogger<FixedPercentageSizingModel>.Instance);
 
         var service = new RmeAdvisoryService(
             reader,
-            options,
+            new[] { sizingModel },
             NullLogger<RmeAdvisoryService>.Instance);
 
         // Act
