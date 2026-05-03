@@ -52,6 +52,11 @@ public static class RmeModuleExtensions
         // Registered as singleton (stateless, thread-safe).
         services.AddSingleton<ISizingModel, FixedPercentageSizingModel>();
 
+        // P6-T9: ATR-based sizing model (volatility-adjusted).
+        // AtrSizingModel — computes position size from ATR and configurable multiplier.
+        // (portfolio-risk-guidelines § Position Sizing Models).
+        services.AddSingleton<ISizingModel, AtrSizingModel>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();

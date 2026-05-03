@@ -43,4 +43,12 @@ public sealed class RmeModuleOptions
     /// </summary>
     [Range(0.1, 100.0)]
     public double MaxRiskPerTradePct { get; set; } = 1.0;
+
+    /// <summary>
+    /// ATR multiplier for ATR-based sizing (portfolio-risk-guidelines § Position Sizing Models).
+    /// The stop distance used for position sizing is ATR × AtrMultiplier.
+    /// Default: 2.0 (stop at 2× ATR from entry).
+    /// </summary>
+    [Range(0.5, 10.0)]
+    public double AtrMultiplier { get; set; } = 2.0;
 }
