@@ -75,6 +75,17 @@ public static class NotificationType
     public static readonly HashSet<string> All = new(
         UserFacing.Concat(AdminOnly), StringComparer.Ordinal);
 
+    /// <summary>
+    /// Non-suppressible (critical) user-facing types per REQ-PROFILE-006.
+    /// These must always be delivered to Telegram regardless of user preference,
+    /// and are counted as critical in the portal unread indicator.
+    /// </summary>
+    public static readonly HashSet<string> Critical = new(StringComparer.Ordinal)
+    {
+        ExitAlert, GapRiskAlert, CircuitLimitAlert,
+        MarketHaltActive, MarketHaltCleared, PendingEntrySuperseded,
+    };
+
     /// <summary>Returns true when <paramref name="type"/> is a known notification type.</summary>
     public static bool IsValid(string type) => All.Contains(type);
 }

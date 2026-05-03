@@ -269,6 +269,9 @@ app.MapTelegramBotEndpoints();
 // User Telegram linking endpoints — P5-T5 / REQ-NOTIFY-016/017/018
 app.MapTelegramLinkingEndpoints();
 
+// Notification feed endpoints — P5-T6 / REQ-NOTIFY-014, REQ-PROFILE-006
+app.MapNotificationEndpoints();
+
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
 

@@ -75,6 +75,18 @@ public sealed class MongoNotificationRepository : INotificationRepository
         return await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
     }
 
+    public async Task<long> CountUnreadCriticalByUserAsync(
+        ObjectId userId, CancellationToken ct = default)
+    {
+        var filter = Builders<NotificationDocument>.Filter.And(
+            Builders<NotificationDocument>.Filter.Eq(n => n.UserId, userId),
+            Builders<NotificationDocument>.Filter.Eq(n => n.IsAdminNotification, false),
+            Builders<NotificationDocument>.Filter.Eq(n => n.IsRead, false),
+            Builders<NotificationDocument>.Filter.In(n => n.NotificationType, NotificationType.Critical));
+
+        return await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+    }
+
     public async Task<long> CountUnreadAdminAsync(CancellationToken ct = default)
     {
         var filter = Builders<NotificationDocument>.Filter.And(
@@ -82,5 +94,59 @@ public sealed class MongoNotificationRepository : INotificationRepository
             Builders<NotificationDocument>.Filter.Eq(n => n.IsRead, false));
 
         return await _collection.CountDocumentsAsync(filter, cancellationToken: ct);
+    }
+
+    public async Task<List<NotificationDocument>> GetByUserIdFilteredAsync(
+        ObjectId userId,
+        int limit = 50,
+        int skip = 0,
+        string? notificationType = null,
+        string? symbol = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? deliveryStatus = null,
+        CancellationToken ct = default)
+    {
+        var filters = new List<FilterDefinition<NotificationDocument>>
+        {
+            Builders<NotificationDocument>.Filter.Eq(n => n.UserId, userId),
+            Builders<NotificationDocument>.Filter.Eq(n => n.IsAdminNotification, false),
+        };
+
+        if (!string.IsNullOrWhiteSpace(notificationType))
+            filters.Add(Builders<NotificationDocument>.Filter.Eq(n => n.NotificationType, notificationType));
+
+        if (!string.IsNullOrWhiteSpace(symbol))
+            filters.Add(Builders<NotificationDocument>.Filter.Eq(n => n.Symbol, symbol));
+
+        if (dateFrom.HasValue)
+            filters.Add(Builders<NotificationDocument>.Filter.Gte(n => n.GeneratedAt, dateFrom.Value));
+
+        if (dateTo.HasValue)
+            filters.Add(Builders<NotificationDocument>.Filter.Lte(n => n.GeneratedAt, dateTo.Value));
+
+        if (!string.IsNullOrWhiteSpace(deliveryStatus))
+            filters.Add(Builders<NotificationDocument>.Filter.Eq(n => n.TelegramDeliveryStatus, deliveryStatus));
+
+        var combined = Builders<NotificationDocument>.Filter.And(filters);
+
+        return await _collection
+            .Find(combined)
+            .SortByDescending(n => n.GeneratedAt)
+            .Skip(skip)
+            .Limit(limit)
+            .ToListAsync(ct);
+    }
+
+    public async Task<long> MarkAllAsReadAsync(ObjectId userId, CancellationToken ct = default)
+    {
+        var filter = Builders<NotificationDocument>.Filter.And(
+            Builders<NotificationDocument>.Filter.Eq(n => n.UserId, userId),
+            Builders<NotificationDocument>.Filter.Eq(n => n.IsAdminNotification, false),
+            Builders<NotificationDocument>.Filter.Eq(n => n.IsRead, false));
+
+        var update = Builders<NotificationDocument>.Update.Set(n => n.IsRead, true);
+        var result = await _collection.UpdateManyAsync(filter, update, cancellationToken: ct);
+        return result.ModifiedCount;
     }
 }

@@ -862,3 +862,31 @@ export function adminNavItemsWithApprovals(count: number): NavItem[] {
       : item,
   );
 }
+
+/**
+ * Returns a copy of userNavItems with the notifications badge set.
+ * REQ-NOTIFY-014: shows critical + total unread counts.
+ * If critical is 0, only the total is shown.
+ */
+export function userNavItemsWithNotificationCount(
+  totalUnread: number,
+  criticalUnread: number,
+): NavItem[] {
+  return userNavItems.map((item) => {
+    if (item.id !== "notifications") return item;
+
+    if (totalUnread === 0) return { ...item, badge: undefined, badgeTone: undefined };
+
+    // Show badge as "C·T" when critical > 0, or just "T" when only total
+    const badgeText =
+      criticalUnread > 0
+        ? `${criticalUnread}·${totalUnread}`
+        : `${totalUnread}`;
+
+    return {
+      ...item,
+      badge: badgeText,
+      badgeTone: criticalUnread > 0 ? "warn" : "info",
+    };
+  });
+}
