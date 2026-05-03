@@ -22,6 +22,7 @@ using SignalStack.Worker.Jobs.EodTradeSync;
 using SignalStack.Worker.Jobs.ManualSync;
 using SignalStack.Worker.Jobs.AdminRebuild;
 using SignalStack.Worker.Jobs.SingleSymbolBackfill;
+using SignalStack.Worker.Jobs.LiveMarketScan;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -132,6 +133,13 @@ builder.Services.AddNotificationDelivery(builder.Configuration);
 // Intraday per-user account sync during NSE market hours. Tracks
 // consecutive cycle aborts with graduated suspension (warn at 2, suspend at 3).
 builder.Services.AddAccountSync(builder.Configuration);
+
+// Live Market Data Scan (LMDS) — P5-T12 / REQ-STOP-006/006a/006b/006c
+// Continuous market-hours price + level monitoring across all open positions.
+// Polls at configurable interval, evaluates stop/add/reduce/trailing-stop levels,
+// enqueues PriceLevelBreachedEvent to the per-position channel registry.
+// REQ-SLO-004: cycle-time capacity warning. REQ-PLC-004: circuit-clear detection.
+builder.Services.AddLiveMarketScan(builder.Configuration);
 
 // Trade-ledger writer services (P5-T8 lock wiring — REQ-PORT-031/031a/031b)
 // Skeleton services that acquire the per-user write lock; logic wired in P5-T9+.
