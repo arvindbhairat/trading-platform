@@ -98,6 +98,26 @@ public sealed class UserDocument
 
     [BsonElement("updated_at")]
     public DateTime UpdatedAt { get; set; }
+
+    // ── Telegram notification channel (REQ-NOTIFY-016/019) ─────────────────
+
+    /// <summary>Telegram chat ID for delivering notifications. Null when not linked.</summary>
+    [BsonElement("telegram_chat_id")]
+    [BsonIgnoreIfNull]
+    public string? TelegramChatId { get; set; }
+
+    /// <summary>UTC timestamp when the Telegram account was linked.</summary>
+    [BsonElement("telegram_linked_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? TelegramLinkedAt { get; set; }
+
+    /// <summary>True when the Telegram link is dirty (unreachable — REQ-NOTIFY-019).</summary>
+    [BsonElement("telegram_is_dirty")]
+    public bool TelegramIsDirty { get; set; }
+
+    /// <summary>Consecutive Telegram delivery failures since last successful send (REQ-NOTIFY-019).</summary>
+    [BsonElement("telegram_consecutive_failures")]
+    public int TelegramConsecutiveFailures { get; set; }
 }
 
 /// <summary>

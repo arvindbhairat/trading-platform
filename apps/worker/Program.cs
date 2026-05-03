@@ -16,6 +16,7 @@ using SignalStack.Worker.Observability;
 using SignalStack.Worker.Jobs.DataSync;
 using SignalStack.Worker.Jobs.EodSignalRunner;
 using SignalStack.Worker.Jobs.HistoricDataSeed;
+using SignalStack.Worker.Jobs.NotificationDelivery;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -113,6 +114,11 @@ builder.Services.AddSingleton<IEntrySignalEvaluator, MaCrossoverEvaluator>();
 // REQ-NOTIFY-004: synchronous persistence before Telegram delivery.
 // REQ-NOTIFY-007: producers write to notifications collection; no Telegram dispatch here.
 builder.Services.AddNotificationServices();
+
+// Notification Delivery Job (NDJ) — P5-T4 / REQ-NOTIFY-008/019/022a
+// Sole Telegram dispatcher for all notification types. Handles Retry-After,
+// dirty-link auto-disable, and global-disable break-glass.
+builder.Services.AddNotificationDelivery(builder.Configuration);
 
 // EOD Signal Runner (EODSR): post-market evaluation of user-subscribed Signal types.
 // REQ-STRAT-013/013a: single-pass per-symbol read + user-scoped evaluation.
