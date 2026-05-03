@@ -7,6 +7,7 @@ namespace Microsoft.Extensions.DependencyInjection;
 ///
 /// Registers:
 /// - <see cref="IManualAdjustmentRepository"/> → <see cref="MongoManualAdjustmentRepository"/>
+/// - <see cref="HoldingsService"/> — FIFO-based holdings and PnL computation
 ///
 /// Call from API <c>Program.cs</c>.
 /// </summary>
@@ -15,6 +16,7 @@ public static class PortfolioExtensions
     public static IServiceCollection AddPortfolioServices(this IServiceCollection services)
     {
         services.AddSingleton<IManualAdjustmentRepository, MongoManualAdjustmentRepository>();
+        services.AddSingleton<HoldingsService>();
         return services;
     }
 }

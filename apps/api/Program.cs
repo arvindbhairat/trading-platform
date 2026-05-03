@@ -288,6 +288,9 @@ app.MapNotificationEndpoints();
 // Reconciliation endpoints — P5-T10 / REQ-RECON-001..004
 app.MapReconciliationEndpoints();
 
+// Portfolio endpoints — P5-T11 / REQ-DASH-002/010 (holdings/PnL subset)
+app.MapPortfolioEndpoints();
+
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
 
