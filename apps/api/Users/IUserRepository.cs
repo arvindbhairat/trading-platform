@@ -103,6 +103,17 @@ public interface IUserRepository
         string userId, string ticketId, DateTime redactedAt, CancellationToken ct = default);
 
     /// <summary>
+    /// REQ-RME-006c: sets (or clears) the manual equity base override.
+    /// Pass <see langword="null"/> for <paramref name="overrideValue"/> to clear.
+    /// Updates <c>equity_base_override</c>, <c>equity_base_override_updated_at</c>,
+    /// and <c>updated_at</c> atomically.
+    /// </summary>
+    Task SetEquityOverrideAsync(
+        string userId,
+        decimal? overrideValue,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// REQ-RECOVERY-005: admin-assisted rebind — replaces all linked identities
     /// with a single new primary identity and clears the old provider/key.
     /// Only the OAuth identity binding changes; all other state is preserved.

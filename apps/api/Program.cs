@@ -291,6 +291,9 @@ app.MapTelegramBotEndpoints();
 // User Telegram linking endpoints — P5-T5 / REQ-NOTIFY-016/017/018
 app.MapTelegramLinkingEndpoints();
 
+// User profile settings endpoints — P6-T6 / REQ-RME-006c
+app.MapUserProfileEndpoints();
+
 // Notification feed endpoints — P5-T6 / REQ-NOTIFY-014, REQ-PROFILE-006
 app.MapNotificationEndpoints();
 

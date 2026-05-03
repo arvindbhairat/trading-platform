@@ -2,6 +2,7 @@ namespace Microsoft.Extensions.Hosting;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SignalStack.Worker.Rme;
 
 /// <summary>
@@ -25,6 +26,12 @@ public static class RmeModuleExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services
+            .AddOptions<EquityReadOptions>()
+            .BindConfiguration(EquityReadOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // ── P6-T3: Position lifecycle state machine ─────────────────────────
         // ITransitionValidator — immutable, thread-safe, encodes the full
         // authoritative state-transition matrix (REQ-PLC-002a).
@@ -35,11 +42,13 @@ public static class RmeModuleExtensions
         // with fencing-token stale-write detection (REQ-RME-CONC-002, REQ-PORT-031b).
         services.AddSingleton<IPositionRepository, MongoPositionRepository>();
 
-        // Interface contracts — no-op / not-implemented placeholders.
-        // Replaced by concrete implementations as each P6 sub-task delivers.
-        // P6-T8 replaces the sizing registration; P6-T12 replaces the stop
-        // registration; P6-T5 wires the advisory service into the channel
-        // consumer loop.
+        // ── P6-T6: Snapshot-consistent equity-base reader ────────────────────
+        // IEquityBaseReader — V1/V2 snapshot protocol with retry, override
+        // support, and OTEL telemetry (REQ-RME-006a/b/c/d).
+        services.AddSingleton<IEquityBaseReader, EquityBaseReader>();
+
+        // RmeAdvisoryService — replaced by concrete implementation in P6-T6
+        // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
 
         // P6-T5: Synchronous trailing-stop recalculation (ADR-0003 carve-out).
@@ -54,41 +63,64 @@ public static class RmeModuleExtensions
 }
 
 /// <summary>
-/// Placeholder advisory service that logs and returns default (zero) advisories.
-/// Replaced by a real implementation in P6-T6 (equity-base read) + P6-T8/P6-T12
-/// (sizing + stop wiring).
+/// RME advisory service that uses <see cref="IEquityBaseReader"/> to read
+/// the user's equity base with snapshot consistency (REQ-RME-006d) and
+/// produces sizing recommendations.
+///
+/// Full sizing-model wiring (ATR, portfolio heat, drawdown-adjusted models)
+/// is added in P6-T8/P6-T9/P6-T10/P6-T11; for now the service applies the
+/// default risk-per-trade percentage as a flat sizing rule.
+/// REQ-RME-004, REQ-RME-017, REQ-RME-018.
 /// </summary>
 internal sealed class RmeAdvisoryService : IRmeAdvisoryService
 {
+    private readonly IEquityBaseReader _equityBaseReader;
+    private readonly IOptions<RmeModuleOptions> _options;
     private readonly ILogger<RmeAdvisoryService> _logger;
 
-    public RmeAdvisoryService(ILogger<RmeAdvisoryService> logger)
+    public RmeAdvisoryService(
+        IEquityBaseReader equityBaseReader,
+        IOptions<RmeModuleOptions> options,
+        ILogger<RmeAdvisoryService> logger)
     {
-        _logger = logger;
+        _equityBaseReader = equityBaseReader ?? throw new ArgumentNullException(nameof(equityBaseReader));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public Task<PortfolioImpactAssessment> AssessEntryImpactAsync(
+    public async Task<PortfolioImpactAssessment> AssessEntryImpactAsync(
         string userId,
         string symbol,
         decimal entryPrice,
         CancellationToken cancellationToken)
     {
         _logger.LogWarning(
-            "RME advisory service not yet implemented — returning default impact assessment "
-            + "(userId: {UserId}, symbol: {Symbol}). Will be wired in P6-T6/T8/T12.",
+            "RME advisory service not yet fully implemented — returning default impact assessment "
+            + "(userId: {UserId}, symbol: {Symbol}). Full portfolio impact wiring in P6-T22.",
             userId, symbol);
 
+        // Read equity base with snapshot consistency (REQ-RME-006d).
+        var equityResult = await _equityBaseReader.GetEquityBaseAsync(userId, cancellationToken);
+
+        if (!equityResult.IsSnapshotConsistent)
+        {
+            throw new InvalidOperationException(
+                $"Cannot assess entry impact: {equityResult.AdvisoryMessage ?? "snapshot contention"}. " +
+                "Please retry.");
+        }
+
+        // Return a partial assessment; full implementation in P6-T22.
         var result = new PortfolioImpactAssessment(
             ProjectedPortfolioHeat: 0m,
             ProjectedSectorExposure: 0m,
-            CashReserveRemaining: 0m,
+            CashReserveRemaining: equityResult.EquityBase,
             SameSectorPositionCount: 0,
             WorstCaseStopLossTotal: 0m);
 
-        return Task.FromResult(result);
+        return result;
     }
 
-    public Task<SizingAdvisory> GetSizingRecommendationAsync(
+    public async Task<SizingAdvisory> GetSizingRecommendationAsync(
         string userId,
         string symbol,
         decimal entryPrice,
@@ -96,20 +128,69 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
         string stopLossType,
         CancellationToken cancellationToken)
     {
-        _logger.LogWarning(
-            "RME advisory service not yet implemented — returning default sizing advisory "
-            + "(userId: {UserId}, symbol: {Symbol}). Will be wired in P6-T8/T12.",
-            userId, symbol);
+        // ── Step 1: Read equity base with snapshot consistency (REQ-RME-006d) ──
+        var equityResult = await _equityBaseReader.GetEquityBaseAsync(userId, cancellationToken);
 
-        var result = new SizingAdvisory(
-            RecommendedQuantity: 0m,
-            RiskAmount: 0m,
-            StopPrice: 0m,
+        if (!equityResult.IsSnapshotConsistent)
+        {
+            _logger.LogWarning(
+                "RME: sizing recommendation deferred for user {UserId} symbol {Symbol} — " +
+                "{AdvisoryMessage}",
+                userId, symbol, equityResult.AdvisoryMessage);
+
+            return new SizingAdvisory(
+                RecommendedQuantity: 0m,
+                RiskAmount: 0m,
+                StopPrice: 0m,
+                SizingModelUsed: sizingModelType,
+                StopTypeUsed: stopLossType,
+                AdvisoryMessage: equityResult.AdvisoryMessage);
+        }
+
+        if (equityResult.Source == EquityBaseSource.Zero)
+        {
+            _logger.LogWarning(
+                "RME: sizing blocked for user {UserId} symbol {Symbol} — equity base is zero. "
+                + "{AdvisoryMessage}",
+                userId, symbol, equityResult.AdvisoryMessage);
+
+            return new SizingAdvisory(
+                RecommendedQuantity: 0m,
+                RiskAmount: 0m,
+                StopPrice: 0m,
+                SizingModelUsed: sizingModelType,
+                StopTypeUsed: stopLossType,
+                AdvisoryMessage: equityResult.AdvisoryMessage);
+        }
+
+        // ── Step 2: Compute default sizing ──────────────────────────────────
+        // Full sizing-model plug-in dispatch is wired in P6-T8/P6-T12.
+        // For now, apply the default risk-per-trade percentage as a flat rule.
+        var equityBase = equityResult.EquityBase;
+        var riskPct = (decimal)_options.Value.DefaultRiskPerTradePct / 100m;
+        var riskAmount = equityBase * riskPct;
+
+        var suggestedQuantity = entryPrice > 0
+            ? Math.Floor(riskAmount / entryPrice)
+            : 0m;
+
+        _logger.LogInformation(
+            "RME: sizing recommendation for user {UserId} symbol {Symbol} — " +
+            "equity base: {EquityBase}, risk {RiskPct}% = risk amount ₹{RiskAmount}, " +
+            "suggested qty: {Qty} @ ₹{Price}. Source: {Source}. Override active: {Override}. " +
+            "Snapshot consistent: {Consistent}.",
+            userId, symbol, equityBase, _options.Value.DefaultRiskPerTradePct,
+            riskAmount, suggestedQuantity, entryPrice,
+            equityResult.Source, equityResult.IsOverrideActive,
+            equityResult.IsSnapshotConsistent);
+
+        return new SizingAdvisory(
+            RecommendedQuantity: suggestedQuantity,
+            RiskAmount: riskAmount,
+            StopPrice: 0m, // Stop price wiring in P6-T12
             SizingModelUsed: sizingModelType,
             StopTypeUsed: stopLossType,
-            AdvisoryMessage: "Sizing engine not yet available.");
-
-        return Task.FromResult(result);
+            AdvisoryMessage: equityResult.AdvisoryMessage);
     }
 }
 

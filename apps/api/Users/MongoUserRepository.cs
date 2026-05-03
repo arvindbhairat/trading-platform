@@ -187,6 +187,32 @@ public sealed class MongoUserRepository : IUserRepository
     }
 
     // REQ-RECOVERY-001: links a secondary OAuth identity, enforcing the max-2 limit.
+    public async Task SetEquityOverrideAsync(
+        string userId, decimal? overrideValue, CancellationToken ct = default)
+    {
+        var filter = Builders<UserDocument>.Filter.Eq(u => u.UserId, userId);
+        var now = DateTime.UtcNow;
+
+        if (overrideValue.HasValue)
+        {
+            var update = Builders<UserDocument>.Update
+                .Set(u => u.EquityBaseOverride, overrideValue.Value)
+                .Set(u => u.EquityBaseOverrideUpdatedAt, now)
+                .Set(u => u.UpdatedAt, now);
+
+            await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+        }
+        else
+        {
+            var update = Builders<UserDocument>.Update
+                .Unset(u => u.EquityBaseOverride)
+                .Unset(u => u.EquityBaseOverrideUpdatedAt)
+                .Set(u => u.UpdatedAt, now);
+
+            await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+        }
+    }
+
     public async Task<List<LinkedIdentity>> LinkIdentityAsync(
         string userId, string provider, string providerKey, string email,
         CancellationToken ct = default)
