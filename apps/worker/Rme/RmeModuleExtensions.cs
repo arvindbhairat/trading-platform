@@ -51,6 +51,13 @@ public static class RmeModuleExtensions
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
 
+        // ── P6-T7: Equity-base divergence advisory ───────────────────────────
+        // IEquityBaseDivergenceService — detects divergence between FYERS total
+        // and platform-visible equity, writing an advisory notification when
+        // the gap exceeds risk.equity_base.external_divergence_warn_pct
+        // (REQ-RME-006e).
+        services.AddSingleton<IEquityBaseDivergenceService, EquityBaseDivergenceService>();
+
         // P6-T5: Synchronous trailing-stop recalculation (ADR-0003 carve-out).
         // Replaced by concrete implementations in P6-T14/T15.
         services.AddSingleton<ITrailingStopSyncService, NoOpTrailingStopSyncService>();

@@ -32,6 +32,7 @@ public static class NotificationEndpoints
         [NotificationType.SectorExposureBreach] = "Sector Exposure Breach",
         [NotificationType.MarketHaltActive] = "Market Halt Active",
         [NotificationType.MarketHaltCleared] = "Market Halt Cleared",
+        [NotificationType.EquityBaseDivergenceAdvisory] = "Equity Base Divergence",
     };
 
     public static IEndpointRouteBuilder MapNotificationEndpoints(

@@ -17,8 +17,9 @@ public static class UserProfileExtensions
 
         // ── GET /api/v1/user/profile/equity ─────────────────────────────────
         // Returns the user's current equity base state including override status,
-        // FYERS total, platform-visible equity, and the max permitted override.
-        // REQ-RME-006b/c.
+        // FYERS total, platform-visible equity, divergence advisory info, and
+        // the max permitted override.
+        // REQ-RME-006b/c/e.
         profile.MapGet("/equity", async (
             HttpContext context,
             IMongoDatabase database) =>
@@ -55,6 +56,39 @@ public static class UserProfileExtensions
                 cashReserve = cashVal;
             }
 
+            // Read platform-visible equity from equity_curve (most authoritative).
+            decimal? platformVisible = null;
+            decimal? externalHoldings = null;
+            var equityCurve = database.GetCollection<BsonDocument>("equity_curve");
+            var curveFilter = Builders<BsonDocument>.Filter.Eq("user_id", userId);
+            var sort = Builders<BsonDocument>.Sort.Descending("session_date");
+            var latestCurve = await equityCurve
+                .Find(curveFilter)
+                .Sort(sort)
+                .Limit(1)
+                .FirstOrDefaultAsync(context.RequestAborted);
+
+            if (latestCurve is not null)
+            {
+                var eqValue = latestCurve.GetValue("equity_value", BsonNull.Value);
+                if (!eqValue.IsBsonNull && eqValue.IsDecimal128)
+                {
+                    platformVisible = (decimal)eqValue.AsDecimal128;
+                }
+            }
+
+            // Fall back to portfolio_snapshots if equity_curve unavailable.
+            if (platformVisible is null && fyersTotal.HasValue)
+            {
+                platformVisible = fyersTotal;
+            }
+
+            // Compute external holdings = FYERS total − platform-visible equity.
+            if (fyersTotal.HasValue && platformVisible.HasValue)
+            {
+                externalHoldings = fyersTotal.Value - platformVisible.Value;
+            }
+
             // S-10 cap: min(FYERS_total × 1.5, FYERS_total + ₹10,00,000)
             decimal? maxOverride = null;
             if (fyersTotal.HasValue)
@@ -64,13 +98,50 @@ public static class UserProfileExtensions
                     fyersTotal.Value + 1_000_000m);
             }
 
+            // ── Divergence assessment (REQ-RME-006e) ──────────────────────────
+            bool hasDivergence = false;
+            decimal? divergenceGapPct = null;
+            decimal divergenceThresholdPct = 15m; // Default unless sys_config says otherwise
+
+            // Read threshold from sys_config
+            var sysConfig = database.GetCollection<BsonDocument>("sys_config");
+            var thresholdDoc = await sysConfig
+                .Find(Builders<BsonDocument>.Filter.Eq("key",
+                    "risk.equity_base.external_divergence_warn_pct"))
+                .FirstOrDefaultAsync(context.RequestAborted);
+
+            if (thresholdDoc is not null)
+            {
+                var tv = thresholdDoc.GetValue("value", BsonNull.Value);
+                if (!tv.IsBsonNull && decimal.TryParse(tv.AsString,
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var parsedThreshold))
+                {
+                    divergenceThresholdPct = parsedThreshold;
+                }
+            }
+
+            if (fyersTotal.HasValue && platformVisible.HasValue && platformVisible.Value > 0)
+            {
+                var gap = Math.Abs(fyersTotal.Value - platformVisible.Value);
+                var gapPct = Math.Round(gap / platformVisible.Value * 100m, 2);
+                divergenceGapPct = gapPct;
+                hasDivergence = gapPct > divergenceThresholdPct;
+            }
+
             return Results.Ok(new
             {
                 equity_base_override = user.EquityBaseOverride,
                 equity_base_override_updated_at = user.EquityBaseOverrideUpdatedAt,
                 fyers_total_account_value = fyersTotal,
+                platform_visible_equity = platformVisible,
+                external_holdings_excluded = externalHoldings,
                 platform_visible_override_max = maxOverride,
                 override_is_active = user.EquityBaseOverride.HasValue,
+                has_divergence = hasDivergence,
+                divergence_gap_pct = divergenceGapPct,
+                external_divergence_warn_pct = divergenceThresholdPct,
             });
         });
 

@@ -61,6 +61,7 @@ public static class SysConfigManifest
         new("risk.corporate_action.avg_cost_delta_threshold_pct","risk", "number",  "50",   "Average-cost delta percentage triggering corporate-action detection.",                                               "REQ-PORT-016"),
         new("risk.circuit_limit_stale_minutes",        "risk",           "number",  "15",   "Minutes after which a circuit-limit reading is considered stale.",                                                  "REQ-ORDER-018a"),
         new("risk.equity_override_stale_days",         "risk",           "number",  "30",   "Days after which an equity-base override is considered stale.",                                                     "REQ-RME-006c"),
+        new("risk.equity_base.external_divergence_warn_pct","risk",      "number",  "15",   "Divergence threshold percentage between FYERS total and platform-visible equity before advisory fires.",            "REQ-RME-006e"),
         new("risk.default.portfolio_heat_warning_threshold_pct","risk",  "number",  "4",    "Portfolio heat warning threshold percentage.",                                                                      "REQ-ORDER-012"),
 
         // ── rme ───────────────────────────────────────────────────────────
