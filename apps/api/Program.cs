@@ -19,6 +19,7 @@ using SignalStack.Api.Historical;
 using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
 using SignalStack.Api.Notifications;
+using SignalStack.Api.TelegramBot;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -91,6 +92,10 @@ builder.Services.AddBacktestingServices(sqlConnectionString);
 // Notification collection schema + writer paths — P5-T3 / REQ-NOTIFY-006
 // REQ-NOTIFY-004: synchronous persistence before Telegram delivery.
 builder.Services.AddNotificationServices();
+
+// Telegram bot provisioning + deep-link subscription + token rotation — P5-T5
+// REQ-NOTIFY-015/016/017/022a.
+builder.Services.AddTelegramBotServices();
 
 // Sentinel startup check: fails when sys_config seeder has not been run (REQ-CONFIG-010).
 builder.Services.AddHealthChecks()
@@ -257,6 +262,12 @@ app.MapAdminBreachEndpoints();
 
 // Admin home / transfer recovery summary endpoints — P2-T19 / REQ-ROLE-007a
 app.MapAdminHomeEndpoints();
+
+// Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
+app.MapTelegramBotEndpoints();
+
+// User Telegram linking endpoints — P5-T5 / REQ-NOTIFY-016/017/018
+app.MapTelegramLinkingEndpoints();
 
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();

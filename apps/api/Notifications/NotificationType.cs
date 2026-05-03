@@ -35,6 +35,8 @@ public static class NotificationType
     public const string AdminNdjThresholdBreach = "admin_ndj_threshold_breach";
     public const string AdminFyersTokenExpiryWarning = "admin_fyers_token_expiry_warning";
     public const string AdminTelegramBotHealth = "admin_telegram_bot_health";
+    public const string AdminTelegramTokenRotationDue = "admin_telegram_token_rotation_due";
+    public const string AdminTelegramGlobalDisableChanged = "admin_telegram_global_disable_changed";
     public const string AdminSysConfigChanged = "admin_sys_config_changed";
     public const string AdminPhaseTransition = "admin_phase_transition";
     public const string AdminMarketHaltDetected = "admin_market_halt_detected";
@@ -62,6 +64,7 @@ public static class NotificationType
         AdminDataSyncJobFailure, AdminEodSignalRunnerFailure, AdminKillSwitchChanged,
         AdminHdsJobFailure, AdminLmdsSuspended, AdminLadsThresholdBreach,
         AdminNdjThresholdBreach, AdminFyersTokenExpiryWarning, AdminTelegramBotHealth,
+        AdminTelegramTokenRotationDue, AdminTelegramGlobalDisableChanged,
         AdminSysConfigChanged, AdminPhaseTransition, AdminMarketHaltDetected,
         AdminMarketHaltCleared, AdminDataQualityBreach, AdminFyersBudgetThreshold,
         AdminCorporateActionDiscontinuity, AdminManualAdjustmentReconciliation,
