@@ -4,12 +4,12 @@ namespace SignalStack.Worker.Rme;
 
 /// <summary>
 /// Real RME event consumer that validates events against the authoritative
-/// state-transition matrix via <see cref="ITransitionValidator"/>.
+/// state-transition matrix via <see cref="ITransitionValidator"/> and produces
+/// updated position state together with side-effect descriptors.
 ///
-/// In the P6-T3 baseline this consumer performs transition validation using
-/// event metadata alone. P6-T4 adds full (PositionDocument, RmeEvent) → RmeOutput
-/// wiring with OCC versioning, at which point this consumer will receive the
-/// current position state and apply transitions atomically.
+/// Pure function over <c>(PositionDocument, RmeEvent) → (UpdatedPositionDocument, IReadOnlyList&lt;RmeOutput&gt;)</c>
+/// per REQ-RME-CONC-003. No side effects — writes are performed by the channel
+/// consumer loop (REQ-RME-CONC-003).
 ///
 /// Replaces <see cref="NoOpRmeEventConsumer"/> (kept in source for reference
 /// but no longer registered in DI).
@@ -28,8 +28,9 @@ internal sealed class RmeEventConsumer : IRmeEventConsumer
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<RmeOutput>> ConsumeAsync(
+    public Task<(PositionDocument UpdatedPosition, IReadOnlyList<RmeOutput> Outputs)> ConsumeAsync(
         RmeEvent rmeEvent,
+        PositionDocument currentPosition,
         CancellationToken cancellationToken)
     {
         // ── Map event source string to enum ───────────────────────────────
@@ -40,25 +41,73 @@ internal sealed class RmeEventConsumer : IRmeEventConsumer
                 "RME event {EventType} for position {PositionId} has unrecognised " +
                 "source '{Source}'; skipping.",
                 rmeEvent.GetType().Name, rmeEvent.PositionId, rmeEvent.Source);
-            return Task.FromResult<IReadOnlyList<RmeOutput>>(Array.Empty<RmeOutput>());
+            return Task.FromResult<(PositionDocument, IReadOnlyList<RmeOutput>)>(
+                (currentPosition, Array.Empty<RmeOutput>()));
         }
 
         // ── Determine reason code from event type + content ───────────────
         var reason = MapReason(rmeEvent);
 
-        // ── Log the validation attempt; actual transition requires current
-        //    position state which is wired in P6-T4 with OCC versioning. ──
-        _logger.LogInformation(
+        // ── Attempt state transition ─────────────────────────────────────
+        if (reason is not null &&
+            _transitionValidator.TryTransition(currentPosition.State, source.Value, reason, out var transition, out _))
+        {
+            // Transition allowed — produce updated position (pure: new instance, no mutation)
+            var updatedPosition = currentPosition.CloneWith(
+                state: transition!.ToState);
+
+            var output = new RmeOutput
+            {
+                Transition = transition,
+                IncidentRecordRequired = transition.ToState == PositionState.Suspended,
+                AuditRecordRequired = source == PositionEventSource.ADMIN,
+                AdvisoryMessage = FormatAdvisoryMessage(rmeEvent, source.Value, reason),
+            };
+
+            _logger.LogInformation(
+                "Position {PositionId}: {FromState} → {ToState} " +
+                "({EventDesc}, source: {Source}, reason: {Reason})",
+                rmeEvent.PositionId,
+                transition.FromState, transition.ToState,
+                transition.EventDescription,
+                transition.Source,
+                transition.ReasonCode ?? "(none)");
+
+            return Task.FromResult<(PositionDocument, IReadOnlyList<RmeOutput>)>(
+                (updatedPosition, new[] { output }));
+        }
+
+        // ── Advisory-only update (no state transition) ───────────────────
+        // Some events (e.g. add/reduce level breach, drawdown state change)
+        // do not trigger a state machine transition but may update advisory flags.
+        var advisoryFlags = MapAdvisoryFlagsUpdate(rmeEvent);
+
+        if (advisoryFlags is not null)
+        {
+            var updatedPosition = currentPosition.CloneWith(
+                addAdvisoryActive: advisoryFlags.AddAdvisoryActive,
+                reduceAdvisoryActive: advisoryFlags.ReduceAdvisoryActive,
+                trailingStopActive: advisoryFlags.TrailingStopActive,
+                exitAdvisoryActive: advisoryFlags.ExitAdvisoryActive);
+
+            var output = new RmeOutput
+            {
+                AdvisoryFlags = advisoryFlags,
+                AdvisoryMessage = FormatAdvisoryMessage(rmeEvent, source.Value, reason),
+            };
+
+            return Task.FromResult<(PositionDocument, IReadOnlyList<RmeOutput>)>(
+                (updatedPosition, new[] { output }));
+        }
+
+        // ── No change ────────────────────────────────────────────────────
+        _logger.LogDebug(
             "RME event {EventType} for position {PositionId}: source={Source}, reason={Reason}. " +
-            "Transition validation requires current position state (P6-T4).",
+            "No state transition or advisory flags changed.",
             rmeEvent.GetType().Name, rmeEvent.PositionId, source, reason ?? "(none)");
 
-        var output = new RmeOutput
-        {
-            AdvisoryMessage = FormatAdvisoryMessage(rmeEvent, source.Value, reason),
-        };
-
-        return Task.FromResult<IReadOnlyList<RmeOutput>>(new[] { output });
+        return Task.FromResult<(PositionDocument, IReadOnlyList<RmeOutput>)>(
+            (currentPosition, Array.Empty<RmeOutput>()));
     }
 
     /// <summary>
@@ -94,6 +143,23 @@ internal sealed class RmeEventConsumer : IRmeEventConsumer
         DrawdownStateChangedEvent => null, // advisory-only, no state transition
         KillSwitchActivatedEvent => TransitionReason.KillSwitchActivated,
         TrailingStopUpdateEvent => null, // ADR-0003 carve-out, handled synchronously
+        _ => null,
+    };
+
+    /// <summary>
+    /// Maps an RME event to advisory flag changes. Returns non-null only when at least
+    /// one advisory flag was toggled by the event.
+    /// </summary>
+    private static AdvisoryFlagsUpdate? MapAdvisoryFlagsUpdate(RmeEvent rmeEvent) => rmeEvent switch
+    {
+        PriceLevelBreachedEvent { Level: LevelType.Add } => new AdvisoryFlagsUpdate
+        {
+            AddAdvisoryActive = true,
+        },
+        PriceLevelBreachedEvent { Level: LevelType.Reduce } => new AdvisoryFlagsUpdate
+        {
+            ReduceAdvisoryActive = true,
+        },
         _ => null,
     };
 

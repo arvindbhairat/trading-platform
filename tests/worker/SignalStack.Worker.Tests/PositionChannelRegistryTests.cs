@@ -7,8 +7,8 @@ using Xunit;
 namespace SignalStack.Worker.Tests;
 
 /// <summary>
-/// Verifies ADR-0003 per-position channel registry skeleton.
-/// REQ-RME-CONC-001/003/004/005.
+/// Verifies ADR-0003 per-position channel registry with OCC retry loop.
+/// REQ-RME-CONC-001/002/003/004/005.
 /// </summary>
 public sealed class PositionChannelRegistryTests : IDisposable
 {
@@ -18,11 +18,13 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
     private PositionChannelRegistry BuildRegistry(
         IRmeEventConsumer consumer,
+        IPositionRepository repository,
         PositionChannelOptions? options = null) =>
         new(
             NullLogger<PositionChannelRegistry>.Instance,
             Options.Create(options ?? new PositionChannelOptions()),
             consumer,
+            repository,
             _meter);
 
     // ─── REQ-RME-CONC-001 / Vertical slice ───────────────────────────────────
@@ -36,7 +38,9 @@ public sealed class PositionChannelRegistryTests : IDisposable
         var processedCount = 0;
         var allProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var consumer = new DelegatingRmeEventConsumer(async (_, ct) =>
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer(async (_, _, ct) =>
         {
             var inFlight = Interlocked.Increment(ref concurrencyCount);
             InterlockedMax(ref maxObservedConcurrency, inFlight);
@@ -44,9 +48,12 @@ public sealed class PositionChannelRegistryTests : IDisposable
             Interlocked.Decrement(ref concurrencyCount);
             if (Interlocked.Increment(ref processedCount) == 2)
                 allProcessed.TrySetResult();
+            return (position, Array.Empty<RmeOutput>());
         });
 
-        await using var registry = BuildRegistry(consumer);
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
         var positionId = Guid.NewGuid();
         registry.OpenChannel(positionId);
 
@@ -69,14 +76,18 @@ public sealed class PositionChannelRegistryTests : IDisposable
         var processed = new List<Guid>();
         var gate = new SemaphoreSlim(0);
 
-        var consumer = new DelegatingRmeEventConsumer((evt, _) =>
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer((evt, _, _) =>
         {
             lock (processed) processed.Add(evt.PositionId);
             if (processed.Count == 2) gate.Release();
-            return Task.CompletedTask;
+            return (position, Array.Empty<RmeOutput>());
         });
 
-        await using var registry = BuildRegistry(consumer);
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
         registry.OpenChannel(posA);
         registry.OpenChannel(posB);
 
@@ -85,6 +96,84 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
         await gate.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(2, processed.Count);
+    }
+
+    // ─── REQ-RME-CONC-002: OCC retry loop ────────────────────────────────────
+
+    [Fact]
+    public async Task OCC_retry_succeeds_after_transient_conflict()
+    {
+        // Arrange – first write fails OCC, second succeeds
+        var callCount = 0;
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
+        {
+            var updated = MakeOpenPosition();
+            updated.State = PositionState.Closed;
+            return (updated, Array.Empty<RmeOutput>());
+        });
+
+        var repo = new DelegatingPositionRepository
+        {
+            OnGetById = _ => position,
+            OnUpdateWithOcc = (_, expected, _) =>
+            {
+                var current = Interlocked.Increment(ref callCount);
+                // First call: OCC conflict; second: success
+                return current == 1
+                    ? new PositionOccResult(false, 0)
+                    : new PositionOccResult(true, expected + 1);
+            }
+        };
+
+        await using var registry = BuildRegistry(consumer, repo);
+        var positionId = Guid.NewGuid();
+        registry.OpenChannel(positionId);
+
+        await registry.EnqueueAsync(MakeFillEvent(positionId));
+
+        // Small yield to let the consumer process
+        await Task.Delay(200);
+
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public async Task OCC_retry_exhaustion_after_three_failures_logs_error_and_ceases()
+    {
+        // Arrange – all writes fail OCC
+        var callCount = 0;
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
+        {
+            var updated = MakeOpenPosition();
+            updated.State = PositionState.Closed;
+            return (updated, Array.Empty<RmeOutput>());
+        });
+
+        var repo = new DelegatingPositionRepository
+        {
+            OnGetById = _ => position,
+            OnUpdateWithOcc = (_, _, _) =>
+            {
+                Interlocked.Increment(ref callCount);
+                return new PositionOccResult(false, 0);
+            }
+        };
+
+        await using var registry = BuildRegistry(consumer, repo);
+        var positionId = Guid.NewGuid();
+        registry.OpenChannel(positionId);
+
+        await registry.EnqueueAsync(MakeFillEvent(positionId));
+
+        // Small yield to let the consumer process (3 retries + original = 4 write attempts)
+        await Task.Delay(200);
+
+        // 1 original + 3 retries = 4
+        Assert.Equal(4, callCount);
     }
 
     // ─── REQ-RME-CONC-004: backlog gauge ─────────────────────────────────────
@@ -97,16 +186,21 @@ public sealed class PositionChannelRegistryTests : IDisposable
         var releaseConsumer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var isFirst = true;
 
-        var consumer = new DelegatingRmeEventConsumer(async (_, ct) =>
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer(async (_, _, ct) =>
         {
             if (Interlocked.Exchange(ref isFirst, false) is var wasFirst && wasFirst)
             {
                 event1Started.TrySetResult();
                 await releaseConsumer.Task.WaitAsync(ct);
             }
+            return (position, Array.Empty<RmeOutput>());
         });
 
-        await using var registry = BuildRegistry(consumer);
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
         var positionId = Guid.NewGuid();
         registry.OpenChannel(positionId);
 
@@ -131,8 +225,10 @@ public sealed class PositionChannelRegistryTests : IDisposable
     [Fact]
     public async Task Backlog_depth_is_zero_when_all_channels_are_empty()
     {
-        var consumer = new DelegatingRmeEventConsumer((_, _) => Task.CompletedTask);
-        await using var registry = BuildRegistry(consumer);
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
+            (MakeOpenPosition(), Array.Empty<RmeOutput>()));
+        var repo = new DelegatingPositionRepository();
+        await using var registry = BuildRegistry(consumer, repo);
         Assert.Equal(0, registry.GetMaxBacklogDepth());
     }
 
@@ -144,14 +240,16 @@ public sealed class PositionChannelRegistryTests : IDisposable
         var consumerCalled = false;
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var consumer = new DelegatingRmeEventConsumer((_, _) =>
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
         {
             consumerCalled = true;
             gate.TrySetResult();
-            return Task.CompletedTask;
+            return (MakeOpenPosition(), Array.Empty<RmeOutput>());
         });
 
-        await using var registry = BuildRegistry(consumer);
+        var repo = new DelegatingPositionRepository();
+
+        await using var registry = BuildRegistry(consumer, repo);
         var positionId = Guid.NewGuid();
         registry.OpenChannel(positionId);
 
@@ -174,8 +272,10 @@ public sealed class PositionChannelRegistryTests : IDisposable
     [Fact]
     public async Task EnqueueAsync_discards_event_and_logs_warning_when_no_channel_is_registered()
     {
-        var consumer = new DelegatingRmeEventConsumer((_, _) => Task.CompletedTask);
-        await using var registry = BuildRegistry(consumer);
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
+            (MakeOpenPosition(), Array.Empty<RmeOutput>()));
+        var repo = new DelegatingPositionRepository();
+        await using var registry = BuildRegistry(consumer, repo);
 
         // No channel opened — should not throw; event is silently discarded
         await registry.EnqueueAsync(MakeFillEvent(Guid.NewGuid()));
@@ -185,13 +285,17 @@ public sealed class PositionChannelRegistryTests : IDisposable
     public async Task CloseChannel_drains_remaining_events_before_consumer_terminates()
     {
         var processedCount = 0;
-        var consumer = new DelegatingRmeEventConsumer((_, _) =>
+        var position = MakeOpenPosition();
+
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
         {
             Interlocked.Increment(ref processedCount);
-            return Task.CompletedTask;
+            return (position, Array.Empty<RmeOutput>());
         });
 
-        await using var registry = BuildRegistry(consumer);
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
         var positionId = Guid.NewGuid();
         registry.OpenChannel(positionId);
 
@@ -206,7 +310,64 @@ public sealed class PositionChannelRegistryTests : IDisposable
         Assert.Equal(2, processedCount);
     }
 
+    // ─── REQ-PORT-031b: fencing-token abort ──────────────────────────────────
+
+    [Fact]
+    public async Task Fencing_token_stale_write_is_rejected_by_repository()
+    {
+        // Arrange – create a position with fencing token 5, try to write with token 3
+        var position = MakeOpenPosition();
+        position.LedgerFenceToken = 5;
+
+        var repo = new MongoPositionRepositoryStub();
+        await repo.CreateAsync(position);
+
+        // Act – write with stale fencing token (expected version 1, fence token 3 < current 5)
+        var result = await repo.UpdateWithOccAsync(position, expectedVersion: 1, fencingToken: 3);
+
+        // Assert – write rejected
+        Assert.False(result.Success);
+        // Version must remain unchanged after stale-write rejection
+        Assert.Equal(1, position.Version);
+    }
+
+    [Fact]
+    public async Task Fencing_token_valid_write_succeeds()
+    {
+        // Arrange – create a position with fencing token 5, write with token >= 5
+        var position = MakeOpenPosition();
+        position.LedgerFenceToken = 5;
+
+        var repo = new MongoPositionRepositoryStub();
+        await repo.CreateAsync(position);
+
+        // Act – write with valid fencing token (token 5, equals current)
+        var result = await repo.UpdateWithOccAsync(position, expectedVersion: 1, fencingToken: 5);
+
+        // Assert – write accepted
+        Assert.True(result.Success);
+        Assert.Equal(2, result.NewVersion);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private static PositionDocument MakeOpenPosition()
+    {
+        return new PositionDocument
+        {
+            PositionId = Guid.NewGuid(),
+            UserId = "test-user",
+            Symbol = "RELIANCE",
+            State = PositionState.Open,
+            EntryPrice = 2500m,
+            CurrentPrice = 2520m,
+            Quantity = 10m,
+            StopLoss = 2450m,
+            TrailingStop = 0m,
+            Version = 1,
+            LedgerFenceToken = 1,
+        };
+    }
 
     private static FillConfirmedEvent MakeFillEvent(Guid positionId) => new()
     {
@@ -229,11 +390,125 @@ public sealed class PositionChannelRegistryTests : IDisposable
     }
 }
 
-file sealed class DelegatingRmeEventConsumer(Func<RmeEvent, CancellationToken, Task> handler) : IRmeEventConsumer
+/// <summary>
+/// Test double that delegates <see cref="IRmeEventConsumer"/> calls to a provided function.
+/// </summary>
+file sealed class DelegatingRmeEventConsumer : IRmeEventConsumer
 {
-    public async Task<IReadOnlyList<RmeOutput>> ConsumeAsync(RmeEvent rmeEvent, CancellationToken cancellationToken)
+    private readonly Func<RmeEvent, PositionDocument, CancellationToken, Task<(PositionDocument, IReadOnlyList<RmeOutput>)>> _handler;
+
+    public DelegatingRmeEventConsumer(
+        Func<RmeEvent, PositionDocument, CancellationToken, Task<(PositionDocument, IReadOnlyList<RmeOutput>)>> handler)
     {
-        await handler(rmeEvent, cancellationToken);
-        return Array.Empty<RmeOutput>();
+        _handler = handler;
+    }
+
+    public DelegatingRmeEventConsumer(
+        Func<RmeEvent, PositionDocument, CancellationToken, (PositionDocument, IReadOnlyList<RmeOutput>)> syncHandler)
+    {
+        _handler = (evt, pos, ct) => Task.FromResult(syncHandler(evt, pos, ct));
+    }
+
+    public Task<(PositionDocument UpdatedPosition, IReadOnlyList<RmeOutput> Outputs)> ConsumeAsync(
+        RmeEvent rmeEvent, PositionDocument currentPosition, CancellationToken cancellationToken)
+    {
+        return _handler(rmeEvent, currentPosition, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Test double for <see cref="IPositionRepository"/> with configurable delegate callbacks.
+/// Default behavior: writes succeed, GetById returns null.
+/// </summary>
+file sealed class DelegatingPositionRepository : IPositionRepository
+{
+    public Func<Guid, PositionDocument?>? OnGetById { get; set; }
+    public Func<PositionDocument, long, long?, PositionOccResult>? OnUpdateWithOcc { get; set; }
+    public Func<List<PositionDocument>>? OnGetNonTerminal { get; set; }
+
+    public Task<PositionDocument?> GetByIdAsync(Guid positionId, CancellationToken ct = default)
+    {
+        return Task.FromResult(OnGetById?.Invoke(positionId));
+    }
+
+    public Task CreateAsync(PositionDocument position, CancellationToken ct = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task<PositionOccResult> UpdateWithOccAsync(
+        PositionDocument position, long expectedVersion, long? fencingToken = null, CancellationToken ct = default)
+    {
+        if (OnUpdateWithOcc is not null)
+        {
+            var result = OnUpdateWithOcc(position, expectedVersion, fencingToken);
+            if (result.Success)
+            {
+                position.Version = expectedVersion + 1;
+            }
+            return Task.FromResult(result);
+        }
+        // Default: always succeed
+        position.Version = expectedVersion + 1;
+        return Task.FromResult(new PositionOccResult(true, expectedVersion + 1));
+    }
+
+    public Task<List<PositionDocument>> GetNonTerminalAsync(CancellationToken ct = default)
+    {
+        return Task.FromResult(OnGetNonTerminal?.Invoke() ?? new List<PositionDocument>());
+    }
+}
+
+/// <summary>
+/// In-memory stub of <see cref="MongoPositionRepository"/> for testing the
+/// OCC and fencing-token write filtering logic without a real MongoDB.
+/// </summary>
+file sealed class MongoPositionRepositoryStub : IPositionRepository
+{
+    // In-memory store keyed by position ID
+    private readonly Dictionary<Guid, (PositionDocument Doc, long Version, long FenceToken)> _store = new();
+
+    public Task<PositionDocument?> GetByIdAsync(Guid positionId, CancellationToken ct = default)
+    {
+        if (_store.TryGetValue(positionId, out var entry))
+            return Task.FromResult<PositionDocument?>(entry.Doc);
+        return Task.FromResult<PositionDocument?>(null);
+    }
+
+    public Task CreateAsync(PositionDocument position, CancellationToken ct = default)
+    {
+        _store[position.PositionId] = (position, position.Version, position.LedgerFenceToken);
+        return Task.CompletedTask;
+    }
+
+    public Task<PositionOccResult> UpdateWithOccAsync(
+        PositionDocument position, long expectedVersion, long? fencingToken = null, CancellationToken ct = default)
+    {
+        // Replicate the real repo's filter logic in memory
+        if (!_store.TryGetValue(position.PositionId, out var current))
+            return Task.FromResult(new PositionOccResult(false, 0));
+
+        // Version check (REQ-RME-CONC-002)
+        if (current.Version != expectedVersion)
+            return Task.FromResult(new PositionOccResult(false, 0));
+
+        // Fencing token check (REQ-PORT-031b(b))
+        if (fencingToken.HasValue && current.FenceToken > fencingToken.Value)
+            return Task.FromResult(new PositionOccResult(false, 0));
+
+        // Success
+        var newVersion = expectedVersion + 1;
+        position.Version = newVersion;
+        position.UpdatedAt = DateTime.UtcNow;
+        _store[position.PositionId] = (position, newVersion, position.LedgerFenceToken);
+        return Task.FromResult(new PositionOccResult(true, newVersion));
+    }
+
+    public Task<List<PositionDocument>> GetNonTerminalAsync(CancellationToken ct = default)
+    {
+        return Task.FromResult(_store.Values
+            .Where(e => e.Doc.State != PositionState.Closed && e.Doc.State != PositionState.Rejected)
+            .Select(e => e.Doc)
+            .ToList());
     }
 }

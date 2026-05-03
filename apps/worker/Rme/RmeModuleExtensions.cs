@@ -30,6 +30,11 @@ public static class RmeModuleExtensions
         // authoritative state-transition matrix (REQ-PLC-002a).
         services.AddSingleton<ITransitionValidator, TransitionValidator>();
 
+        // ── P6-T4: Position document OCC repository ──────────────────────────
+        // IPositionRepository — _version-based Optimistic Concurrency Control
+        // with fencing-token stale-write detection (REQ-RME-CONC-002, REQ-PORT-031b).
+        services.AddSingleton<IPositionRepository, MongoPositionRepository>();
+
         // Interface contracts — no-op / not-implemented placeholders.
         // Replaced by concrete implementations as each P6 sub-task delivers.
         // P6-T8 replaces the sizing registration; P6-T12 replaces the stop
