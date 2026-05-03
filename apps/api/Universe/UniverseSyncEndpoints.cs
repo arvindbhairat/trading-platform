@@ -7,6 +7,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
+using SignalStack.Api.Notifications;
 using SignalStack.Api.SysConfig;
 
 namespace SignalStack.Api.Universe;
@@ -238,6 +239,16 @@ public static class UniverseSyncEndpoints
                 auditDetails["confirmation_phrase"] = request.ConfirmationPhrase;
 
             await auditRepo.RecordAsync(adminId, "universe_sync_commit", DateTime.UtcNow, auditDetails, ct);
+
+            // REQ-UNIV-015: notify users with open positions in archived symbols.
+            if (result.ArchivedSymbols.Count > 0)
+            {
+                var notifDb = context.RequestServices.GetRequiredService<IMongoDatabase>();
+                var notifWriter = context.RequestServices.GetRequiredService<INotificationWriter>();
+                var notifLogger = context.RequestServices.GetRequiredService<ILogger<UniverseSyncService>>();
+                await NotifyArchivedSymbolOpenPositionsAsync(
+                    result.ArchivedSymbols, notifDb, notifWriter, notifLogger, ct);
+            }
 
             return Results.Ok(new
             {
@@ -670,7 +681,13 @@ public static class UniverseSyncEndpoints
                             ["previous_failure_count"] = symbol.ConsecutiveFailureCount
                         }, ct);
 
-                    // Note: symbol_archived_with_open_position notification is deferred to P5-T16.
+                    // REQ-UNIV-015: notify users with open positions in archived symbols.
+                    var notifDbSymbol = context.RequestServices.GetRequiredService<IMongoDatabase>();
+                    var notifWriterSymbol = context.RequestServices.GetRequiredService<INotificationWriter>();
+                    var notifLoggerSymbol = context.RequestServices.GetRequiredService<ILogger<UniverseSyncService>>();
+                    await NotifyArchivedSymbolOpenPositionsAsync(
+                        [request.Symbol], notifDbSymbol, notifWriterSymbol, notifLoggerSymbol, ct);
+
                     return Results.Ok(new { status = "archived", symbol = request.Symbol });
 
                 case "dismiss":
@@ -729,6 +746,94 @@ public static class UniverseSyncEndpoints
         .WithTags(Tag);
 
         return app;
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// For each archived symbol, checks whether any user has an open position
+    /// and generates a <c>symbol_archived_with_open_position</c> notification.
+    /// REQ-UNIV-015.
+    /// </summary>
+    private static async Task NotifyArchivedSymbolOpenPositionsAsync(
+        IReadOnlyList<string> archivedSymbols,
+        IMongoDatabase database,
+        INotificationWriter notificationWriter,
+        ILogger<UniverseSyncService> logger,
+        CancellationToken ct)
+    {
+        if (archivedSymbols.Count == 0) return;
+
+        try
+        {
+            var positionsCollection = database.GetCollection<BsonDocument>("positions");
+            var nonTerminalStates = new[] { "PendingEntry", "Open", "Suspended" };
+
+            var filter = Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.In("symbol",
+                    BsonArray.Create(archivedSymbols.ToArray())),
+                Builders<BsonDocument>.Filter.In("state",
+                    BsonArray.Create(nonTerminalStates)));
+
+            var positions = await positionsCollection.Find(filter).ToListAsync(ct);
+            if (positions.Count == 0) return;
+
+            // Group by user.
+            var userPositions = positions
+                .GroupBy(p => p.GetValue("user_id", BsonNull.Value)?.AsString ?? "")
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+                .ToList();
+
+            if (userPositions.Count == 0) return;
+
+            var notifications = new List<NotificationDocument>();
+            var now = DateTime.UtcNow;
+
+            foreach (var userGroup in userPositions)
+            {
+                var symbols = userGroup
+                    .Select(p => p.GetValue("symbol", "")?.AsString ?? "")
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                foreach (var symbol in symbols)
+                {
+                    if (!ObjectId.TryParse(userGroup.Key, out var userId))
+                        continue;
+
+                    notifications.Add(new NotificationDocument
+                    {
+                        UserId = userId,
+                        NotificationType = NotificationType.SymbolArchivedWithOpenPosition,
+                        Symbol = symbol,
+                        Content = $"The symbol {symbol} has been removed from the Nifty 500 universe. " +
+                                  "Your position will no longer receive new entry signal advisories " +
+                                  "but will continue to be monitored by the RME for stop updates, " +
+                                  "add and reduce level triggers, and exit conditions until you close the position.",
+                        DeepLink = $"/chart?symbol={symbol}",
+                        GeneratedAt = now,
+                        IsAdminNotification = false,
+                        IsRead = false
+                    });
+                }
+            }
+
+            if (notifications.Count > 0)
+            {
+                await notificationWriter.WriteBatchAsync(notifications, ct);
+                logger.LogInformation(
+                    "Generated {Count} symbol_archived_with_open_position notifications for symbols: {Symbols}",
+                    notifications.Count, string.Join(", ", archivedSymbols));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to generate symbol_archived_with_open_position notifications " +
+                "for archived symbols: {Symbols}. Non-fatal; archive was committed.",
+                string.Join(", ", archivedSymbols));
+        }
     }
 }
 

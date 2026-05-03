@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Api.Universe;
 using SignalStack.MarketData;
 using SignalStack.Worker.Observability;
 using SignalStack.Worker.Push;
@@ -55,6 +56,7 @@ public sealed record ScanCycleResult(
 public sealed class LiveMarketScanService
 {
     private readonly IMongoDatabase _database;
+    private readonly ISymbolMasterRepository _symbolMasterRepo;
     private readonly IMarketDataProvider _marketDataProvider;
     private readonly IPositionChannelRegistry _channelRegistry;
     private readonly IPushEventPublisher _pushEventPublisher;
@@ -79,6 +81,7 @@ public sealed class LiveMarketScanService
     private int _consecutiveStaleCycles;
     public LiveMarketScanService(
         IMongoDatabase database,
+        ISymbolMasterRepository symbolMasterRepo,
         IMarketDataProvider marketDataProvider,
         IPositionChannelRegistry channelRegistry,
         IPushEventPublisher pushEventPublisher,
@@ -86,6 +89,7 @@ public sealed class LiveMarketScanService
         ILogger<LiveMarketScanService> logger)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
+        _symbolMasterRepo = symbolMasterRepo ?? throw new ArgumentNullException(nameof(symbolMasterRepo));
         _marketDataProvider = marketDataProvider ?? throw new ArgumentNullException(nameof(marketDataProvider));
         _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
         _pushEventPublisher = pushEventPublisher ?? throw new ArgumentNullException(nameof(pushEventPublisher));
@@ -108,6 +112,30 @@ public sealed class LiveMarketScanService
             var emptyResult = new ScanCycleResult(0, 0, 0, 0, sw.Elapsed, false);
             RecordMetrics(emptyResult);
             return emptyResult;
+        }
+
+        // ── Step 1b: Exclude positions whose symbols are archived or scan-excluded ──
+        // REQ-STRAT-014: LMDS must honour admin-configured scan exclusions.
+        // REQ-UNIV-015:  archived symbols excluded from scans.
+        var excludedSymbols = await GetExcludedSymbolsAsync(ct);
+        if (excludedSymbols.Count > 0)
+        {
+            var beforeCount = positions.Count;
+            positions = positions.Where(p => !excludedSymbols.Contains(p.Symbol)).ToList();
+            if (positions.Count != beforeCount)
+            {
+                _logger.LogInformation(
+                    "LMDS: excluded {Count} positions whose symbols are archived or scan-excluded.",
+                    beforeCount - positions.Count);
+
+                if (positions.Count == 0)
+                {
+                    sw.Stop();
+                    var emptyResult = new ScanCycleResult(0, 0, 0, 0, sw.Elapsed, false);
+                    RecordMetrics(emptyResult);
+                    return emptyResult;
+                }
+            }
         }
 
         // ── Step 2: Collate unique symbols ───────────────────────────────────
@@ -222,6 +250,24 @@ public sealed class LiveMarketScanService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Loads the symbol master and returns a set of symbols that should be excluded
+    /// from LMDS scanning: archived symbols (REQ-UNIV-015) and scan-excluded symbols (REQ-STRAT-014).
+    /// </summary>
+    private async Task<HashSet<string>> GetExcludedSymbolsAsync(CancellationToken ct)
+    {
+        var allSymbols = await _symbolMasterRepo.GetAllAsync(archived: null, ct);
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sym in allSymbols)
+        {
+            if (sym.IsArchived || sym.ScanExcluded)
+                excluded.Add(sym.Symbol);
+        }
+
+        return excluded;
     }
 
     /// <summary>

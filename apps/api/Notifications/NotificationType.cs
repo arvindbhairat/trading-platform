@@ -23,6 +23,7 @@ public static class NotificationType
     public const string SectorExposureBreach = "sector_exposure_breach";
     public const string MarketHaltActive = "market_halt_active";
     public const string MarketHaltCleared = "market_halt_cleared";
+    public const string SymbolArchivedWithOpenPosition = "symbol_archived_with_open_position";
 
     // ── Admin-only operational notification types (REQ-NOTIFY-006a) ────────
 
@@ -57,6 +58,7 @@ public static class NotificationType
         GapRiskAlert, CircuitLimitAlert, CorporateActionWarning,
         PendingEntrySuperseded, PendingEntryExpired, SectorExposureBreach,
         MarketHaltActive, MarketHaltCleared,
+        SymbolArchivedWithOpenPosition,
     };
 
     /// <summary>All valid admin-only notification types.</summary>
