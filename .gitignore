@@ -230,6 +230,7 @@ packages/migrations/SignalStack.SqlMigrations/obj/
 !packages/market-data/SignalStack.MarketData/**
 packages/market-data/SignalStack.MarketData/bin/
 packages/market-data/SignalStack.MarketData/obj/
+!packages/testing/
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
 # Uncomment if necessary however generally it will be regenerated when needed
