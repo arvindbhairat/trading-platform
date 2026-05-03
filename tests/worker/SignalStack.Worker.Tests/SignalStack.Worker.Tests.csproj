@@ -4,6 +4,9 @@
     <AssemblyName>SignalStack.Worker.Tests</AssemblyName>
     <RootNamespace>SignalStack.Worker.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <Threshold>3</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ThresholdStat>Total</ThresholdStat>
   </PropertyGroup>
 
   <ItemGroup>
