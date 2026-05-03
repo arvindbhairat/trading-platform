@@ -36,6 +36,14 @@ public interface IPositionRepository
     /// Called at worker startup to rebuild the channel registry (REQ-RME-CONC-005c).
     /// </summary>
     Task<List<PositionDocument>> GetNonTerminalAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Load all positions for a given user in a specific state.
+    /// Used by LADS to find PendingEntry positions after fill detection,
+    /// and by EODSR to find existing positions before creating new ones.
+    /// </summary>
+    Task<List<PositionDocument>> GetByUserIdAndStateAsync(
+        string userId, PositionState state, CancellationToken ct = default);
 }
 
 /// <summary>

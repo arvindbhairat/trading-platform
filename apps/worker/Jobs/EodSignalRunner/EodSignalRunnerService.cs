@@ -9,6 +9,7 @@ using SignalStack.Api.Historical;
 using SignalStack.Api.Signals;
 using SignalStack.Api.Universe;
 using SignalStack.Worker.Jobs.EodSuccessMarker;
+using SignalStack.Worker.Rme;
 
 namespace SignalStack.Worker.Jobs.EodSignalRunner;
 
@@ -39,6 +40,8 @@ public sealed class EodSignalRunnerService
     private readonly IMongoDatabase _database;
     private readonly IOptions<EodSignalRunnerOptions> _options;
     private readonly ILogger<EodSignalRunnerService> _logger;
+    private readonly IPositionChannelRegistry _channelRegistry;
+    private readonly IPositionRepository _positionRepository;
 
     public EodSignalRunnerService(
         EodSequencingGate sequencingGate,
@@ -49,7 +52,9 @@ public sealed class EodSignalRunnerService
         ITradingCalendarRepository calendarRepo,
         IMongoDatabase database,
         IOptions<EodSignalRunnerOptions> options,
-        ILogger<EodSignalRunnerService> logger)
+        ILogger<EodSignalRunnerService> logger,
+        IPositionChannelRegistry channelRegistry,
+        IPositionRepository positionRepository)
     {
         _sequencingGate = sequencingGate;
         _symbolMasterRepo = symbolMasterRepo;
@@ -60,6 +65,8 @@ public sealed class EodSignalRunnerService
         _database = database;
         _options = options;
         _logger = logger;
+        _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
+        _positionRepository = positionRepository ?? throw new ArgumentNullException(nameof(positionRepository));
     }
 
     /// <summary>
@@ -319,6 +326,13 @@ public sealed class EodSignalRunnerService
                 _logger.LogInformation(
                     "EODSR: persisted {Count} entry signals for session {Session} -> next day {NextDay}.",
                     signalList.Count, sessionDate, nextTradingDay);
+
+                // ── Step 7a: Create PendingEntry positions + open channels ──────
+                // For each (user, symbol) with a new entry signal, ensure a
+                // PendingEntry position exists and open a channel for it.
+                // REQ-RME-CONC-005: EODSR wired as event producer through the
+                // per-position channel registry.
+                await EnsurePositionsForEntrySignalsAsync(signalList, ct);
             }
             else
             {
@@ -360,6 +374,99 @@ public sealed class EodSignalRunnerService
                 sessionDate, ex.Message);
             return new EodSignalRunnerResult(OutcomeFailedForReview, 0, 0, null);
         }
+    }
+
+    /// <summary>
+    /// For each distinct (user, symbol) in the entry signal list, creates a
+    /// PendingEntry position document if one does not already exist, and opens
+    /// a per-position channel so the registry can route future events (e.g.
+    /// FillConfirmedEvent from LADS) to the position consumer.
+    /// REQ-RME-CONC-005: EODSR wired as event producer.
+    /// </summary>
+    private async Task EnsurePositionsForEntrySignalsAsync(
+        List<EntrySignalDocument> signalList, CancellationToken ct)
+    {
+        // Group by (user, symbol) — there may be multiple signal types per pair
+        var uniquePairs = signalList
+            .GroupBy(s => (s.UserId, s.Symbol))
+            .ToList();
+
+        foreach (var pair in uniquePairs)
+        {
+            var (userId, symbol) = pair.Key;
+
+            try
+            {
+                // Check if a PendingEntry position already exists for this user/symbol
+                var existing = await _positionRepository.GetByUserIdAndStateAsync(
+                    userId, PositionState.PendingEntry, ct);
+
+                var existingPosition = existing.FirstOrDefault(p =>
+                    string.Equals(p.Symbol, symbol, StringComparison.Ordinal));
+
+                if (existingPosition is not null)
+                {
+                    // Position already exists — ensure channel is open
+                    _channelRegistry.OpenChannel(existingPosition.PositionId);
+                    continue;
+                }
+
+                // Extract entry price from the primary signal's signal_data
+                var primarySignal = pair.First();
+                var entryPrice = ExtractEntryPrice(primarySignal.SignalData);
+
+                // Create a new PendingEntry position
+                var positionId = Guid.NewGuid();
+                var position = new PositionDocument
+                {
+                    PositionId = positionId,
+                    UserId = userId,
+                    Symbol = symbol,
+                    State = PositionState.PendingEntry,
+                    EntryPrice = entryPrice,
+                    CurrentPrice = entryPrice,
+                    Quantity = 0m,          // not yet filled
+                    StopLoss = 0m,
+                    TrailingStop = 0m,
+                    Version = 1,
+                    LedgerFenceToken = 0,
+                };
+
+                await _positionRepository.CreateAsync(position, ct);
+                _channelRegistry.OpenChannel(positionId);
+
+                _logger.LogInformation(
+                    "EODSR: created PendingEntry position {PositionId} for user {UserId}, symbol {Symbol} " +
+                    "(entryPrice: {Price}). Channel opened per REQ-RME-CONC-005.",
+                    positionId, userId, symbol, entryPrice);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "EODSR: failed to create position for user {UserId}, symbol {Symbol}. " +
+                    "Entry signal was persisted; position creation will be retried.",
+                    userId, symbol);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extracts the entry price from an entry signal's signal_data BSON document.
+    /// Falls back to 0 if the data is not available.
+    /// </summary>
+    private static decimal ExtractEntryPrice(BsonDocument? signalData)
+    {
+        if (signalData is null) return 0m;
+
+        if (signalData.TryGetValue("entry_price", out var priceValue) && !priceValue.IsBsonNull)
+        {
+            return priceValue.IsDouble ? (decimal)priceValue.AsDouble
+                 : priceValue.IsInt32 ? priceValue.AsInt32
+                 : priceValue.IsInt64 ? priceValue.AsInt64
+                 : 0m;
+        }
+
+        return 0m;
     }
 
     /// <summary>

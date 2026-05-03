@@ -8,6 +8,7 @@ using SignalStack.Api.LedgerWriters;
 using SignalStack.Api.Notifications;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Worker.Observability;
+using SignalStack.Worker.Rme;
 
 namespace SignalStack.Worker.Jobs.AccountSync;
 
@@ -51,6 +52,8 @@ public sealed class LiveAccountDataSyncService
     private readonly ILedgerWriteLock _ledgerLock;
     private readonly ILedgerSnapshotVersionHelper _snapshotVersionHelper;
     private readonly TradeIngestionService _ingestionService;
+    private readonly IPositionChannelRegistry _channelRegistry;
+    private readonly IPositionRepository _positionRepository;
 
     // ── OTEL metrics (REQ-PORT-021a(a)) ──────────────────────────────────
     private static readonly Counter<long> CycleAbortedCounter = WorkerTelemetry.Meter
@@ -80,7 +83,9 @@ public sealed class LiveAccountDataSyncService
         ILogger<LiveAccountDataSyncService> logger,
         ILedgerWriteLock ledgerLock,
         ILedgerSnapshotVersionHelper snapshotVersionHelper,
-        TradeIngestionService ingestionService)
+        TradeIngestionService ingestionService,
+        IPositionChannelRegistry channelRegistry,
+        IPositionRepository positionRepository)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -88,6 +93,8 @@ public sealed class LiveAccountDataSyncService
         _ledgerLock = ledgerLock ?? throw new ArgumentNullException(nameof(ledgerLock));
         _snapshotVersionHelper = snapshotVersionHelper ?? throw new ArgumentNullException(nameof(snapshotVersionHelper));
         _ingestionService = ingestionService ?? throw new ArgumentNullException(nameof(ingestionService));
+        _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
+        _positionRepository = positionRepository ?? throw new ArgumentNullException(nameof(positionRepository));
     }
 
     /// <summary>
@@ -372,6 +379,14 @@ public sealed class LiveAccountDataSyncService
                     user.UserId, handle.FencingToken);
             }
 
+            // ── Step 2a: Emit FillConfirmedEvent for matched PendingEntry positions ─
+            // REQ-RME-CONC-005: wire LADS as event producer through the per-position
+            // channel registry.
+            if (rawTrades.Count > 0)
+            {
+                await EmitFillConfirmedEventsAsync(user.UserId, rawTrades, ct);
+            }
+
             // ── Step 3: Record sync progress (P5-T7 guard write) ───────────
             var now = DateTime.UtcNow;
 
@@ -414,6 +429,71 @@ public sealed class LiveAccountDataSyncService
             // Ensure the lock is released on any failure.
             // The handle's DisposeAsync will call ReleaseAsync.
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Queries PendingEntry positions for the user and emits FillConfirmedEvent
+    /// through the channel registry for each position whose symbol matches an
+    /// ingested buy-side trade.
+    /// REQ-RME-CONC-005: LADS fill-detection → per-position channel dispatch.
+    /// </summary>
+    private async Task EmitFillConfirmedEventsAsync(
+        string userId, IReadOnlyList<RawTrade> rawTrades, CancellationToken ct)
+    {
+        try
+        {
+            // Find buy-side trades that indicate a fill
+            var buyTrades = rawTrades
+                .Where(t => string.Equals(t.Side, "buy", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(t.Side, "b", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(t => t.Symbol)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            if (buyTrades.Count == 0)
+                return;
+
+            // Query PendingEntry positions for this user
+            var pendingPositions = await _positionRepository.GetByUserIdAndStateAsync(
+                userId, PositionState.PendingEntry, ct);
+
+            if (pendingPositions.Count == 0)
+                return;
+
+            foreach (var position in pendingPositions)
+            {
+                if (!buyTrades.TryGetValue(position.Symbol, out var trades))
+                    continue;
+
+                // Aggregate fill quantity and average price
+                var totalQty = trades.Sum(t => t.Quantity);
+                var avgPrice = trades.Count > 0
+                    ? trades.Average(t => t.Price)
+                    : 0m;
+
+                var fillEvent = new FillConfirmedEvent
+                {
+                    PositionId = position.PositionId,
+                    OccurredAt = DateTimeOffset.UtcNow,
+                    Source = "LADS",
+                    FilledQty = totalQty,
+                    AvgFillPrice = avgPrice,
+                };
+
+                await _channelRegistry.EnqueueAsync(fillEvent, ct);
+
+                _logger.LogInformation(
+                    "LADS: emitted FillConfirmedEvent for position {PositionId} " +
+                    "(symbol: {Symbol}, qty: {Qty}, avgPrice: {Price}).",
+                    position.PositionId, position.Symbol, totalQty, avgPrice);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "LADS: failed to emit FillConfirmedEvent for user {UserId}. " +
+                "Trade ingestion completed; fill event emission is non-critical.",
+                userId);
         }
     }
 

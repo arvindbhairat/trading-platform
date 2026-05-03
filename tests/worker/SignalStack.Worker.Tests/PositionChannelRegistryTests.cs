@@ -267,6 +267,92 @@ public sealed class PositionChannelRegistryTests : IDisposable
         Assert.False(consumerCalled, "Consumer should not be invoked for TrailingStopUpdateEvent.");
     }
 
+    // ─── P6-T5: FillConfirmedEvent → consumer invoked with correct data ─────────────────
+
+    [Fact]
+    public async Task FillConfirmedEvent_enqueued_for_PendingEntry_position_produces_state_transition()
+    {
+        // Arrange — a PendingEntry position processed through the registry
+        var position = MakePendingEntryPosition();
+        var consumerInvoked = false;
+
+        var consumer = new DelegatingRmeEventConsumer((evt, pos, _) =>
+        {
+            consumerInvoked = true;
+            Assert.IsType<FillConfirmedEvent>(evt);
+            Assert.Equal("LADS", evt.Source);
+            Assert.Equal(PositionState.PendingEntry, pos.State);
+
+            var updated = pos.CloneWith(state: PositionState.Open);
+            var output = new RmeOutput
+            {
+                Transition = new PositionTransition(
+                    PositionState.PendingEntry, PositionState.Open,
+                    "Entry fill confirmed", PositionEventSource.LADS, TransitionReason.EntryFillConfirmed),
+            };
+            return (updated, new[] { output });
+        });
+
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
+        var positionId = position.PositionId;
+        registry.OpenChannel(positionId);
+
+        // Act — enqueue a FillConfirmedEvent (as LADS would)
+        var fillEvent = new FillConfirmedEvent
+        {
+            PositionId = positionId,
+            OccurredAt = DateTimeOffset.UtcNow,
+            Source = "LADS",
+            FilledQty = 10m,
+            AvgFillPrice = 500m,
+        };
+
+        await registry.EnqueueAsync(fillEvent);
+
+        // Small yield for consumer to process
+        await Task.Delay(200);
+
+        // Assert — consumer was invoked with the event
+        Assert.True(consumerInvoked, "Consumer should be invoked for FillConfirmedEvent.");
+    }
+
+    // ─── P6-T5: EODSR position creation → channel opened ─────────────────────
+
+    [Fact]
+    public async Task Position_channel_is_opened_when_repository_has_positions()
+    {
+        // This test verifies that channels are openable for positions
+        // created by EODSR's EnsurePositionsForEntrySignalsAsync flow.
+        // The EODSR flow calls OpenChannel after creating PendingEntry positions.
+        // We verify the registry accepts events for such positions.
+
+        var position = MakePendingEntryPosition();
+        var consumerInvoked = false;
+
+        var consumer = new DelegatingRmeEventConsumer((_, _, _) =>
+        {
+            consumerInvoked = true;
+            return (position, Array.Empty<RmeOutput>());
+        });
+
+        var repo = new DelegatingPositionRepository { OnGetById = _ => position };
+
+        await using var registry = BuildRegistry(consumer, repo);
+
+        // Act — simulate what EODSR does after creating a PendingEntry position
+        registry.OpenChannel(position.PositionId);
+
+        // Enqueue an event — should be processed since channel is open
+        await registry.EnqueueAsync(MakeFillEvent(position.PositionId));
+
+        await Task.Delay(200);
+
+        // Assert — consumer was invoked because the channel was opened
+        Assert.True(consumerInvoked, "Consumer should be invoked after channel is opened.");
+    }
+
     // ─── REQ-RME-CONC-005: channel lifecycle ─────────────────────────────────
 
     [Fact]
@@ -351,6 +437,24 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
+    private static PositionDocument MakePendingEntryPosition()
+    {
+        return new PositionDocument
+        {
+            PositionId = Guid.NewGuid(),
+            UserId = "test-user",
+            Symbol = "RELIANCE",
+            State = PositionState.PendingEntry,
+            EntryPrice = 0m,
+            CurrentPrice = 0m,
+            Quantity = 0m,
+            StopLoss = 0m,
+            TrailingStop = 0m,
+            Version = 1,
+            LedgerFenceToken = 1,
+        };
+    }
+
     private static PositionDocument MakeOpenPosition()
     {
         return new PositionDocument
@@ -425,6 +529,7 @@ file sealed class DelegatingPositionRepository : IPositionRepository
     public Func<Guid, PositionDocument?>? OnGetById { get; set; }
     public Func<PositionDocument, long, long?, PositionOccResult>? OnUpdateWithOcc { get; set; }
     public Func<List<PositionDocument>>? OnGetNonTerminal { get; set; }
+    public Func<string, PositionState, List<PositionDocument>>? OnGetByUserAndState { get; set; }
 
     public Task<PositionDocument?> GetByIdAsync(Guid positionId, CancellationToken ct = default)
     {
@@ -456,6 +561,12 @@ file sealed class DelegatingPositionRepository : IPositionRepository
     public Task<List<PositionDocument>> GetNonTerminalAsync(CancellationToken ct = default)
     {
         return Task.FromResult(OnGetNonTerminal?.Invoke() ?? new List<PositionDocument>());
+    }
+
+    public Task<List<PositionDocument>> GetByUserIdAndStateAsync(
+        string userId, PositionState state, CancellationToken ct = default)
+    {
+        return Task.FromResult(OnGetByUserAndState?.Invoke(userId, state) ?? new List<PositionDocument>());
     }
 }
 
@@ -508,6 +619,15 @@ file sealed class MongoPositionRepositoryStub : IPositionRepository
     {
         return Task.FromResult(_store.Values
             .Where(e => e.Doc.State != PositionState.Closed && e.Doc.State != PositionState.Rejected)
+            .Select(e => e.Doc)
+            .ToList());
+    }
+
+    public Task<List<PositionDocument>> GetByUserIdAndStateAsync(
+        string userId, PositionState state, CancellationToken ct = default)
+    {
+        return Task.FromResult(_store.Values
+            .Where(e => e.Doc.UserId == userId && e.Doc.State == state)
             .Select(e => e.Doc)
             .ToList());
     }

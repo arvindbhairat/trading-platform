@@ -70,4 +70,12 @@ internal sealed class MongoPositionRepository : IPositionRepository
             .Find(p => p.State != PositionState.Closed && p.State != PositionState.Rejected)
             .ToListAsync(ct);
     }
+
+    public async Task<List<PositionDocument>> GetByUserIdAndStateAsync(
+        string userId, PositionState state, CancellationToken ct = default)
+    {
+        return await _collection
+            .Find(p => p.UserId == userId && p.State == state)
+            .ToListAsync(ct);
+    }
 }

@@ -42,6 +42,10 @@ public static class RmeModuleExtensions
         // consumer loop.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
 
+        // P6-T5: Synchronous trailing-stop recalculation (ADR-0003 carve-out).
+        // Replaced by concrete implementations in P6-T14/T15.
+        services.AddSingleton<ITrailingStopSyncService, NoOpTrailingStopSyncService>();
+
         // Background service — skeleton only; real work added by P6-T24.
         services.AddHostedService<RmeBackgroundService>();
 
@@ -106,5 +110,37 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
             AdvisoryMessage: "Sizing engine not yet available.");
 
         return Task.FromResult(result);
+    }
+}
+
+/// <summary>
+/// No-op placeholder for the synchronous EOD trailing-stop recalculation service.
+/// ADR-0003 carve-out: trailing-stop updates must NOT route through the per-position
+/// channel. Replaced by concrete implementations in P6-T14 (percentage) and
+/// P6-T15 (ATR with EOD carve-out).
+/// </summary>
+internal sealed class NoOpTrailingStopSyncService : ITrailingStopSyncService
+{
+    private readonly ILogger<NoOpTrailingStopSyncService> _logger;
+
+    public NoOpTrailingStopSyncService(ILogger<NoOpTrailingStopSyncService> logger)
+    {
+        _logger = logger;
+    }
+
+    public Task RecalculateAllAsync(CancellationToken ct = default)
+    {
+        _logger.LogWarning(
+            "Trailing-stop recalculation not yet implemented (P6-T14/T15). " +
+            "Synchronous EOD trailing-stop path is a no-op placeholder.");
+        return Task.CompletedTask;
+    }
+
+    public Task RecalculateForPositionAsync(Guid positionId, CancellationToken ct = default)
+    {
+        _logger.LogWarning(
+            "Per-position trailing-stop recalculation not yet implemented (P6-T14/T15). " +
+            "Position {PositionId}: no-op placeholder.", positionId);
+        return Task.CompletedTask;
     }
 }
