@@ -5,10 +5,11 @@ using Microsoft.Extensions.DependencyInjection;
 using SignalStack.Worker.Rme;
 
 /// <summary>
-/// DI registration for the RME module skeleton (P6-T2).
-/// Registers the sizing / stop / advisory interfaces, module options, and the
-/// background service. Concrete model and service implementations are added
-/// by subsequent P6 tasks as they replace no-op registrations.
+/// DI registration for the RME module (P6-T2 onward).
+/// Registers the state machine (P6-T3), sizing / stop / advisory interfaces,
+/// module options, and the background service. Concrete model and service
+/// implementations are added by subsequent P6 tasks as they replace no-op
+/// registrations.
 /// REQ-RME-001, REQ-RME-012.
 /// </summary>
 public static class RmeModuleExtensions
@@ -23,6 +24,11 @@ public static class RmeModuleExtensions
             .BindConfiguration(RmeModuleOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // ── P6-T3: Position lifecycle state machine ─────────────────────────
+        // ITransitionValidator — immutable, thread-safe, encodes the full
+        // authoritative state-transition matrix (REQ-PLC-002a).
+        services.AddSingleton<ITransitionValidator, TransitionValidator>();
 
         // Interface contracts — no-op / not-implemented placeholders.
         // Replaced by concrete implementations as each P6 sub-task delivers.

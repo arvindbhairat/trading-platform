@@ -231,6 +231,9 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
 file sealed class DelegatingRmeEventConsumer(Func<RmeEvent, CancellationToken, Task> handler) : IRmeEventConsumer
 {
-    public Task ConsumeAsync(RmeEvent rmeEvent, CancellationToken cancellationToken) =>
-        handler(rmeEvent, cancellationToken);
+    public async Task<IReadOnlyList<RmeOutput>> ConsumeAsync(RmeEvent rmeEvent, CancellationToken cancellationToken)
+    {
+        await handler(rmeEvent, cancellationToken);
+        return Array.Empty<RmeOutput>();
+    }
 }

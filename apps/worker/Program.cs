@@ -65,7 +65,10 @@ builder.Services
     .BindConfiguration(PositionChannelOptions.SectionName)
     .ValidateDataAnnotations()
     .ValidateOnStart();
-builder.Services.AddSingleton<IRmeEventConsumer, NoOpRmeEventConsumer>();
+// P6-T3: RME event consumer with lifecycle state-machine validation.
+// Replaces NoOpRmeEventConsumer from P6-T2 now that the transition
+// validator (ITransitionValidator) is registered via AddRmeModule.
+builder.Services.AddSingleton<IRmeEventConsumer, RmeEventConsumer>();
 builder.Services.AddSingleton<IPositionChannelRegistry, PositionChannelRegistry>();
 
 // RME module skeleton — sizing / stop / advisory interfaces (P6-T2, REQ-RME-001..005)

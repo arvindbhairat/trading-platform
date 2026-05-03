@@ -159,7 +159,21 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
 
                 try
                 {
-                    await _consumer.ConsumeAsync(evt, cancellationToken);
+                    var outputs = await _consumer.ConsumeAsync(evt, cancellationToken);
+                    foreach (var output in outputs)
+                    {
+                        if (output.Transition is not null)
+                        {
+                            _logger.LogInformation(
+                                "Position {PositionId}: {FromState} → {ToState} " +
+                                "({EventDesc}, source: {Source}, reason: {Reason})",
+                                positionId,
+                                output.Transition.FromState, output.Transition.ToState,
+                                output.Transition.EventDescription,
+                                output.Transition.Source,
+                                output.Transition.ReasonCode ?? "(none)");
+                        }
+                    }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
