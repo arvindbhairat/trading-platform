@@ -16,6 +16,7 @@ using SignalStack.Worker.Observability;
 using SignalStack.Worker.Jobs.DataSync;
 using SignalStack.Worker.Jobs.EodSignalRunner;
 using SignalStack.Worker.Jobs.HistoricDataSeed;
+using SignalStack.Worker.Jobs.AccountSync;
 using SignalStack.Worker.Jobs.NotificationDelivery;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
@@ -119,6 +120,11 @@ builder.Services.AddNotificationServices();
 // Sole Telegram dispatcher for all notification types. Handles Retry-After,
 // dirty-link auto-disable, and global-disable break-glass.
 builder.Services.AddNotificationDelivery(builder.Configuration);
+
+// Live Account Data Sync (LADS) — P5-T7 / REQ-PORT-019/021a
+// Intraday per-user account sync during NSE market hours. Tracks
+// consecutive cycle aborts with graduated suspension (warn at 2, suspend at 3).
+builder.Services.AddAccountSync(builder.Configuration);
 
 // EOD Signal Runner (EODSR): post-market evaluation of user-subscribed Signal types.
 // REQ-STRAT-013/013a: single-pass per-symbol read + user-scoped evaluation.
