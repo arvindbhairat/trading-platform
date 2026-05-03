@@ -21,6 +21,7 @@ using SignalStack.Api.Signals;
 using SignalStack.Api.Notifications;
 using SignalStack.Api.TelegramBot;
 using SignalStack.Api.LedgerWriters;
+using SignalStack.Api.Portfolio;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -50,6 +51,9 @@ builder.Services.AddTradeLedgerServices();
 // Ingestion logic wired in P5-T9.
 builder.Services.AddSingleton<OnLoginSyncService>();
 builder.Services.AddSingleton<ManualAdjustmentService>();
+
+// Portfolio and reconciliation services — P5-T10 / REQ-RECON-001..004
+builder.Services.AddPortfolioServices();
 
 // OAuth / JWT Bearer / CSRF — REQ-AUTH-001/002/011, REQ-SEC-001
 builder.Services.AddSignalStackAuth(builder.Configuration);
@@ -280,6 +284,9 @@ app.MapTelegramLinkingEndpoints();
 
 // Notification feed endpoints — P5-T6 / REQ-NOTIFY-014, REQ-PROFILE-006
 app.MapNotificationEndpoints();
+
+// Reconciliation endpoints — P5-T10 / REQ-RECON-001..004
+app.MapReconciliationEndpoints();
 
 // Symbol master / universe endpoints — P3-T2 / REQ-UNIV-001..010
 app.MapGroup("/api/v1/universe").MapSymbolMasterEndpoints();
