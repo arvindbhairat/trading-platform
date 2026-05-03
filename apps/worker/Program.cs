@@ -18,6 +18,10 @@ using SignalStack.Worker.Jobs.EodSignalRunner;
 using SignalStack.Worker.Jobs.HistoricDataSeed;
 using SignalStack.Worker.Jobs.AccountSync;
 using SignalStack.Worker.Jobs.NotificationDelivery;
+using SignalStack.Worker.Jobs.EodTradeSync;
+using SignalStack.Worker.Jobs.ManualSync;
+using SignalStack.Worker.Jobs.AdminRebuild;
+using SignalStack.Worker.Jobs.SingleSymbolBackfill;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -125,6 +129,13 @@ builder.Services.AddNotificationDelivery(builder.Configuration);
 // Intraday per-user account sync during NSE market hours. Tracks
 // consecutive cycle aborts with graduated suspension (warn at 2, suspend at 3).
 builder.Services.AddAccountSync(builder.Configuration);
+
+// Trade-ledger writer services (P5-T8 lock wiring — REQ-PORT-031/031a/031b)
+// Skeleton services that acquire the per-user write lock; logic wired in P5-T9+.
+builder.Services.AddSingleton<EodTradeSyncService>();
+builder.Services.AddSingleton<ManualSyncService>();
+builder.Services.AddSingleton<AdminRebuildService>();
+builder.Services.AddSingleton<SingleSymbolBackfillService>();
 
 // EOD Signal Runner (EODSR): post-market evaluation of user-subscribed Signal types.
 // REQ-STRAT-013/013a: single-pass per-symbol read + user-scoped evaluation.

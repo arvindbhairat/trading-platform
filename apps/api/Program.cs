@@ -20,6 +20,7 @@ using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
 using SignalStack.Api.Notifications;
 using SignalStack.Api.TelegramBot;
+using SignalStack.Api.LedgerWriters;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -41,6 +42,11 @@ builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
 
 // Trade-ledger write lock primitives (REQ-PORT-031/031a/031b — writers wired in P5-T8)
 builder.Services.AddLedgerWriteLock();
+
+// Trade-ledger writer services (P5-T8 lock wiring — REQ-PORT-031/031a/031b)
+// Skeleton services that acquire the per-user write lock; logic wired in P5-T9+.
+builder.Services.AddSingleton<OnLoginSyncService>();
+builder.Services.AddSingleton<ManualAdjustmentService>();
 
 // OAuth / JWT Bearer / CSRF — REQ-AUTH-001/002/011, REQ-SEC-001
 builder.Services.AddSignalStackAuth(builder.Configuration);

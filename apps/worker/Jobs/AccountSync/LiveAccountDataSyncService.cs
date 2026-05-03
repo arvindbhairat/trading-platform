@@ -5,6 +5,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Notifications;
+using SignalStack.Configuration.Ledger;
 using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.AccountSync;
@@ -46,6 +47,8 @@ public sealed class LiveAccountDataSyncService
     private readonly IMongoDatabase _database;
     private readonly IOptions<AccountSyncOptions> _options;
     private readonly ILogger<LiveAccountDataSyncService> _logger;
+    private readonly ILedgerWriteLock _ledgerLock;
+    private readonly ILedgerSnapshotVersionHelper _snapshotVersionHelper;
 
     // ── OTEL metrics (REQ-PORT-021a(a)) ──────────────────────────────────
     private static readonly Counter<long> CycleAbortedCounter = WorkerTelemetry.Meter
@@ -72,11 +75,15 @@ public sealed class LiveAccountDataSyncService
     public LiveAccountDataSyncService(
         IMongoDatabase database,
         IOptions<AccountSyncOptions> options,
-        ILogger<LiveAccountDataSyncService> logger)
+        ILogger<LiveAccountDataSyncService> logger,
+        ILedgerWriteLock ledgerLock,
+        ILedgerSnapshotVersionHelper snapshotVersionHelper)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ledgerLock = ledgerLock ?? throw new ArgumentNullException(nameof(ledgerLock));
+        _snapshotVersionHelper = snapshotVersionHelper ?? throw new ArgumentNullException(nameof(snapshotVersionHelper));
     }
 
     /// <summary>
@@ -301,32 +308,80 @@ public sealed class LiveAccountDataSyncService
     }
 
     /// <summary>
-    /// Per-user account sync cycle.
+    /// Per-user account sync cycle with trade-ledger write lock acquisition
+    /// (REQ-PORT-031/031a/031b).
     ///
-    /// P5-T7 skeleton: records sync progress in <c>fyers_account_sync</c>
-    /// without FYERS API calls or trade-ledger writes. Real sync (positions,
-    /// orders, trades, holdings) is wired in P5-T8/T9.
+    /// Acquires the per-user lock in TryNonBlocking mode. If busy, the user
+    /// is skipped (background sync behaviour). On successful lock acquisition,
+    /// records sync progress and increments <c>ledger_snapshot_version</c>
+    /// after the durable write. The fencing token guards against stale writes;
+    /// if a fencing abort is detected the version is NOT incremented
+    /// (REQ-PORT-031b invariant A-11).
     /// </summary>
-    private static async Task SyncUserAccountAsync(
+    private async Task SyncUserAccountAsync(
         UserSyncInfo user,
         IMongoCollection<BsonDocument> accountSyncCollection,
         CancellationToken ct)
     {
-        var now = DateTime.UtcNow;
+        // ── Step 1: Acquire the per-user trade-ledger write lock ────────────
+        var acquireResult = await _ledgerLock.AcquireAsync(
+            user.UserId, LedgerAcquireMode.TryNonBlocking, ct);
 
-        var filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId);
-        var update = Builders<BsonDocument>.Update
-            .Set("last_successful_sync_at", now)
-            .Set("last_sync_attempt_at", now)
-            .Set("sync_status", "completed")
-            .Set("updated_at", now)
-            .SetOnInsert("user_id", user.UserId)
-            .SetOnInsert("user_object_id", user.Id);
+        if (acquireResult.Outcome != LedgerLockAcquireOutcome.Acquired)
+        {
+            _logger.LogTrace(
+                "LADS: lock not acquired for user {UserId} ({Outcome}). Skipping this cycle.",
+                user.UserId, acquireResult.Outcome);
+            return;
+        }
 
-        await accountSyncCollection.UpdateOneAsync(
-            filter, update,
-            options: new UpdateOptions { IsUpsert = true },
-            cancellationToken: ct);
+        await using var handle = acquireResult.Handle!;
+
+        try
+        {
+            // ── Step 2: Record sync progress (P5-T7 skeleton writes) ──────
+            var now = DateTime.UtcNow;
+
+            var filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId);
+            var update = Builders<BsonDocument>.Update
+                .Set("last_successful_sync_at", now)
+                .Set("last_sync_attempt_at", now)
+                .Set("sync_status", "completed")
+                .Set("updated_at", now)
+                .SetOnInsert("user_id", user.UserId)
+                .SetOnInsert("user_object_id", user.Id);
+
+            // REQ-PORT-031b(b): include fencing-token filter for stale-write detection
+            filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId)
+                     & Builders<BsonDocument>.Filter.Lte("ledger_fence_token", handle.FencingToken);
+
+            var result = await accountSyncCollection.UpdateOneAsync(
+                filter, update,
+                options: new UpdateOptions { IsUpsert = true },
+                cancellationToken: ct);
+
+            // ── Step 3: Fencing-token guard (REQ-PORT-031b invariant A-11) ──
+            // If the update matched 0 documents, another process has advanced
+            // the fence token past ours — do NOT increment the snapshot version.
+            if (result.MatchedCount == 0)
+            {
+                _logger.LogWarning(
+                    "LADS: fencing-token abort for user {UserId} " +
+                    "(fence {FenceToken}). ledger_snapshot_version NOT incremented.",
+                    user.UserId, handle.FencingToken);
+                return;
+            }
+
+            // ── Step 4: Increment ledger_snapshot_version after durable write ─
+            // REQ-PORT-031a: only after all trade-ledger writes durably committed.
+            await _snapshotVersionHelper.IncrementAsync(user.UserId, ct);
+        }
+        catch
+        {
+            // Ensure the lock is released on any failure.
+            // The handle's DisposeAsync will call ReleaseAsync.
+            throw;
+        }
     }
 
     /// <summary>

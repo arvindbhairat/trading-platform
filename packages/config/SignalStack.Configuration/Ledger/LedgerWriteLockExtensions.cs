@@ -18,6 +18,7 @@ public static class LedgerWriteLockExtensions
       .ValidateOnStart();
 
     services.AddSingleton<ILedgerWriteLock, RedisLedgerWriteLock>();
+    services.AddSingleton<ILedgerSnapshotVersionHelper, MongoLedgerSnapshotVersionHelper>();
 
     return services;
   }
