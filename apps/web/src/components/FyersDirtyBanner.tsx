@@ -8,7 +8,7 @@
 // All hardcoded values (#fff3cd, #ffc107, #fff, #666, #999, inline rem) removed.
 
 import { useState } from "react";
-import { Btn, Icon, Card, Pill } from "@/components/primitives";
+import { Btn, Icon, Card } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 
 interface FyersDirtyBannerProps {

@@ -17,7 +17,7 @@ import {
   userNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
-import { fetchSessionStatus } from "@/lib/session";
+
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -325,33 +325,6 @@ export default function SignalsPage() {
       setNotification({
         type: "error",
         message: err instanceof Error ? err.message : "Failed to discard",
-      });
-    }
-  }
-
-  // ── Delete subscription ──────────────────────────────────────────────
-
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"? This action cannot be undone.`)) return;
-
-    setNotification(null);
-    try {
-      const res = await apiFetch(`/api/v1/signals/subscriptions/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setNotification({ type: "error", message: body.error ?? "Delete failed" });
-        return;
-      }
-
-      setNotification({ type: "success", message: `"${name}" deleted` });
-      fetchSubscriptions();
-    } catch (err) {
-      setNotification({
-        type: "error",
-        message: err instanceof Error ? err.message : "Delete failed",
       });
     }
   }

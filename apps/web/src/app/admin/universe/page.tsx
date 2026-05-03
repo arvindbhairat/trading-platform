@@ -19,13 +19,6 @@ import { getToken, apiFetch } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-interface CoverageData {
-  unconfirmed_count: number;
-  earliest_unconfirmed_date: string | null;
-  unconfirmed_dates: string[];
-  checked_from: string;
-  checked_to: string;
-}
 
 interface SymbolEntry {
   symbol: string;
@@ -989,7 +982,6 @@ export default function AdminUniversePage() {
                     onResolve={(resolution, newSymbol, reason) =>
                       handleResolveItem(item.id, item.symbol, resolution, newSymbol, reason)
                     }
-                    setResolving={(id) => setResolvingItem(id)}
                   />
                 ))}
               </div>
@@ -1673,12 +1665,10 @@ function WorkQueueItemCard({
   item,
   resolving,
   onResolve,
-  setResolving,
 }: {
   item: WorkQueueItem;
   resolving: boolean;
   onResolve: (resolution: "approve_rename" | "mark_delisting" | "dismiss", newSymbol?: string, reason?: string) => Promise<void>;
-  setResolving: (id: string | null) => void;
 }) {
   const [action, setAction] = useState<"approve_rename" | "mark_delisting" | "dismiss" | null>(null);
   const [newSymbol, setNewSymbol] = useState(item.symbol);

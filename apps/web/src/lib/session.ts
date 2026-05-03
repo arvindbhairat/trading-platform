@@ -23,7 +23,6 @@ export interface SessionStatus {
   };
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 /** Fetches the server-side session status for the currently signed-in user. */
 export async function fetchSessionStatus(): Promise<SessionStatus | null> {

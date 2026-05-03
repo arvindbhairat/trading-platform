@@ -59,7 +59,7 @@ describe('Axe gate integrity', () => {
     document.body.innerHTML = `<main><h1>Test</h1></main>`;
     axe.configure({});
     const results = await axe.run(document, { runOnly: WCAG_TAGS });
-    const langViolation = results.violations.find((v: axe.Result) => v.id === 'html-has-lang');
+    const langViolation = results.violations.find((v) => v.id === 'html-has-lang');
     expect(langViolation).toBeDefined();
   });
 
@@ -67,7 +67,7 @@ describe('Axe gate integrity', () => {
     const results = await runAxe(`
       <main><img src="chart.png"/></main>
     `);
-    const altViolation = results.violations.find((v: axe.Result) => v.id === 'image-alt');
+    const altViolation = results.violations.find((v) => v.id === 'image-alt');
     expect(altViolation).toBeDefined();
   });
 });

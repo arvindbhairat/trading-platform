@@ -57,12 +57,6 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
   grievance: "Grievance",
 };
 
-const REQUEST_TYPE_ICONS: Record<string, string> = {
-  access: "download",
-  correction: "edit",
-  erasure: "trash",
-  grievance: "alert-triangle",
-};
 
 const STATUS_PILL_TONE: Record<string, "warn" | "up" | "down" | "info" | "neutral" | "brand"> = {
   open: "warn",

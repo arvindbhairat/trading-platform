@@ -290,7 +290,7 @@ export default function AdminHomePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {summary!.failedJobs.map((job, i) => (
+                          {summary!.failedJobs.map((job) => (
                             <tr
                               key={job.runId}
                               style={{

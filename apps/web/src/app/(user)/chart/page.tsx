@@ -65,7 +65,7 @@ export default function ChartPage() {
   const [changePct, setChangePct] = useState<number>(0);
   const [dataFreshness, setDataFreshness] = useState<string | null>(null);
   const [connStatus, setConnStatus] = useState<ConnectionStatus>("disconnected");
-  const [connMessage, setConnMessage] = useState<string | undefined>();
+  const [, setConnMessage] = useState<string | undefined>();
   const [searchInput, setSearchInput] = useState("SBIN");
 
   // -------------------------------------------------------------------
