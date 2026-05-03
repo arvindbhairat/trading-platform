@@ -23,6 +23,7 @@ using SignalStack.Worker.Jobs.ManualSync;
 using SignalStack.Worker.Jobs.AdminRebuild;
 using SignalStack.Worker.Jobs.SingleSymbolBackfill;
 using SignalStack.Worker.Jobs.LiveMarketScan;
+using SignalStack.Worker.Jobs.AdminFyersTokenCheck;
 using SignalStack.Worker.Push;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
@@ -141,6 +142,11 @@ builder.Services.AddAccountSync(builder.Configuration);
 // enqueues PriceLevelBreachedEvent to the per-position channel registry.
 // REQ-SLO-004: cycle-time capacity warning. REQ-PLC-004: circuit-clear detection.
 builder.Services.AddLiveMarketScan(builder.Configuration);
+
+// Admin FYERS Token Validity Check (P5-T14 / REQ-NOTIFY-022, REQ-NOTIFY-022b)
+// Pre-market check at 08:30 IST + daily check at 15:00 IST on NSE trading days.
+// Fires admin_fyers_token_expiry_warning notification if token is absent or invalid.
+builder.Services.AddAdminFyersTokenCheck(builder.Configuration);
 
 // Push event publisher for real-time WebSocket fan-out (P5-T13 / REQ-NFR-013)
 // Publishes events to Redis pub/sub so the API can deliver them to connected
