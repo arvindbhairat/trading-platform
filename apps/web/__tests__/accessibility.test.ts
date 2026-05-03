@@ -52,11 +52,13 @@ describe('Home page accessibility', () => {
 
 describe('Axe gate integrity', () => {
   it('detects missing lang attribute (WCAG 3.1.1 / html-has-lang)', async () => {
-    // Remove lang from the document root so axe detects the violation
+    // Remove lang from the document root so axe detects the violation.
+    // Use axe.run(document) rather than #axe-fixture because the
+    // html-has-lang rule checks document.documentElement, not a fixture child.
     document.documentElement.removeAttribute('lang');
-    document.body.innerHTML = `<div id="axe-fixture"><main><h1>Test</h1></main></div>`;
+    document.body.innerHTML = `<main><h1>Test</h1></main>`;
     axe.configure({});
-    const results = await axe.run('#axe-fixture', { runOnly: WCAG_TAGS });
+    const results = await axe.run(document, { runOnly: WCAG_TAGS });
     const langViolation = results.violations.find((v: any) => v.id === 'html-has-lang');
     expect(langViolation).toBeDefined();
   });
