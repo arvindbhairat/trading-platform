@@ -19,6 +19,7 @@ import {
   userNavItemsWithNotificationCount,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
+import { getLiveAlerts } from "@/lib/live-alerts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -201,6 +202,20 @@ export default function NotificationsPage() {
     fetchNotificationTypes();
     fetchUnreadCount();
     fetchNotifications(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Subscribe to real-time push events (REQ-NFR-013) — auto-refresh when
+  // a new notification arrives via WebSocket fan-out.
+  useEffect(() => {
+    const client = getLiveAlerts();
+    const unsub = client.onPushEvent(() => {
+      fetchUnreadCount();
+      if (skip === 0) {
+        fetchNotifications(true);
+      }
+    });
+
+    return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch when filters change.

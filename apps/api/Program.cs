@@ -19,6 +19,7 @@ using SignalStack.Api.Historical;
 using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
 using SignalStack.Api.Notifications;
+using SignalStack.Api.Push;
 using SignalStack.Api.TelegramBot;
 using SignalStack.Api.LedgerWriters;
 using SignalStack.Api.Portfolio;
@@ -105,6 +106,11 @@ builder.Services.AddBacktestingServices(sqlConnectionString);
 // Notification collection schema + writer paths — P5-T3 / REQ-NOTIFY-006
 // REQ-NOTIFY-004: synchronous persistence before Telegram delivery.
 builder.Services.AddNotificationServices();
+
+// Push notification WebSocket fan-out infrastructure — P5-T13 / REQ-NFR-013
+// Registers PushConnectionManager, PushFanOutService (Redis pub/sub subscriber).
+// REQ-DATA-006a(c)(i): degraded fallback when Redis is unreachable.
+builder.Services.AddPushNotificationServices();
 
 // Telegram bot provisioning + deep-link subscription + token rotation — P5-T5
 // REQ-NOTIFY-015/016/017/022a.
@@ -260,6 +266,9 @@ app.MapFyersEndpoints();
 
 // PLD WebSocket session lease endpoint — REQ-SESSION-014
 app.MapPldEndpoints();
+
+// Push notification WebSocket endpoint — P5-T13 / REQ-NFR-013
+app.MapPushEndpoints();
 
 // Admin sys_config management endpoints — P2-T11 / REQ-CONFIG-005/005a/007, REQ-SEC-011
 app.MapAdminConfigEndpoints();

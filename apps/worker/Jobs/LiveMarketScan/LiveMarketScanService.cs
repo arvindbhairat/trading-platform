@@ -6,6 +6,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.MarketData;
 using SignalStack.Worker.Observability;
+using SignalStack.Worker.Push;
 using SignalStack.Worker.Rme;
 
 namespace SignalStack.Worker.Jobs.LiveMarketScan;
@@ -56,6 +57,7 @@ public sealed class LiveMarketScanService
     private readonly IMongoDatabase _database;
     private readonly IMarketDataProvider _marketDataProvider;
     private readonly IPositionChannelRegistry _channelRegistry;
+    private readonly IPushEventPublisher _pushEventPublisher;
     private readonly IOptions<LiveMarketScanOptions> _options;
     private readonly ILogger<LiveMarketScanService> _logger;
 
@@ -79,12 +81,14 @@ public sealed class LiveMarketScanService
         IMongoDatabase database,
         IMarketDataProvider marketDataProvider,
         IPositionChannelRegistry channelRegistry,
+        IPushEventPublisher pushEventPublisher,
         IOptions<LiveMarketScanOptions> options,
         ILogger<LiveMarketScanService> logger)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _marketDataProvider = marketDataProvider ?? throw new ArgumentNullException(nameof(marketDataProvider));
         _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
+        _pushEventPublisher = pushEventPublisher ?? throw new ArgumentNullException(nameof(pushEventPublisher));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -352,14 +356,14 @@ public sealed class LiveMarketScanService
         // ── Stop level (breach when price <= stop) ──────────────────────────
         if (position.CurrentStopLoss.HasValue && price <= position.CurrentStopLoss.Value)
         {
-            EnqueueBreach(position.PositionId, LevelType.Stop, price, now, ct);
+            EnqueueBreach(position, LevelType.Stop, price, now, ct);
             breaches++;
         }
 
         // ── Trailing stop level (breach when price <= trailing level) ───────
         if (position.TrailingStopLevel.HasValue && price <= position.TrailingStopLevel.Value)
         {
-            EnqueueBreach(position.PositionId, LevelType.TrailingStop, price, now, ct);
+            EnqueueBreach(position, LevelType.TrailingStop, price, now, ct);
             breaches++;
         }
 
@@ -368,7 +372,7 @@ public sealed class LiveMarketScanService
         {
             if (price >= level)
             {
-                EnqueueBreach(position.PositionId, LevelType.Add, price, now, ct);
+                EnqueueBreach(position, LevelType.Add, price, now, ct);
                 breaches++;
             }
         }
@@ -378,7 +382,7 @@ public sealed class LiveMarketScanService
         {
             if (price >= level)
             {
-                EnqueueBreach(position.PositionId, LevelType.Reduce, price, now, ct);
+                EnqueueBreach(position, LevelType.Reduce, price, now, ct);
                 breaches++;
             }
         }
@@ -387,16 +391,18 @@ public sealed class LiveMarketScanService
     }
 
     /// <summary>
-    /// Enqueues a <see cref="PriceLevelBreachedEvent"/> to the channel registry.
+    /// Enqueues a <see cref="PriceLevelBreachedEvent"/> to the channel registry
+    /// and publishes a push event for real-time delivery to connected portal clients.
     /// REQ-STOP-006b: stop, add, reduce, trailing-stop levels evaluated.
+    /// REQ-NFR-013: push events delivered via WebSocket fan-out.
     /// </summary>
     private void EnqueueBreach(
-        Guid positionId, LevelType levelType, decimal price,
+        PositionScanInfo position, LevelType levelType, decimal price,
         DateTimeOffset occurredAt, CancellationToken ct)
     {
         var evt = new PriceLevelBreachedEvent
         {
-            PositionId = positionId,
+            PositionId = position.PositionId,
             OccurredAt = occurredAt,
             Source = "LMDS",
             Level = levelType,
@@ -412,7 +418,59 @@ public sealed class LiveMarketScanService
         {
             _logger.LogError(ex,
                 "LMDS: failed to enqueue {LevelType} breach event for position {PositionId}.",
-                levelType, positionId);
+                levelType, position.PositionId);
+        }
+
+        // Publish push event for real-time portal delivery (REQ-NFR-013).
+        var (pushEventType, levelTypeStr) = levelType switch
+        {
+            LevelType.Stop => ("stop_breach", "Stop"),
+            LevelType.Add => ("add_advisory", "Add"),
+            LevelType.Reduce => ("reduce_advisory", "Reduce"),
+            LevelType.TrailingStop => ("stop_breach", "TrailingStop"),
+            _ => ("notification", levelType.ToString())
+        };
+
+        // Fire-and-forget; push publisher handles Redis failure gracefully
+        // per REQ-DATA-006a(c)(i).
+        _ = PublishPushEventAsync(pushEventType, position, levelTypeStr, price, occurredAt, ct);
+    }
+
+    /// <summary>
+    /// Publishes a push event to the Redis fan-out channel.
+    /// REQ-DATA-006a(c)(i): logs and degrades gracefully on Redis failure.
+    /// </summary>
+    private async Task PublishPushEventAsync(
+        string eventType, PositionScanInfo position, string levelType,
+        decimal price, DateTimeOffset occurredAt, CancellationToken ct)
+    {
+        try
+        {
+            var content = levelType switch
+            {
+                "Stop" => $"Stop level breached for {position.Symbol} at {price:F2}",
+                "Add" => $"Add advisory triggered for {position.Symbol} at {price:F2}",
+                "Reduce" => $"Reduce advisory triggered for {position.Symbol} at {price:F2}",
+                "TrailingStop" => $"Trailing stop breached for {position.Symbol} at {price:F2}",
+                _ => $"Level {levelType} breached for {position.Symbol} at {price:F2}"
+            };
+
+            await _pushEventPublisher.PublishAsync(
+                eventType: eventType,
+                userId: position.UserId,
+                symbol: position.Symbol,
+                positionId: position.PositionId.ToString(),
+                content: content,
+                deepLink: $"/chart?symbol={position.Symbol}",
+                price: price,
+                levelType: levelType,
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "LMDS: failed to publish push event for {LevelType} breach on position {PositionId}.",
+                levelType, position.PositionId);
         }
     }
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Roboto, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { AppProviders } from "@/components/AppProviders";
 
 const roboto = Roboto({
   subsets: ["latin"],
@@ -26,7 +27,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${roboto.variable} ${jetbrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }

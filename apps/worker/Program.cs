@@ -23,6 +23,7 @@ using SignalStack.Worker.Jobs.ManualSync;
 using SignalStack.Worker.Jobs.AdminRebuild;
 using SignalStack.Worker.Jobs.SingleSymbolBackfill;
 using SignalStack.Worker.Jobs.LiveMarketScan;
+using SignalStack.Worker.Push;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using SignalStack.Worker.Singleton;
@@ -140,6 +141,11 @@ builder.Services.AddAccountSync(builder.Configuration);
 // enqueues PriceLevelBreachedEvent to the per-position channel registry.
 // REQ-SLO-004: cycle-time capacity warning. REQ-PLC-004: circuit-clear detection.
 builder.Services.AddLiveMarketScan(builder.Configuration);
+
+// Push event publisher for real-time WebSocket fan-out (P5-T13 / REQ-NFR-013)
+// Publishes events to Redis pub/sub so the API can deliver them to connected
+// portal clients. REQ-DATA-006a(c)(i): degrades gracefully on Redis failure.
+builder.Services.AddPushEventPublisher();
 
 // Trade-ledger writer services (P5-T8 lock wiring — REQ-PORT-031/031a/031b)
 // Skeleton services that acquire the per-user write lock; logic wired in P5-T9+.
