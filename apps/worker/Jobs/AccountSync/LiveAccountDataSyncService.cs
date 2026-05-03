@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
+using SignalStack.Api.LedgerWriters;
 using SignalStack.Api.Notifications;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Worker.Observability;
@@ -49,6 +50,7 @@ public sealed class LiveAccountDataSyncService
     private readonly ILogger<LiveAccountDataSyncService> _logger;
     private readonly ILedgerWriteLock _ledgerLock;
     private readonly ILedgerSnapshotVersionHelper _snapshotVersionHelper;
+    private readonly TradeIngestionService _ingestionService;
 
     // ── OTEL metrics (REQ-PORT-021a(a)) ──────────────────────────────────
     private static readonly Counter<long> CycleAbortedCounter = WorkerTelemetry.Meter
@@ -77,13 +79,15 @@ public sealed class LiveAccountDataSyncService
         IOptions<AccountSyncOptions> options,
         ILogger<LiveAccountDataSyncService> logger,
         ILedgerWriteLock ledgerLock,
-        ILedgerSnapshotVersionHelper snapshotVersionHelper)
+        ILedgerSnapshotVersionHelper snapshotVersionHelper,
+        TradeIngestionService ingestionService)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _ledgerLock = ledgerLock ?? throw new ArgumentNullException(nameof(ledgerLock));
         _snapshotVersionHelper = snapshotVersionHelper ?? throw new ArgumentNullException(nameof(snapshotVersionHelper));
+        _ingestionService = ingestionService ?? throw new ArgumentNullException(nameof(ingestionService));
     }
 
     /// <summary>
@@ -148,7 +152,9 @@ public sealed class LiveAccountDataSyncService
                     continue;
                 }
 
-                await SyncUserAccountAsync(user, accountSyncCollection, ct);
+                // P5-T9: trade data from FYERS intraday API to be passed here.
+                // For now, empty list — ingestion is a no-op when no trades.
+                await SyncUserAccountAsync(user, accountSyncCollection, [], ct);
                 processedCount++;
             }
             catch (MongoException ex)
@@ -309,18 +315,19 @@ public sealed class LiveAccountDataSyncService
 
     /// <summary>
     /// Per-user account sync cycle with trade-ledger write lock acquisition
-    /// (REQ-PORT-031/031a/031b).
+    /// and trade ingestion (REQ-PORT-031/031a/031b, REQ-PORT-005a, REQ-PORT-023).
     ///
     /// Acquires the per-user lock in TryNonBlocking mode. If busy, the user
     /// is skipped (background sync behaviour). On successful lock acquisition,
-    /// records sync progress and increments <c>ledger_snapshot_version</c>
-    /// after the durable write. The fencing token guards against stale writes;
-    /// if a fencing abort is detected the version is NOT incremented
-    /// (REQ-PORT-031b invariant A-11).
+    /// ingests the provided trades, records sync progress, and increments
+    /// <c>ledger_snapshot_version</c> after the durable write. The fencing
+    /// token guards against stale writes; if a fencing abort is detected
+    /// the version is NOT incremented (REQ-PORT-031b invariant A-11).
     /// </summary>
     private async Task SyncUserAccountAsync(
         UserSyncInfo user,
         IMongoCollection<BsonDocument> accountSyncCollection,
+        IReadOnlyList<RawTrade> rawTrades,
         CancellationToken ct)
     {
         // ── Step 1: Acquire the per-user trade-ledger write lock ────────────
@@ -339,7 +346,33 @@ public sealed class LiveAccountDataSyncService
 
         try
         {
-            // ── Step 2: Record sync progress (P5-T7 skeleton writes) ──────
+            // ── Step 2: Ingest trades (REQ-PORT-005a/023) ──────────────────
+            if (rawTrades.Count > 0)
+            {
+                _logger.LogInformation(
+                    "LADS: ingesting {Count} trades for user {UserId} (fence {FenceToken}).",
+                    rawTrades.Count, user.UserId, handle.FencingToken);
+
+                var ingestionResult = await _ingestionService.IngestAsync(
+                    user.UserId, rawTrades, handle.FencingToken, SyncSource.Intraday,
+                    DateTime.UtcNow, ct: ct);
+
+                _logger.LogInformation(
+                    "LADS: ingestion result for user {UserId} — " +
+                    "{Inserted} inserted, {Duplicates} duplicates, {Excluded} excluded.",
+                    user.UserId,
+                    ingestionResult.Inserted,
+                    ingestionResult.SkippedDuplicates,
+                    ingestionResult.SkippedNonNifty500);
+            }
+            else
+            {
+                _logger.LogTrace(
+                    "LADS: no trades to ingest for user {UserId} (fence {FenceToken}).",
+                    user.UserId, handle.FencingToken);
+            }
+
+            // ── Step 3: Record sync progress (P5-T7 guard write) ───────────
             var now = DateTime.UtcNow;
 
             var filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId);
@@ -360,7 +393,7 @@ public sealed class LiveAccountDataSyncService
                 options: new UpdateOptions { IsUpsert = true },
                 cancellationToken: ct);
 
-            // ── Step 3: Fencing-token guard (REQ-PORT-031b invariant A-11) ──
+            // ── Step 4: Fencing-token guard (REQ-PORT-031b invariant A-11) ──
             // If the update matched 0 documents, another process has advanced
             // the fence token past ours — do NOT increment the snapshot version.
             if (result.MatchedCount == 0)
@@ -372,7 +405,7 @@ public sealed class LiveAccountDataSyncService
                 return;
             }
 
-            // ── Step 4: Increment ledger_snapshot_version after durable write ─
+            // ── Step 5: Increment ledger_snapshot_version after durable write ─
             // REQ-PORT-031a: only after all trade-ledger writes durably committed.
             await _snapshotVersionHelper.IncrementAsync(user.UserId, ct);
         }

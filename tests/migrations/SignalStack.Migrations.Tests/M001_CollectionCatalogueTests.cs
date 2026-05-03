@@ -122,7 +122,6 @@ public sealed class M001_CollectionCatalogueTests
     [InlineData("symbol_health",     "symbol")]
     [InlineData("sys_config",        "key")]
     [InlineData("watchlists",        "user_id")]
-    [InlineData("trade_ledger",      "trade_id")]
     [InlineData("intent_ledger",     "nonce")]
     [InlineData("portfolio_snapshots","user_id")]
     [InlineData("fyers_account_sync","user_id")]
@@ -140,6 +139,16 @@ public sealed class M001_CollectionCatalogueTests
             ci.Unique &&
             ci.Fields.Any(f => f.Field == "session_date") &&
             ci.Fields.Any(f => f.Field == "session_type"));
+    }
+
+    [Fact]
+    public void TradeLedger_has_unique_compound_index_on_user_id_and_trade_id()
+    {
+        var spec = CollectionCatalogueSpec.All.Single(c => c.Name == "trade_ledger");
+        Assert.Contains(spec.CompoundIndexes, ci =>
+            ci.Unique &&
+            ci.Fields.Any(f => f.Field == "user_id") &&
+            ci.Fields.Any(f => f.Field == "trade_id"));
     }
 
     // ── rme_incidents compound indexes (data-management.md explicit prescriptions) ──

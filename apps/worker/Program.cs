@@ -50,8 +50,11 @@ builder.Services.AddSingleton<IWorkerSingletonLeaseBackend, RedisWorkerSingleton
 builder.Services.AddSingleton<IWorkerSingletonCoordinator, WorkerSingletonCoordinator>();
 builder.Services.AddHostedService<WorkerHeartbeatService>();
 
-// Trade-ledger write lock primitives (REQ-PORT-031/031a/031b — writers wired in P5-T8)
+// Trade-ledger write lock primitives (REQ-PORT-031/031a/031b)
 builder.Services.AddLedgerWriteLock();
+
+// Trade-ledger repository and ingestion pipeline (P5-T9 — REQ-PORT-005a, REQ-PORT-023, REQ-RECON-001..004)
+builder.Services.AddTradeLedgerServices();
 
 // RME per-position channel registry (ADR-0003, REQ-RME-CONC-001/004/005)
 builder.Services

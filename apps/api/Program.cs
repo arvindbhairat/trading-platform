@@ -40,11 +40,14 @@ var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb")
 var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
 builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
 
-// Trade-ledger write lock primitives (REQ-PORT-031/031a/031b — writers wired in P5-T8)
+// Trade-ledger write lock primitives (REQ-PORT-031/031a/031b)
 builder.Services.AddLedgerWriteLock();
 
+// Trade-ledger repository and ingestion pipeline (P5-T9 — REQ-PORT-005a, REQ-PORT-023, REQ-RECON-001..004)
+builder.Services.AddTradeLedgerServices();
+
 // Trade-ledger writer services (P5-T8 lock wiring — REQ-PORT-031/031a/031b)
-// Skeleton services that acquire the per-user write lock; logic wired in P5-T9+.
+// Ingestion logic wired in P5-T9.
 builder.Services.AddSingleton<OnLoginSyncService>();
 builder.Services.AddSingleton<ManualAdjustmentService>();
 

@@ -253,11 +253,11 @@ public static class CollectionCatalogueSpec
             TtlIndexes: [],
             SingleFieldIndexes:
             [
-                new("trade_id", Unique: true),
                 new("trade_at"),
             ],
             CompoundIndexes:
             [
+                new CompoundIndexSpec([("user_id", 1), ("trade_id", 1)], Unique: true),
                 new CompoundIndexSpec([("user_id", 1), ("trade_at", -1)]),
             ],
             HasOnlineArchive: true,
