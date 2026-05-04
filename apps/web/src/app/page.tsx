@@ -12,6 +12,8 @@ import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/p
 import { apiFetch } from "@/lib/auth";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
+import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
+import FyersButtonWidget from "@/components/FyersButtonWidget";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,6 +79,22 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dataFreshness, setDataFreshness] = useState<string | null>(null);
 
+  // ── Exit modal state (P7-T11 / T-8) ──────────────────────────────────
+  const [exitSymbol, setExitSymbol] = useState<string | null>(null);
+  const [exitPrice, setExitPrice] = useState<number | null>(null);
+  const [exitSymbolName, setExitSymbolName] = useState("");
+
+  // ── FYERS widget state (P7-T7) ──────────────────────────────────────────
+  const [activeFyersOrder, setActiveFyersOrder] = useState<{
+    symbol: string;
+    signedPayload: {
+      nonce: string;
+      data_attributes: Record<string, string>;
+      payload_hash: string;
+      expires_at_unix: number;
+    };
+  } | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       const [holdingsRes, summaryRes, reconRes, pendingConfRes] = await Promise.all([
@@ -127,6 +145,41 @@ export default function DashboardPage() {
     }
   }, [loadData]);
 
+  // ── Phase 1 exit modal handlers (P7-T11 / T-8) ─────────────────────────
+
+  const handleExitClick = (symbol: string, price: number | null) => {
+    setExitSymbol(symbol);
+    setExitPrice(price);
+    setExitSymbolName(symbol.replace(/^NSE:/, "").replace(/-EQ$/, ""));
+  };
+
+  const handleCloseExitModal = () => {
+    setExitSymbol(null);
+    setExitPrice(null);
+    setExitSymbolName("");
+  };
+
+  const handleExitProceed = (params: ProceedParams) => {
+    if (params.signedPayload && !params.signedPayloadError) {
+      setActiveFyersOrder({
+        symbol: params.symbol,
+        signedPayload: params.signedPayload,
+      });
+    }
+    setExitSymbol(null);
+    setExitPrice(null);
+    setExitSymbolName("");
+  };
+
+  const handleFyersDismiss = () => {
+    setActiveFyersOrder(null);
+    loadData();
+  };
+
+  const handleFyersComplete = (_nonce: string, _status: string) => {
+    // Intent record updated. Holdings will refresh on dismiss.
+  };
+
   // ── Derive pending confirmation lookup ─────────────────────────────────────
   const pendingConfBySymbol = useMemo(() => {
     const map = new Map<string, PendingConfirmation>();
@@ -172,6 +225,7 @@ export default function DashboardPage() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
+    <>
     <Shell current="dashboard" navItems={userNavItems}>
       <div style={{ padding: "var(--s-8) var(--s-10)", display: "flex", flexDirection: "column", gap: "var(--s-6)" }}>
         <SessionExpiryBanner />
@@ -264,7 +318,7 @@ export default function DashboardPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Symbol", "Qty", "Avg buy", "LTP", "Invested", "M.Value", "P&L", "Return", "Days"].map((h, i) => (
+                        {["Symbol", "Qty", "Avg buy", "LTP", "Invested", "M.Value", "P&L", "Return", "Days", "Action"].map((h, i) => (
                           <th
                             key={h}
                             style={{
@@ -329,6 +383,16 @@ export default function DashboardPage() {
                             <td style={{ padding: "11px 12px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                               {h.holding_period_days}d
                             </td>
+                            <td style={{ padding: "11px 12px", textAlign: "right" }}>
+                              <Btn
+                                variant="danger"
+                                size="sm"
+                                icon="arrow-up-right"
+                                onClick={() => handleExitClick(h.symbol, h.current_price)}
+                              >
+                                Exit
+                              </Btn>
+                            </td>
                           </tr>
                         );
                       })}
@@ -387,5 +451,29 @@ export default function DashboardPage() {
         )}
       </div>
     </Shell>
+
+      {/* Phase 1 exit modal — P7-T11 / T-8 */}
+      {exitSymbol !== null && (
+        <Phase1Modal
+          symbol={exitSymbol}
+          symbolName={exitSymbolName}
+          actionType="exit"
+          currentPrice={exitPrice}
+          pendingConf={null}
+          onClose={handleCloseExitModal}
+          onProceed={handleExitProceed}
+        />
+      )}
+
+      {/* FYERS button widget — P7-T7 */}
+      {activeFyersOrder && (
+        <FyersButtonWidget
+          symbol={activeFyersOrder.symbol}
+          signedPayload={activeFyersOrder.signedPayload}
+          onDismiss={handleFyersDismiss}
+          onComplete={handleFyersComplete}
+        />
+      )}
+    </>
   );
 }
