@@ -507,8 +507,8 @@ public sealed class LiveAccountDataSyncService
     private sealed record FillNotificationDetail(
         string Symbol,
         string PositionId,
-        int RequestedQuantity,
-        int FilledQuantity,
+        decimal RequestedQuantity,
+        decimal FilledQuantity,
         decimal AvgFillPrice,
         bool IsPartialFill);
 
@@ -571,7 +571,7 @@ public sealed class LiveAccountDataSyncService
                     position.PositionId, position.Symbol, totalQty, avgPrice);
 
                 // Collect fill details for notification dispatch (REQ-ORDER-015f)
-                var requestedQty = position.EntryQuantity ?? totalQty;
+                var requestedQty = position.Quantity;
                 fillDetails.Add(new FillNotificationDetail(
                     Symbol: position.Symbol,
                     PositionId: position.PositionId.ToString(),
