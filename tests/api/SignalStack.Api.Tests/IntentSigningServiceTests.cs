@@ -33,6 +33,7 @@ public sealed class IntentSigningServiceTests
             new IntentSigningService(
                 Mock.Of<IMongoDatabase>(),
                 Mock.Of<ISysConfigRepository>(),
+                Mock.Of<IIntentLedgerRepository>(),
                 configMock.Object));
 
         Assert.Contains("Execution:IntentHmacKey", ex.Message);
@@ -408,9 +409,16 @@ public sealed class IntentSigningServiceTests
         sysConfigMock.Setup(s => s.GetDecimalAsync("risk.drawdown_enforcement.suppress_entry_pct", 20m, It.IsAny<CancellationToken>()))
             .ReturnsAsync(20m);
 
+        var intentLedgerMock = new Mock<IIntentLedgerRepository>();
+        intentLedgerMock.Setup(r => r.CreateIntentAsync(
+                It.IsAny<IntentLedgerDocument>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         return new IntentSigningService(
             database ?? CreateDefaultMockDatabase().Object,
             sysConfigMock.Object,
+            intentLedgerMock.Object,
             configMock.Object);
     }
 }

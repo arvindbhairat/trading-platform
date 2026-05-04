@@ -41,15 +41,18 @@ public sealed class IntentSigningService : IIntentSigningService
 
     private readonly IMongoDatabase _database;
     private readonly ISysConfigRepository _sysConfig;
+    private readonly IIntentLedgerRepository _intentLedger;
     private readonly byte[] _hmacKey;
 
     public IntentSigningService(
         IMongoDatabase database,
         ISysConfigRepository sysConfig,
+        IIntentLedgerRepository intentLedger,
         IConfiguration configuration)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _sysConfig = sysConfig ?? throw new ArgumentNullException(nameof(sysConfig));
+        _intentLedger = intentLedger ?? throw new ArgumentNullException(nameof(intentLedger));
 
         var keyString = configuration[HmacKeyConfigPath]
             ?? throw new InvalidOperationException(
@@ -133,7 +136,47 @@ public sealed class IntentSigningService : IIntentSigningService
             SHA256.HashData(Encoding.UTF8.GetBytes(canonicalPayload)))
             .ToLowerInvariant();
 
-        // ── 11. Read nonce TTL ─────────────────────────────────────────────
+        // ── 11b. Persist intent record before widget activation (REQ-ORDER-014a/014b) ───
+        // The intent is written synchronously with status "pending" before the signed
+        // payload is returned to the frontend. The frontend uses the data attributes
+        // to render the <fyers-button> widget, which submits the order to FYERS.
+        // If the write fails (e.g. duplicate nonce), the request is refused with a
+        // signing exception so the frontend retries with a fresh nonce.
+        var intentPrice = orderType == "LIMIT" && request.LimitPrice.HasValue
+            ? request.LimitPrice.Value
+            : 0m;
+
+        var intent = new IntentLedgerDocument
+        {
+            UserId = userId,
+            PositionId = null,   // resolved by the frontend context; set in follow-up
+            SignalId = null,     // set when the intent originates from a signal advisory
+            Action = action,
+            Symbol = request.Symbol,
+            Side = transactionType,
+            Quantity = request.Quantity,
+            OrderType = orderType,
+            Price = intentPrice,
+            Product = productType,
+            Status = IntentStatus.Pending,
+            Nonce = nonce,
+            PayloadSignature = signature,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        try
+        {
+            await _intentLedger.CreateIntentAsync(intent, ct);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // Nonce collision — extremely rare (128-bit random), but handle gracefully.
+            ThrowSigning("nonce_collision",
+                "A nonce collision occurred. Please retry — a fresh nonce has been generated.");
+        }
+
+        // ── 12. Read nonce TTL ─────────────────────────────────────────────
         var nonceTtlSeconds = await _sysConfig.GetLongAsync(
             "orders.payload_nonce_ttl_seconds", 300L, ct);
         var expiresAt = iat + nonceTtlSeconds;

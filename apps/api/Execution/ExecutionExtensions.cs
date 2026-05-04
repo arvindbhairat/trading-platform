@@ -7,6 +7,7 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// P7-T3: PreFlightCheckService.
 /// P7-T4: OrderContextService.
 /// P7-T5: IntentSigningService.
+/// P7-T6: IntentLedgerRepository.
 /// </summary>
 public static class ExecutionExtensions
 {
@@ -15,6 +16,7 @@ public static class ExecutionExtensions
         services.AddSingleton<PreFlightCheckService>();
         services.AddSingleton<OrderContextService>();
         services.AddSingleton<IIntentSigningService, IntentSigningService>();
+        services.AddSingleton<IIntentLedgerRepository, MongoIntentLedgerRepository>();
         return services;
     }
 }
