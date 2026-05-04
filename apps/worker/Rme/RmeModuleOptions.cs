@@ -62,4 +62,25 @@ public sealed class RmeModuleOptions
     /// </summary>
     [Range(1.0, 100.0)]
     public double MaxPortfolioHeatPct { get; set; } = 5.0;
+
+    /// <summary>
+    /// Drawdown threshold at which position-size reduction begins.
+    /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
+    /// model starts reducing the recommended position size proportionally, reaching
+    /// zero at <see cref="DrawdownBlockPct"/>.
+    /// Mapped from sys_config <c>risk.drawdown.threshold_reduce_size_pct</c> (REQ-DRDN-003).
+    /// Default: 5.0 (5% drawdown from peak equity).
+    /// </summary>
+    [Range(0.0, 100.0)]
+    public double DrawdownReductionStartPct { get; set; } = 5.0;
+
+    /// <summary>
+    /// Drawdown threshold at which new entry recommendations are blocked entirely.
+    /// When current drawdown reaches or exceeds this percentage, the drawdown-adjusted
+    /// sizing model returns zero quantity with an advisory message.
+    /// Mapped from sys_config <c>risk.drawdown.threshold_block_new_entries_pct</c> (REQ-DRDN-003).
+    /// Default: 20.0 (20% drawdown from peak equity).
+    /// </summary>
+    [Range(0.0, 100.0)]
+    public double DrawdownBlockPct { get; set; } = 20.0;
 }

@@ -63,6 +63,13 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Position Sizing Models).
         services.AddSingleton<ISizingModel, HeatBasedSizingModel>();
 
+        // P6-T11: Drawdown-adjusted sizing model.
+        // DrawdownAdjustedSizingModel — applies a graduated reduction to the base
+        // risk amount as account drawdown deepens, blocking new entries at the
+        // configured block threshold (REQ-DRDN-003).
+        // (portfolio-risk-guidelines § Position Sizing Models).
+        services.AddSingleton<ISizingModel, DrawdownAdjustedSizingModel>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
