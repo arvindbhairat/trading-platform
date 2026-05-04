@@ -75,11 +75,17 @@ interface Props {
   symbolName?: string;
   currentPrice: number | null;
   priceColor: string;
+  pendingConf?: {
+    symbol: string;
+    action: string;
+    submission_timestamp: string;
+    last_lads_sync_at: string | null;
+  } | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function RmeAdvisoryPanel({ symbol, symbolName, currentPrice, priceColor }: Props) {
+export default function RmeAdvisoryPanel({ symbol, symbolName, currentPrice, priceColor, pendingConf }: Props) {
   const [advisory, setAdvisory] = useState<RmeAdvisoryData | null>(null);
   const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -347,6 +353,23 @@ export default function RmeAdvisoryPanel({ symbol, symbolName, currentPrice, pri
                   textAlign: "center",
                 }}>
                   No open position for this symbol.
+                </div>
+              )}
+
+              {/* ── Awaiting fill confirmation (P7-T9 / REQ-ORDER-015e) ────────── */}
+              {pendingConf && hasPosition && advisory?.state === "PendingEntry" && (
+                <div style={{
+                  padding: 10,
+                  background: "var(--info-bg)",
+                  border: "1px solid rgba(216,138,28,0.2)",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: "var(--brand-300)",
+                  lineHeight: 1.5,
+                }}>
+                  Awaiting fill confirmation — LADS scan pending. Last scan: {pendingConf.last_lads_sync_at
+                    ? new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })
+                    : "N/A"}
                 </div>
               )}
 

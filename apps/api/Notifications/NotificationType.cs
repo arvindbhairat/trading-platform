@@ -25,6 +25,8 @@ public static class NotificationType
     public const string MarketHaltCleared = "market_halt_cleared";
     public const string SymbolArchivedWithOpenPosition = "symbol_archived_with_open_position";
     public const string EquityBaseDivergenceAdvisory = "equity_base_divergence_advisory";
+    public const string EntryFilled = "entry_filled";
+    public const string EntryPartiallyFilled = "entry_partially_filled";
 
     // ── Admin-only operational notification types (REQ-NOTIFY-006a) ────────
 
@@ -62,6 +64,7 @@ public static class NotificationType
         PendingEntrySuperseded, PendingEntryExpired, SectorExposureBreach,
         MarketHaltActive, MarketHaltCleared,
         SymbolArchivedWithOpenPosition, EquityBaseDivergenceAdvisory,
+        EntryFilled, EntryPartiallyFilled,
     };
 
     /// <summary>All valid admin-only notification types.</summary>

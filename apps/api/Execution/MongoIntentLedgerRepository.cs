@@ -152,4 +152,22 @@ public sealed class MongoIntentLedgerRepository : IIntentLedgerRepository
     {
         await _intents.InsertOneAsync(orphanIntent, cancellationToken: ct);
     }
+
+    /// <inheritdoc />
+    public async Task<List<IntentLedgerDocument>> GetAwaitingConfirmationByUserAsync(
+        string userId, string? symbol = null, CancellationToken ct = default)
+    {
+        var filters = new List<FilterDefinition<IntentLedgerDocument>>
+        {
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.UserId, userId),
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.Status, IntentStatus.Matched),
+        };
+
+        if (symbol is not null)
+            filters.Add(Builders<IntentLedgerDocument>.Filter.Eq(d => d.Symbol, symbol));
+
+        return await _intents.Find(Builders<IntentLedgerDocument>.Filter.And(filters))
+            .Sort(Builders<IntentLedgerDocument>.Sort.Descending(d => d.CreatedAt))
+            .ToListAsync(ct);
+    }
 }

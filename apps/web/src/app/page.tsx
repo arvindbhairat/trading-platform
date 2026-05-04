@@ -7,7 +7,7 @@
 // REQ-DASH-010: positions summary with per-position data.
 // REQ-DASH-013: data freshness timestamp.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
@@ -16,6 +16,19 @@ import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface PendingConfirmation {
+  symbol: string;
+  action: string;
+  side: string;
+  quantity: number;
+  order_type: string;
+  submission_timestamp: string;
+  callback_received_at: string | null;
+  intent_created_at: string;
+  last_lads_sync_at: string | null;
+  nonce: string;
+}
 
 interface HoldingDto {
   symbol: string;
@@ -58,6 +71,7 @@ export default function DashboardPage() {
   const [holdings, setHoldings] = useState<HoldingDto[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryDto | null>(null);
   const [reconStatus, setReconStatus] = useState<ReconciliationStatusDto | null>(null);
+  const [pendingConfirmations, setPendingConfirmations] = useState<PendingConfirmation[]>([]);
   const [loading, setLoading] = useState(true);
   const [reconLoading, setReconLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +79,11 @@ export default function DashboardPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [holdingsRes, summaryRes, reconRes] = await Promise.all([
+      const [holdingsRes, summaryRes, reconRes, pendingConfRes] = await Promise.all([
         apiFetch("/api/v1/portfolio/holdings"),
         apiFetch("/api/v1/portfolio/summary"),
         apiFetch("/api/v1/reconciliation/status"),
+        apiFetch("/api/v1/execution/intent/pending-confirmations"),
       ]);
 
       if (holdingsRes.ok) {
@@ -82,6 +97,10 @@ export default function DashboardPage() {
       if (reconRes.ok) {
         const d = (await reconRes.json()) as ReconciliationStatusDto;
         setReconStatus(d);
+      }
+      if (pendingConfRes.ok) {
+        const d = (await pendingConfRes.json()) as { pending_confirmations: PendingConfirmation[] };
+        setPendingConfirmations(d.pending_confirmations ?? []);
       }
 
       setDataFreshness(new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" }));
@@ -108,7 +127,18 @@ export default function DashboardPage() {
     }
   }, [loadData]);
 
-  // ── Format helpers ───────────────────────────────────────────────────────
+  // ── Derive pending confirmation lookup ─────────────────────────────────────
+  const pendingConfBySymbol = useMemo(() => {
+    const map = new Map<string, PendingConfirmation>();
+    for (const pc of pendingConfirmations) {
+      if (!map.has(pc.symbol)) {
+        map.set(pc.symbol, pc);
+      }
+    }
+    return map;
+  }, [pendingConfirmations]);
+
+  // ── Format helpers ─────────────────────────────────────────────────────────
 
   const fmtInr = (v: number | null | undefined) => {
     if (v === null || v === undefined) return "—";
@@ -256,10 +286,26 @@ export default function DashboardPage() {
                     <tbody>
                       {holdings.map((h) => {
                         const pnl = h.unrealized_pnl ?? 0;
+                        const pendingConf = pendingConfBySymbol.get(h.symbol);
                         return (
                           <tr key={h.symbol} style={{ borderBottom: "1px solid var(--line-1)" }}>
                             <td style={{ padding: "11px 12px", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                              {h.symbol}
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span>{h.symbol}</span>
+                                {pendingConf && (
+                                  <Pill tone="info" dot>
+                                    Awaiting fill confirmation
+                                  </Pill>
+                                )}
+                                {pendingConf && (
+                                  <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 2, lineHeight: 1.4 }}>
+                                    Submitted: {new Date(pendingConf.submission_timestamp).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
+                                    {pendingConf.last_lads_sync_at && (
+                                      <> · LADS: {new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}</>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td style={{ padding: "11px 12px", textAlign: "right" }}>{h.quantity}</td>
                             <td style={{ padding: "11px 12px", textAlign: "right" }}>

@@ -71,6 +71,14 @@ export default function ChartPage() {
   const [, setConnMessage] = useState<string | undefined>();
   const [searchInput, setSearchInput] = useState("SBIN");
 
+  // ── Awaiting-confirmation state (P7-T9 / REQ-ORDER-015e) ─────────────────
+  const [pendingConf, setPendingConf] = useState<{
+    symbol: string;
+    action: string;
+    submission_timestamp: string;
+    last_lads_sync_at: string | null;
+  } | null>(null);
+
   // ── Phase 1 modal state (P7-T4) ─────────────────────────────────────────
   const [modalAction, setModalAction] = useState<"entry" | "add" | "reduce" | "exit" | null>(null);
   const showModal = modalAction !== null;
@@ -226,6 +234,43 @@ export default function ChartPage() {
       lq.unsubscribe([symbol]);
       unsubQuote();
       unsubStatus();
+    };
+  }, [symbol]);
+
+  // ── Fetch pending confirmations (P7-T9 / REQ-ORDER-015e) ──────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchPendingConf() {
+      // Strip exchange prefix for matching with intent ledger symbols
+      const sym = symbol.replace(/^NSE:/, "").replace(/-EQ$/, "");
+      try {
+        const res = await apiFetch(
+          `/api/v1/execution/intent/pending-confirmations?symbol=${encodeURIComponent(sym)}`
+        );
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { pending_confirmations: Array<{
+            symbol: string;
+            action: string;
+            submission_timestamp: string;
+            last_lads_sync_at: string | null;
+          }> };
+          const list = data.pending_confirmations ?? [];
+          setPendingConf(list.length > 0 ? list[0] : null);
+        } else if (!cancelled) {
+          setPendingConf(null);
+        }
+      } catch {
+        if (!cancelled) setPendingConf(null);
+      }
+    }
+
+    fetchPendingConf();
+    // Poll every 30 seconds to stay current with LADS sync
+    const interval = setInterval(fetchPendingConf, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
     };
   }, [symbol]);
 
@@ -410,6 +455,28 @@ export default function ChartPage() {
 
         <div style={{ height: "var(--s-4)" }} />
 
+        {/* ── Awaiting fill confirmation banner (P7-T9 / REQ-ORDER-015e) ────── */}
+        {pendingConf && (
+          <Card accent="brand" style={{ padding: "12px 18px", marginBottom: "var(--s-4)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                  Awaiting fill confirmation
+                </div>
+                <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>
+                  This order was submitted to FYERS and is awaiting fill confirmation from the next Live Account Data Scan.
+                </div>
+                <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6, fontFamily: "var(--font-mono)" }}>
+                  Submitted: {new Date(pendingConf.submission_timestamp).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
+                  {pendingConf.last_lads_sync_at && (
+                    <> · LADS: {new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}</>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Chart + RME panel grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 14 }}>
           {/* Chart */}
@@ -475,6 +542,7 @@ export default function ChartPage() {
               symbolName={symbolName}
               currentPrice={currentPrice}
               priceColor={priceColor}
+              pendingConf={pendingConf}
             />
 
             {/* Phase 1 action buttons — P7-T4 / REQ-ORDER-007 */}
@@ -543,6 +611,7 @@ export default function ChartPage() {
           symbolName={symbolName}
           actionType={modalAction}
           currentPrice={currentPrice}
+          pendingConf={pendingConf}
           onClose={handleCloseModal}
           onProceed={handleProceed}
         />

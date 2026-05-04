@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using SignalStack.Api.Execution;
 
 namespace Microsoft.AspNetCore.Routing;
@@ -172,6 +174,60 @@ public static class ExecutionEndpoints
                 match_source = updated.MatchSource,
                 callback_received_at = updated.CallbackReceivedAt,
             });
+        });
+
+        // ── GET /api/v1/execution/intent/pending-confirmations?symbol={symbol} ─
+        // Returns intents in "matched" status for pending fill confirmation
+        // state (REQ-ORDER-015e). Optionally filtered by symbol. Includes
+        // submission timestamp and the user's last LADS sync timestamp.
+        execution.MapGet("/intent/pending-confirmations", async (
+            HttpContext context,
+            IIntentLedgerRepository intentLedger,
+            IMongoDatabase database,
+            string? symbol) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            // Get matched intents awaiting position advancement
+            var matchedIntents = await intentLedger.GetAwaitingConfirmationByUserAsync(
+                userId, symbol, context.RequestAborted);
+
+            if (matchedIntents.Count == 0)
+                return Results.Ok(new { pending_confirmations = Array.Empty<object>() });
+
+            // Get the user's last successful LADS sync timestamp
+            var accountSync = database.GetCollection<BsonDocument>("fyers_account_sync");
+            var syncFilter = Builders<BsonDocument>.Filter.Eq("user_id", userId);
+            var syncDoc = await accountSync
+                .Find(syncFilter)
+                .Project<BsonDocument>(Builders<BsonDocument>.Projection
+                    .Include("last_successful_sync_at"))
+                .FirstOrDefaultAsync(context.RequestAborted);
+
+            DateTime? lastSyncAt = null;
+            if (syncDoc?.TryGetValue("last_successful_sync_at", out var syncVal) == true
+                && !syncVal.IsBsonNull)
+            {
+                lastSyncAt = syncVal.ToUniversalTime();
+            }
+
+            var result = matchedIntents.Select(intent => new
+            {
+                symbol = intent.Symbol,
+                action = intent.Action,
+                side = intent.Side,
+                quantity = intent.Quantity,
+                order_type = intent.OrderType,
+                submission_timestamp = intent.CallbackReceivedAt ?? intent.CreatedAt,
+                callback_received_at = intent.CallbackReceivedAt,
+                intent_created_at = intent.CreatedAt,
+                last_lads_sync_at = lastSyncAt,
+                nonce = intent.Nonce,
+            });
+
+            return Results.Ok(new { pending_confirmations = result });
         });
 
         return app;

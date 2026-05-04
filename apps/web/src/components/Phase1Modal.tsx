@@ -74,6 +74,12 @@ interface Props {
   symbolName?: string;
   actionType: ActionType;
   currentPrice: number | null;
+  pendingConf?: {
+    symbol: string;
+    action: string;
+    submission_timestamp: string;
+    last_lads_sync_at: string | null;
+  } | null;
   onClose: () => void;
   onProceed: (params: ProceedParams) => void;
 }
@@ -118,6 +124,7 @@ export default function Phase1Modal({
   symbolName,
   actionType,
   currentPrice,
+  pendingConf,
   onClose,
   onProceed,
 }: Props) {
@@ -540,6 +547,28 @@ export default function Phase1Modal({
                       <span>{check.message}</span>
                     </div>
                   ))}
+                </Card>
+              )}
+
+              {/* ── Awaiting fill confirmation (P7-T9 / REQ-ORDER-015e) ───── */}
+              {pendingConf && (
+                <Card accent="brand" style={{ padding: 12 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icon name="clock" size={16} color="var(--brand-300)" /></span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-300)", marginBottom: 4 }}>
+                        Awaiting fill confirmation
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>
+                        This order was submitted to FYERS and is awaiting fill confirmation from the next Live Account Data Scan.
+                      </div>
+                      {pendingConf.last_lads_sync_at && (
+                        <div style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-mono)", marginTop: 6 }}>
+                          Last LADS scan: {new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </Card>
               )}
 

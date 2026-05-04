@@ -89,4 +89,12 @@ public interface IIntentLedgerRepository
     /// </summary>
     Task CreateOrphanAckAsync(
         IntentLedgerDocument orphanIntent, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns all intents for the given user with <c>matched</c> status
+    /// whose corresponding position is still in <c>PendingEntry</c>.
+    /// These are intents awaiting fill confirmation from LADS (REQ-ORDER-015e).
+    /// </summary>
+    Task<List<IntentLedgerDocument>> GetAwaitingConfirmationByUserAsync(
+        string userId, string? symbol = null, CancellationToken ct = default);
 }

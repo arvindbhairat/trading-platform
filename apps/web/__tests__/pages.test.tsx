@@ -45,9 +45,10 @@ describe('RootLayout', () => {
   it('wraps children in body', () => {
     const child = createElement('span', null, 'test-child');
     const element = RootLayout({ children: child });
-    const body = element.props.children as React.ReactElement<any>;
+    const body = element.props.children as React.ReactElement<{ children: React.ReactNode }>;
     expect(body?.type).toBe('body');
     // RootLayout wraps children in AppProviders, so they appear one level deeper.
-    expect(body?.props?.children?.props?.children).toBe(child);
+    const inner = body?.props?.children as React.ReactElement<{ children: React.ReactNode }>;
+    expect(inner?.props?.children).toBe(child);
   });
 });

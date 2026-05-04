@@ -405,9 +405,19 @@ public sealed class LiveAccountDataSyncService
             // ── Step 2a: Emit FillConfirmedEvent for matched PendingEntry positions ─
             // REQ-RME-CONC-005: wire LADS as event producer through the per-position
             // channel registry.
+            var fillDetails = new List<FillNotificationDetail>();
             if (rawTrades.Count > 0)
             {
-                await EmitFillConfirmedEventsAsync(user.UserId, rawTrades, ct);
+                fillDetails = await EmitFillConfirmedEventsAsync(user.UserId, rawTrades, ct);
+
+                // ── Step 2a(i): Write fill notifications (REQ-ORDER-015f) ─────
+                // Fill notifications (Telegram + portal feed) fire on LADS-confirmed
+                // fill evidence, not on the FYERS finished callback. Partial-fill
+                // vs full-fill distinction is determined here.
+                if (fillDetails.Count > 0)
+                {
+                    await WriteFillNotificationsAsync(user.UserId, user.Id, fillDetails, ct);
+                }
             }
 
             // ── Step 2b: LADS intent-reconciliation safety net (REQ-ORDER-015c) ──
@@ -475,14 +485,28 @@ public sealed class LiveAccountDataSyncService
     }
 
     /// <summary>
+    /// Details about a detected fill used for notification dispatch (REQ-ORDER-015f).
+    /// </summary>
+    private sealed record FillNotificationDetail(
+        string Symbol,
+        string PositionId,
+        int RequestedQuantity,
+        int FilledQuantity,
+        decimal AvgFillPrice,
+        bool IsPartialFill);
+
+    /// <summary>
     /// Queries PendingEntry positions for the user and emits FillConfirmedEvent
     /// through the channel registry for each position whose symbol matches an
     /// ingested buy-side trade.
     /// REQ-RME-CONC-005: LADS fill-detection → per-position channel dispatch.
+    /// Returns fill details for notification dispatch (REQ-ORDER-015f).
     /// </summary>
-    private async Task EmitFillConfirmedEventsAsync(
+    private async Task<List<FillNotificationDetail>> EmitFillConfirmedEventsAsync(
         string userId, IReadOnlyList<RawTrade> rawTrades, CancellationToken ct)
     {
+        var fillDetails = new List<FillNotificationDetail>();
+
         try
         {
             // Find buy-side trades that indicate a fill
@@ -493,14 +517,14 @@ public sealed class LiveAccountDataSyncService
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             if (buyTrades.Count == 0)
-                return;
+                return fillDetails;
 
             // Query PendingEntry positions for this user
             var pendingPositions = await _positionRepository.GetByUserIdAndStateAsync(
                 userId, PositionState.PendingEntry, ct);
 
             if (pendingPositions.Count == 0)
-                return;
+                return fillDetails;
 
             foreach (var position in pendingPositions)
             {
@@ -528,6 +552,16 @@ public sealed class LiveAccountDataSyncService
                     "LADS: emitted FillConfirmedEvent for position {PositionId} " +
                     "(symbol: {Symbol}, qty: {Qty}, avgPrice: {Price}).",
                     position.PositionId, position.Symbol, totalQty, avgPrice);
+
+                // Collect fill details for notification dispatch (REQ-ORDER-015f)
+                var requestedQty = position.EntryQuantity ?? totalQty;
+                fillDetails.Add(new FillNotificationDetail(
+                    Symbol: position.Symbol,
+                    PositionId: position.PositionId.ToString(),
+                    RequestedQuantity: requestedQty,
+                    FilledQuantity: totalQty,
+                    AvgFillPrice: avgPrice,
+                    IsPartialFill: totalQty < requestedQty));
             }
         }
         catch (Exception ex)
@@ -535,6 +569,68 @@ public sealed class LiveAccountDataSyncService
             _logger.LogWarning(ex,
                 "LADS: failed to emit FillConfirmedEvent for user {UserId}. " +
                 "Trade ingestion completed; fill event emission is non-critical.",
+                userId);
+        }
+
+        return fillDetails;
+    }
+
+    /// <summary>
+    /// Writes fill notifications (Telegram + portal feed) for LADS-confirmed fills.
+    /// REQ-ORDER-015f: fill notifications fire on LADS-confirmed fill evidence,
+    /// not on the FYERS finished callback. Detects partial vs full fills.
+    /// </summary>
+    private async Task WriteFillNotificationsAsync(
+        string userId,
+        ObjectId userObjectId,
+        IReadOnlyList<FillNotificationDetail> fillDetails,
+        CancellationToken ct)
+    {
+        try
+        {
+            var notifications = _database.GetCollection<BsonDocument>("notifications");
+
+            foreach (var detail in fillDetails)
+            {
+                var notificationType = detail.IsPartialFill
+                    ? NotificationType.EntryPartiallyFilled
+                    : NotificationType.EntryFilled;
+
+                var fillSummary = detail.IsPartialFill
+                    ? $"filled {detail.FilledQuantity} of {detail.RequestedQuantity} shares at ₹{detail.AvgFillPrice:F2}"
+                    : $"filled {detail.FilledQuantity} shares at ₹{detail.AvgFillPrice:F2}";
+
+                var content = detail.IsPartialFill
+                    ? $"Entry partially filled for {detail.Symbol} — {fillSummary}. Review your positions."
+                    : $"Entry filled for {detail.Symbol} — {fillSummary}.";
+
+                var notification = new BsonDocument
+                {
+                    ["notification_type"] = notificationType,
+                    ["is_admin_notification"] = false,
+                    ["user_id"] = userObjectId,
+                    ["symbol"] = detail.Symbol,
+                    ["content"] = content,
+                    ["generated_at"] = DateTime.UtcNow,
+                    ["is_read"] = false,
+                    ["telegram_delivery_status"] = "pending",
+                    ["telegram_delivery_attempts"] = 0,
+                };
+
+                await notifications.InsertOneAsync(notification, cancellationToken: ct);
+
+                _logger.LogInformation(
+                    "LADS: wrote {NotificationType} notification for user {UserId} " +
+                    "(symbol: {Symbol}, qty: {FilledQty}/{RequestedQty}).",
+                    notificationType, userId, detail.Symbol,
+                    detail.FilledQuantity, detail.RequestedQuantity);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "LADS: failed to write fill notifications for user {UserId}. " +
+                "Fill events were emitted; notification dispatch is non-critical.",
                 userId);
         }
     }
