@@ -55,4 +55,101 @@ public sealed class MongoIntentLedgerRepository : IIntentLedgerRepository
             return null;
         }
     }
+
+    // ── LADS reconciliation methods (P7-T8 / REQ-ORDER-015c) ────────────────
+
+    /// <inheritdoc />
+    public async Task<List<IntentLedgerDocument>> GetPendingIntentsByUserAsync(
+        string userId, CancellationToken ct = default)
+    {
+        var filter = Builders<IntentLedgerDocument>.Filter.And(
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.UserId, userId),
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.Status, IntentStatus.Pending));
+
+        return await _intents.Find(filter)
+            .Sort(Builders<IntentLedgerDocument>.Sort.Descending(d => d.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<List<IntentLedgerDocument>> GetUnreconciledMatchedIntentsByUserAsync(
+        string userId, CancellationToken ct = default)
+    {
+        var filter = Builders<IntentLedgerDocument>.Filter.And(
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.UserId, userId),
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.Status, IntentStatus.Matched),
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.MatchSource, "callback"),
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.ReconciledAt, null));
+
+        return await _intents.Find(filter)
+            .Sort(Builders<IntentLedgerDocument>.Sort.Descending(d => d.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task ReconcileFromLadsAsync(
+        string nonce, string? brokerOrderId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var update = Builders<IntentLedgerDocument>.Update
+            .Set(d => d.Status, IntentStatus.Matched)
+            .Set(d => d.MatchSource, "lads_reconciliation")
+            .Set(d => d.ReconciledAt, now)
+            .Set(d => d.UpdatedAt, now);
+
+        if (brokerOrderId is not null)
+            update = update.Set(d => d.MatchedBrokerOrderId, brokerOrderId);
+
+        var filter = Builders<IntentLedgerDocument>.Filter.Eq(d => d.Nonce, nonce);
+
+        await _intents.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc />
+    public async Task StampReconciledAtAsync(string nonce, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var update = Builders<IntentLedgerDocument>.Update
+            .Set(d => d.ReconciledAt, now)
+            .Set(d => d.UpdatedAt, now);
+
+        var filter = Builders<IntentLedgerDocument>.Filter.Eq(d => d.Nonce, nonce);
+
+        await _intents.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc />
+    public async Task MarkUnresolvedAsync(string nonce, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var update = Builders<IntentLedgerDocument>.Update
+            .Set(d => d.Status, IntentStatus.Unresolved)
+            .Set(d => d.UnresolvedAt, now)
+            .Set(d => d.UpdatedAt, now);
+
+        var filter = Builders<IntentLedgerDocument>.Filter.Eq(d => d.Nonce, nonce);
+
+        await _intents.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<List<IntentLedgerDocument>> GetAllIntentsByUserAsync(
+        string userId, CancellationToken ct = default)
+    {
+        var filter = Builders<IntentLedgerDocument>.Filter.Eq(d => d.UserId, userId);
+
+        return await _intents.Find(filter)
+            .Sort(Builders<IntentLedgerDocument>.Sort.Descending(d => d.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task CreateOrphanAckAsync(
+        IntentLedgerDocument orphanIntent, CancellationToken ct = default)
+    {
+        await _intents.InsertOneAsync(orphanIntent, cancellationToken: ct);
+    }
 }

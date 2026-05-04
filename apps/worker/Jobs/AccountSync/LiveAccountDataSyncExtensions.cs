@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SignalStack.Api.Execution;
 using SignalStack.Worker.Jobs.AccountSync;
 
 namespace Microsoft.Extensions.Hosting;
@@ -36,6 +37,15 @@ public static class LiveAccountDataSyncExtensions
 
         // ── Step 2: Register the core sync service ─────────────────────────
         services.AddSingleton<LiveAccountDataSyncService>();
+
+        // ── Step 2a: Register intent-ledger repository for reconciliation ──
+        // P7-T8 / REQ-ORDER-015c: the worker needs IIntentLedgerRepository
+        // for the LADS intent-reconciliation safety net.
+        services.AddSingleton<IIntentLedgerRepository, MongoIntentLedgerRepository>();
+
+        // ── Step 2b: Register the intent-reconciliation safety net ─────────
+        // P7-T8 / REQ-ORDER-015c: LADS intent-reconciliation per LADS cycle.
+        services.AddSingleton<IntentReconciliationService>();
 
         // ── Step 3: Register the BackgroundService worker ──────────────────
         services.AddHostedService<LiveAccountDataSyncWorker>();

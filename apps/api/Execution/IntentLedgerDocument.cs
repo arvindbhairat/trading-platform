@@ -93,6 +93,15 @@ public sealed class IntentLedgerDocument
     [BsonIgnoreIfNull]
     public DateTime? ReconciledAt { get; set; }
 
+    /// <summary>
+    /// UTC timestamp when the intent was marked unresolved after
+    /// <c>orders.intent_timeout_minutes</c> elapsed with no observed
+    /// FYERS order (REQ-ORDER-015c).
+    /// </summary>
+    [BsonElement("unresolved_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? UnresolvedAt { get; set; }
+
     /// <summary>UTC timestamp when the intent record was created.</summary>
     [BsonElement("created_at")]
     public required DateTime CreatedAt { get; init; }

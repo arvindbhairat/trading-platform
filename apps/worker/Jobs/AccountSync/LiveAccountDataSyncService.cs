@@ -52,6 +52,7 @@ public sealed class LiveAccountDataSyncService
     private readonly ILedgerWriteLock _ledgerLock;
     private readonly ILedgerSnapshotVersionHelper _snapshotVersionHelper;
     private readonly TradeIngestionService _ingestionService;
+    private readonly IntentReconciliationService _reconciliationService;
     private readonly IPositionChannelRegistry _channelRegistry;
     private readonly IPositionRepository _positionRepository;
 
@@ -84,6 +85,7 @@ public sealed class LiveAccountDataSyncService
         ILedgerWriteLock ledgerLock,
         ILedgerSnapshotVersionHelper snapshotVersionHelper,
         TradeIngestionService ingestionService,
+        IntentReconciliationService reconciliationService,
         IPositionChannelRegistry channelRegistry,
         IPositionRepository positionRepository)
     {
@@ -93,6 +95,7 @@ public sealed class LiveAccountDataSyncService
         _ledgerLock = ledgerLock ?? throw new ArgumentNullException(nameof(ledgerLock));
         _snapshotVersionHelper = snapshotVersionHelper ?? throw new ArgumentNullException(nameof(snapshotVersionHelper));
         _ingestionService = ingestionService ?? throw new ArgumentNullException(nameof(ingestionService));
+        _reconciliationService = reconciliationService ?? throw new ArgumentNullException(nameof(reconciliationService));
         _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
         _positionRepository = positionRepository ?? throw new ArgumentNullException(nameof(positionRepository));
     }
@@ -254,6 +257,26 @@ public sealed class LiveAccountDataSyncService
     }
 
     /// <summary>
+    /// Reads the intent timeout from sys_config (REQ-ORDER-015c).
+    /// Default: <c>orders.intent_timeout_minutes</c> or 10 if not configured.
+    /// </summary>
+    private async Task<int> ReadIntentTimeoutMinutesAsync(CancellationToken ct)
+    {
+        var sysConfig = _database.GetCollection<BsonDocument>("sys_config");
+        var filter = Builders<BsonDocument>.Filter.Eq("key", "orders.intent_timeout_minutes");
+        var doc = await sysConfig.Find(filter).FirstOrDefaultAsync(ct);
+
+        if (doc is null)
+            return 10;
+
+        var value = doc.GetValue("value", BsonNull.Value);
+        if (value.IsBsonNull || !int.TryParse(value.AsString, out var parsed))
+            return 10;
+
+        return parsed;
+    }
+
+    /// <summary>
     /// Finds all approved users who have an active, non-expired FYERS token.
     /// REQ-PORT-019: runs for each user with a valid FYERS token.
     /// </summary>
@@ -385,6 +408,25 @@ public sealed class LiveAccountDataSyncService
             if (rawTrades.Count > 0)
             {
                 await EmitFillConfirmedEventsAsync(user.UserId, rawTrades, ct);
+            }
+
+            // ── Step 2b: LADS intent-reconciliation safety net (REQ-ORDER-015c) ──
+            // Runs after trade ingestion to reconcile observed FYERS trades against
+            // intent_ledger records. Handles callback-matched stamping, callback-missed
+            // promotion, unresolved timeout, and orphan detection.
+            // Non-critical: failures are logged but do not block the sync progress write.
+            try
+            {
+                var intentTimeoutMinutes = await ReadIntentTimeoutMinutesAsync(ct);
+                await _reconciliationService.ReconcileAsync(
+                    user.UserId, user.Id, rawTrades, intentTimeoutMinutes, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "LADS: intent reconciliation failed for user {UserId}. " +
+                    "Trade ingestion completed; reconciliation will retry next cycle.",
+                    user.UserId);
             }
 
             // ── Step 3: Record sync progress (P5-T7 guard write) ───────────
