@@ -82,6 +82,13 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
         services.AddSingleton<IStopLoss, AtrStopLoss>();
 
+        // P6-T14: Trailing stop (percentage-based).
+        // TrailingStopLoss — stop trails at a fixed percentage below the highest
+        // price observed since entry. The caller maintains the non-decreasing
+        // invariant across recalculations per ADR-0003.
+        // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
+        services.AddSingleton<IStopLoss, TrailingStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();

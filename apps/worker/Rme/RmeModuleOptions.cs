@@ -74,6 +74,14 @@ public sealed class RmeModuleOptions
     public double DefaultFixedStopDistancePct { get; set; } = 5.0;
 
     /// <summary>
+    /// Default trailing stop percentage. The stop trails at this percentage
+    /// below the highest price observed since entry.
+    /// Default: 10.0 (10% below the highest price since entry).
+    /// </summary>
+    [Range(0.1, 50.0)]
+    public double DefaultTrailingStopPercent { get; set; } = 10.0;
+
+    /// <summary>
     /// Drawdown threshold at which position-size reduction begins.
     /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
     /// model starts reducing the recommended position size proportionally, reaching
