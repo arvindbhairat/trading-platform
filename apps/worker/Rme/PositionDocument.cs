@@ -71,6 +71,29 @@ public sealed class PositionDocument
 
     // ── Timestamps ────────────────────────────────────────────────────────────
 
+    // ── Time Stop (REQ-STOP-003) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Time stop date computed at entry by adding the configured number of trading
+    /// sessions to the entry date using the NSE trading calendar.
+    /// Format: "yyyy-MM-dd". Null when the position does not use a Time Stop.
+    /// REQ-STOP-003.
+    /// </summary>
+    [BsonElement("time_stop_date")]
+    [BsonIgnoreIfNull]
+    public string? TimeStopDate { get; set; }
+
+    /// <summary>
+    /// Audit trail for time_stop_date recomputations triggered by calendar edits
+    /// (REQ-STOP-003a). Each entry records the previous date, new date, and the
+    /// triggering event. Appended, never mutated in place.
+    /// </summary>
+    [BsonElement("time_stop_audit")]
+    [BsonIgnoreIfDefault]
+    public List<TimeStopAuditEntry> TimeStopAudit { get; set; } = [];
+
+    // ── Timestamps ────────────────────────────────────────────────────────────
+
     [BsonElement("created_at")]
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
@@ -94,7 +117,9 @@ public sealed class PositionDocument
         bool? reduceAdvisoryActive = null,
         bool? trailingStopActive = null,
         bool? exitAdvisoryActive = null,
-        long? ledgerFenceToken = null)
+        long? ledgerFenceToken = null,
+        string? timeStopDate = null,
+        List<TimeStopAuditEntry>? timeStopAudit = null)
     {
         return new PositionDocument
         {
@@ -113,6 +138,8 @@ public sealed class PositionDocument
             TrailingStopActive = trailingStopActive ?? TrailingStopActive,
             ExitAdvisoryActive = exitAdvisoryActive ?? ExitAdvisoryActive,
             LedgerFenceToken = ledgerFenceToken ?? LedgerFenceToken,
+            TimeStopDate = timeStopDate ?? TimeStopDate,
+            TimeStopAudit = timeStopAudit ?? TimeStopAudit,
             CreatedAt = CreatedAt,
             UpdatedAt = DateTime.UtcNow,
             ClosedAt = state is PositionState.Closed or PositionState.Rejected
@@ -120,4 +147,26 @@ public sealed class PositionDocument
                 : ClosedAt,
         };
     }
+}
+
+/// <summary>
+/// Audit entry for a time_stop_date recomputation triggered by a calendar edit.
+/// REQ-STOP-003a.
+/// </summary>
+public sealed record TimeStopAuditEntry
+{
+    [BsonElement("previous_date")]
+    public required string PreviousDate { get; init; }
+
+    [BsonElement("new_date")]
+    public required string NewDate { get; init; }
+
+    /// <summary>
+    /// The triggering event (e.g. "calendar_edit").
+    /// </summary>
+    [BsonElement("trigger_event")]
+    public required string TriggerEvent { get; init; }
+
+    [BsonElement("recomputed_at")]
+    public required DateTime RecomputedAt { get; init; }
 }

@@ -50,6 +50,7 @@ public static class NotificationType
     public const string AdminManualAdjustmentReconciliation = "admin_manual_adjustment_reconciliation";
     public const string AdminSecurityEvent = "admin_security_event";
     public const string AdminDsarRequestReceived = "admin_dsar_request_received";
+    public const string AdminTimeStopRecompute = "admin_time_stop_recompute";
 
     /// <summary>All valid user-facing notification types.</summary>
     public static readonly HashSet<string> UserFacing = new(StringComparer.Ordinal)
@@ -72,7 +73,7 @@ public static class NotificationType
         AdminSysConfigChanged, AdminPhaseTransition, AdminMarketHaltDetected,
         AdminMarketHaltCleared, AdminDataQualityBreach, AdminFyersBudgetThreshold,
         AdminCorporateActionDiscontinuity, AdminManualAdjustmentReconciliation,
-        AdminSecurityEvent, AdminDsarRequestReceived,
+        AdminSecurityEvent, AdminDsarRequestReceived, AdminTimeStopRecompute,
     };
 
     /// <summary>All valid notification types (user-facing + admin-only).</summary>

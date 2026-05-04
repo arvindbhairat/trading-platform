@@ -271,6 +271,17 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult(updated);
     }
 
+    public Task SetEquityOverrideAsync(
+        string userId, decimal? overrideValue, CancellationToken ct = default)
+    {
+        if (_byUserId.TryGetValue(userId, out var doc))
+        {
+            doc.EquityBaseOverride = overrideValue;
+            doc.EquityBaseOverrideUpdatedAt = overrideValue.HasValue ? DateTime.UtcNow : null;
+        }
+        return Task.CompletedTask;
+    }
+
     private static UserDocument CloneWith(
         UserDocument source,
         List<LinkedIdentity>? linkedIdentities = null,

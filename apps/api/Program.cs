@@ -93,6 +93,10 @@ builder.Services.AddUniverseManagement(sqlConnectionString);
 // Trading calendar management — P3-T3 / REQ-CALENDAR-001..006
 builder.Services.AddTradingCalendarManagement();
 
+// Time Stop recompute service — P6-T18 / REQ-STOP-003a
+// Triggered by calendar CRUD endpoints; debounced, fire-and-forget.
+builder.Services.AddTimeStopRecomputeService();
+
 // Signal Subscription management — P4-T1 / REQ-STRAT-007a/007b, REQ-STRAT-017b
 builder.Services.AddSignalSubscriptionManagement();
 

@@ -9,6 +9,8 @@ namespace SignalStack.Api.Admin;
 /// <summary>
 /// Admin CRUD endpoints for the internal NSE trading calendar.
 /// REQ-CALENDAR-001..006.
+/// POST, PUT, and DELETE endpoints trigger a background Time Stop recompute
+/// (REQ-STOP-003a).
 /// </summary>
 public static class TradingCalendarEndpoints
 {
@@ -52,9 +54,11 @@ public static class TradingCalendarEndpoints
         // POST /api/v1/admin/calendar — create a new calendar entry
         // REQ-CALENDAR-002: supports normal, special, muhurat sessions and non-trading-day markers.
         // Session records require start/end times; non-trading-day markers require only date + optional holiday name.
+        // REQ-STOP-003a: triggers Time Stop date recompute after creation.
         admin.MapPost("/", async (
             CreateCalendarEntryRequest request,
             ITradingCalendarRepository repo,
+            TimeStopRecomputeService recomputeService,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.SessionDate))
@@ -118,16 +122,22 @@ public static class TradingCalendarEndpoints
             };
 
             await repo.CreateAsync(doc, ct);
+
+            // REQ-STOP-003a: trigger Time Stop recompute after calendar edit.
+            recomputeService.Trigger();
+
             return Results.Created($"/api/v1/admin/calendar/{doc.Id}", doc);
         })
         .RequireAuthorization()
         .WithTags(Tag);
 
         // PUT /api/v1/admin/calendar/{id} — update an existing calendar entry
+        // REQ-STOP-003a: triggers Time Stop date recompute after update.
         admin.MapPut("/{id}", async (
             string id,
             UpdateCalendarEntryRequest request,
             ITradingCalendarRepository repo,
+            TimeStopRecomputeService recomputeService,
             CancellationToken ct) =>
         {
             if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
@@ -144,6 +154,9 @@ public static class TradingCalendarEndpoints
                 sessionEndTime: request.SessionEndTime,
                 holidayName: request.HolidayName,
                 ct: ct);
+
+            // REQ-STOP-003a: trigger Time Stop recompute after calendar edit.
+            recomputeService.Trigger();
 
             return Results.Ok(new { status = "updated" });
         })
@@ -200,15 +213,21 @@ public static class TradingCalendarEndpoints
         .WithTags(Tag);
 
         // DELETE /api/v1/admin/calendar/{id} — delete a calendar entry
+        // REQ-STOP-003a: triggers Time Stop date recompute after deletion.
         admin.MapDelete("/{id}", async (
             string id,
             ITradingCalendarRepository repo,
+            TimeStopRecomputeService recomputeService,
             CancellationToken ct) =>
         {
             if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
                 return Results.BadRequest(new { error = "invalid_id" });
 
             await repo.DeleteAsync(objectId, ct);
+
+            // REQ-STOP-003a: trigger Time Stop recompute after calendar edit.
+            recomputeService.Trigger();
+
             return Results.Ok(new { status = "deleted" });
         })
         .RequireAuthorization()

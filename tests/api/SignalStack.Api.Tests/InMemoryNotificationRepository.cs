@@ -78,6 +78,62 @@ public sealed class InMemoryNotificationRepository : INotificationRepository
         return Task.FromResult((long)count);
     }
 
+    public Task<long> CountUnreadCriticalByUserAsync(
+        ObjectId userId, CancellationToken ct = default)
+    {
+        var count = _insertionOrder
+            .Count(n => n.UserId == userId && !n.IsAdminNotification && !n.IsRead
+                        && NotificationType.Critical.Contains(n.NotificationType));
+        return Task.FromResult((long)count);
+    }
+
+    public Task<List<NotificationDocument>> GetByUserIdFilteredAsync(
+        ObjectId userId,
+        int limit = 50,
+        int skip = 0,
+        string? notificationType = null,
+        string? symbol = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        string? deliveryStatus = null,
+        CancellationToken ct = default)
+    {
+        var query = _insertionOrder
+            .Where(n => n.UserId == userId && !n.IsAdminNotification);
+
+        if (notificationType is not null)
+            query = query.Where(n => n.NotificationType == notificationType);
+        if (symbol is not null)
+            query = query.Where(n => n.Symbol == symbol);
+        if (dateFrom is not null)
+            query = query.Where(n => n.GeneratedAt >= dateFrom.Value);
+        if (dateTo is not null)
+            query = query.Where(n => n.GeneratedAt <= dateTo.Value);
+        if (deliveryStatus is not null)
+            query = query.Where(n => n.TelegramDeliveryStatus == deliveryStatus);
+
+        var results = query
+            .OrderByDescending(n => n.GeneratedAt)
+            .Skip(skip)
+            .Take(limit)
+            .ToList();
+        return Task.FromResult(results);
+    }
+
+    public Task<long> MarkAllAsReadAsync(ObjectId userId, CancellationToken ct = default)
+    {
+        long count = 0;
+        foreach (var kvp in _store)
+        {
+            if (kvp.Value.UserId == userId && !kvp.Value.IsRead)
+            {
+                kvp.Value.IsRead = true;
+                count++;
+            }
+        }
+        return Task.FromResult(count);
+    }
+
     /// <summary>Returns all stored notifications for assertions.</summary>
     public List<NotificationDocument> GetAll() => _insertionOrder.ToList();
 
