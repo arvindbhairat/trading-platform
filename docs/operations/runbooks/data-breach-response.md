@@ -4,7 +4,7 @@
 **Phase required:** A
 **Regulatory basis:** DPDP Act 2023 Section 8 (breach notification)
 **Notification deadline:** 72 hours from detection
-**Last reviewed:** 2026-05-01 (initial authoring — field-test before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — reviewed in P8-T7 (Phase A mandatory runbook refinement); prior review 2026-05-01
 **Owner:** Platform admin (also the designated grievance officer per REQ-PRIVACY-005)
 
 ---

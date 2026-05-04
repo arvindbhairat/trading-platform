@@ -8,11 +8,11 @@ Status per runbook reflects whether it must exist at the current phase (per `REQ
 
 | # | Runbook | File | Phase required | Status |
 |---:|---|---|:---:|:---|
-| 1 | DataSync failure recovery | `datasync-failure-recovery.md` | A | Stub in place, pending field-test refinement |
-| 2 | Admin FYERS token re-auth | `admin-fyers-token-reauth.md` | A | Stub in place, pending field-test refinement |
-| 3 | Data breach response (DPDP 72-hour notification) | `data-breach-response.md` | A | Authored in P2-T22 (REQ-PRIVACY-006) |
-| 4 | RME concurrency-freeze admin resolution | `rme-concurrency-freeze-resolution.md` | A | Authored in P6-T8 — two Phase A mandatory runbooks |
-| 5 | MongoDB replica-set failover during LADS polling | `mongodb-failover-lads-recovery.md` | A | Authored in P6-T8 — two Phase A mandatory runbooks |
+| 1 | DataSync failure recovery | `datasync-failure-recovery.md` | A | Refined in P8-T7 — reviewed 2026-05-05 |
+| 2 | Admin FYERS token re-auth | `admin-fyers-token-reauth.md` | A | Refined in P8-T7 — reviewed 2026-05-05 |
+| 3 | Data breach response (DPDP 72-hour notification) | `data-breach-response.md` | A | Refined in P8-T7 — reviewed 2026-05-05 (initial authoring P2-T22) |
+| 4 | RME concurrency-freeze admin resolution | `rme-concurrency-freeze-resolution.md` | A | Finalized in P8-T7 — reviewed 2026-05-05 (authored in P6-T8) |
+| 5 | MongoDB replica-set failover during LADS polling | `mongodb-failover-lads-recovery.md` | A | Finalized in P8-T7 — reviewed 2026-05-05 (authored in P6-T8) |
 | 6 | EOD Signal Runner failure or abort | *not yet drafted* | B | Missing |
 | 7 | HistoricDataSeed stuck or resume-from-failure | *not yet drafted* | B | Missing |
 | 8 | Telegram bot token replacement | *not yet drafted* | B | Missing |

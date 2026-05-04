@@ -1,7 +1,7 @@
 # Admin FYERS Token Re-authentication
 
 **Phase required:** A
-**Last reviewed:** *(not yet reviewed — stub)*
+**Last reviewed:** 2026-05-05 — reviewed in P8-T7 (Phase A mandatory runbook refinement)
 **Owner:** Platform admin
 
 ## Why this exists
