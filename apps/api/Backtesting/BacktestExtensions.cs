@@ -21,6 +21,9 @@ public static class BacktestExtensions
         services.AddSingleton<ProfileOptimisationEngine>();
         services.AddSingleton<IOptimisationResultRepository, MongoOptimisationResultRepository>();
 
+        // P6-T24: BTE-vs-RME nightly parity check service
+        services.AddSingleton<BteRmeParityService>();
+
         if (!string.IsNullOrWhiteSpace(sqlConnectionString))
         {
             services.AddSingleton<IBacktestRepository>(sp =>
@@ -42,6 +45,7 @@ public static class BacktestExtensions
     {
         group.MapBacktestEndpoints();
         group.MapOptimisationEndpoints();
+        group.MapParityEndpoints();
         return group;
     }
 }

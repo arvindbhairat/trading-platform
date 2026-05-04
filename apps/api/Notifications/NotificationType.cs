@@ -51,6 +51,7 @@ public static class NotificationType
     public const string AdminSecurityEvent = "admin_security_event";
     public const string AdminDsarRequestReceived = "admin_dsar_request_received";
     public const string AdminTimeStopRecompute = "admin_time_stop_recompute";
+    public const string AdminBteRmeParityFailure = "admin_bte_rme_parity_failure";
 
     /// <summary>All valid user-facing notification types.</summary>
     public static readonly HashSet<string> UserFacing = new(StringComparer.Ordinal)
@@ -74,6 +75,7 @@ public static class NotificationType
         AdminMarketHaltCleared, AdminDataQualityBreach, AdminFyersBudgetThreshold,
         AdminCorporateActionDiscontinuity, AdminManualAdjustmentReconciliation,
         AdminSecurityEvent, AdminDsarRequestReceived, AdminTimeStopRecompute,
+        AdminBteRmeParityFailure,
     };
 
     /// <summary>All valid notification types (user-facing + admin-only).</summary>

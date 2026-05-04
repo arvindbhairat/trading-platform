@@ -1,0 +1,52 @@
+name: bte-rme-parity
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC — after DataSync completes for NSE EOD.
+    # REQ-NFR-017: nightly BTE-vs-RME parity check on a fixed synthetic fixture.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    # Allow manual trigger for admin investigation.
+    inputs:
+      reason:
+        description: "Reason for manual parity check"
+        required: false
+        type: string
+
+# Minimal permissions; jobs that need more declare them explicitly.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  parity-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build SignalStack.sln -c Release
+
+      - name: Run BTE-vs-RME parity tests
+        run: >
+          dotnet test SignalStack.sln -c Release --no-build
+          --filter "FullyQualifiedName~BteRmeParityCheckTests"
+          --logger "console;verbosity=detailed"
+        env:
+          # REQ-NFR-017: the parity toggle must be respected if the test checks it.
+          # Tests directly exercise RmeConfigParser so no external deps needed.
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: true
+
+      - name: Report parity check outcome
+        if: failure()
+        run: |
+          echo "::error::BTE-vs-RME parity check FAILED. Review the test output above for "
+          echo "::error::divergence details. If the divergence is expected (e.g. after an RME "
+          echo "::error::model change), the parity fixture and reference values must be updated "
+          echo "::error::to match the new expected behavior."

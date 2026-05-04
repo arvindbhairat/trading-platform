@@ -216,9 +216,25 @@ public sealed class BacktestEngine
                     {
                         var entryPrice = execModel.ApplyEntrySlippage(
                             signal.EntryPrice ?? (decimal)dayCandle.Close);
-                        var stopPrice = signal.StopPrice ?? entryPrice * 0.95m;
 
-                        OpenPosition(position, signal.Date, entryPrice, stopPrice, execModel);
+                        // Use RME config for stop and sizing when available (REQ-RME-003)
+                        decimal stopPrice;
+                        int quantity;
+                        if (!string.IsNullOrWhiteSpace(options.RmeConfigurationJson))
+                        {
+                            var atr = signal.Atr ?? (decimal?)null;
+                            var (rmeStop, rmeQty) = RmeConfigParser.ComputePositionParameters(
+                                entryPrice, atr, options.RmeConfigurationJson, options.StartingEquity);
+                            stopPrice = signal.StopPrice ?? rmeStop;
+                            quantity = rmeQty;
+                        }
+                        else
+                        {
+                            stopPrice = signal.StopPrice ?? entryPrice * 0.95m;
+                            quantity = 1;
+                        }
+
+                        OpenPosition(position, signal.Date, entryPrice, stopPrice, quantity, execModel);
                         tradesForSymbol++;
                     }
                 }
@@ -323,12 +339,13 @@ public sealed class BacktestEngine
 
     private static void OpenPosition(
         SimulatedPosition pos, DateOnly date, decimal entryPrice,
-        decimal stopPrice, ExecutionModel execModel)
+        decimal stopPrice, int quantity, ExecutionModel execModel)
     {
         pos.EntryDate = date;
         pos.EntryPrice = entryPrice;
         pos.InitialStop = stopPrice;
         pos.CurrentStop = stopPrice;
+        pos.Quantity = quantity;
         pos.IsOpen = true;
         pos.RiskAmount = entryPrice - stopPrice; // 1R
     }
@@ -340,9 +357,10 @@ public sealed class BacktestEngine
         if (!pos.IsOpen)
             throw new InvalidOperationException("Cannot close a position that is not open.");
 
-        var grossPnl = (exitPrice - pos.EntryPrice) * 1; // quantity = 1 for backtest
-        var entryValue = pos.EntryPrice * 1;
-        var exitValue = exitPrice * 1;
+        var qty = pos.Quantity;
+        var grossPnl = (exitPrice - pos.EntryPrice) * qty;
+        var entryValue = pos.EntryPrice * qty;
+        var exitValue = exitPrice * qty;
         var netPnl = execModel.CalculateNetPnL(grossPnl, entryValue, exitValue);
 
         var rMultiple = pos.RiskAmount > 0
@@ -361,7 +379,7 @@ public sealed class BacktestEngine
             RMultiple = Math.Round(rMultiple, 4),
             GrossPnL = Math.Round(grossPnl, 2),
             NetPnL = Math.Round(netPnl, 2),
-            Quantity = 1,
+            Quantity = qty,
         };
 
         var evt = new BacktestPositionEvent
@@ -550,6 +568,7 @@ internal sealed class SimulatedPosition
     public decimal CurrentStop { get; set; }
     public decimal CurrentPrice { get; set; }
     public decimal RiskAmount { get; set; }
+    public int Quantity { get; set; }
     public bool IsOpen { get; set; }
 
     public SimulatedPosition(string symbol)
