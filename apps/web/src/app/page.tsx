@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
+import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,6 +145,8 @@ export default function DashboardPage() {
     <Shell current="dashboard" navItems={userNavItems}>
       <div style={{ padding: "var(--s-8) var(--s-10)", display: "flex", flexDirection: "column", gap: "var(--s-6)" }}>
         <SessionExpiryBanner />
+
+        <PortfolioHealthStrip />
 
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
           <div>

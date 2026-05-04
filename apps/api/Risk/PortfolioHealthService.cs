@@ -18,7 +18,9 @@ public sealed record PortfolioHealthResult(
     bool EntryBlocked,
     string? EntryBlockedReason,
     string? DrawdownAdvisory,
-    string HealthStatus  // "good" | "caution" | "warning" | "critical"
+    string HealthStatus,  // "good" | "caution" | "warning" | "critical"
+    DateTime? DataFreshnessTimestamp,
+    string? DrawdownModeLevel
 );
 
 /// <summary>
@@ -93,7 +95,34 @@ public sealed class PortfolioHealthService
             _ => null
         };
 
-        // ── 7. Overall health ───────────────────────────────────────────────
+        // ── 7. Portfolio-level freshness indicator (T-9) ────────────────────
+        // Timestamp = min(LADS completion, LMDS price update, equity-base sync).
+        var ladsCompletedAt = await ReadLadsCompletionAsync(userId, ct);
+        var lmdsUpdatedAt = await ReadLmdsPriceUpdateAsync(userId, ct);
+        var equityBaseSyncAt = await ReadEquityBaseSyncAsync(userId, ct);
+
+        var candidates = new[] { ladsCompletedAt, lmdsUpdatedAt, equityBaseSyncAt }
+            .Where(d => d.HasValue)
+            .Select(d => d!.Value)
+            .ToArray();
+
+        DateTime? dataFreshnessTimestamp = candidates.Length > 0
+            ? candidates.Min()
+            : null;
+
+        // ── 8. Drawdown mode level (REQ-DASH-012) ───────────────────────────
+        string? drawdownModeLevel = drawdownPct switch
+        {
+            >= 30m => "Level 6 — Advisory to stop all trading",
+            >= 25m => "Level 5 — Advisory to close weakest positions",
+            >= 20m => "Level 4 — New entries blocked",
+            >= 15m => "Level 3 — Advisory to reduce positions",
+            >= 10m => "Level 2 — No add-on entries",
+            >= 5m  => "Level 1 — Size reduction",
+            _      => null
+        };
+
+        // ── 9. Overall health ───────────────────────────────────────────────
         var healthStatus = equity <= 0
             ? "caution"
             : drawdownPct >= 20m || entryBlocked
@@ -114,7 +143,9 @@ public sealed class PortfolioHealthService
             EntryBlocked: entryBlocked,
             EntryBlockedReason: entryBlockedReason,
             DrawdownAdvisory: drawdownAdvisory,
-            HealthStatus: healthStatus
+            HealthStatus: healthStatus,
+            DataFreshnessTimestamp: dataFreshnessTimestamp,
+            DrawdownModeLevel: drawdownModeLevel
         );
     }
 
@@ -198,5 +229,73 @@ public sealed class PortfolioHealthService
         if (val.IsInt32) return val.AsInt32;
         if (val.IsInt64) return val.AsInt64;
         return 0m;
+    }
+
+    // ── Freshness helpers (P6-T28 / REQ-DASH-012, T-9) ───────────────────────
+
+    /// <summary>LADS completion timestamp from fyers_account_sync.</summary>
+    private async Task<DateTime?> ReadLadsCompletionAsync(
+        string userId, CancellationToken ct)
+    {
+        var sync = _database.GetCollection<BsonDocument>("fyers_account_sync");
+        var doc = await sync
+            .Find(Builders<BsonDocument>.Filter.Eq("user_id", userId))
+            .FirstOrDefaultAsync(ct);
+
+        if (doc is null) return null;
+
+        var val = doc.GetValue("last_successful_sync_at", BsonNull.Value);
+        return val.IsBsonNull ? null : (DateTime?)val.ToUniversalTime();
+    }
+
+    /// <summary>
+    /// LMDS price update timestamp = most recent <c>updated_at</c> across
+    /// all non-terminal positions for this user (proxy for when LMDS last
+    /// pushed a price update into any active position).
+    /// </summary>
+    private async Task<DateTime?> ReadLmdsPriceUpdateAsync(
+        string userId, CancellationToken ct)
+    {
+        var positions = _database.GetCollection<BsonDocument>("positions");
+        var filter = Builders<BsonDocument>.Filter.Eq("user_id", userId)
+            & Builders<BsonDocument>.Filter.In("state",
+                ["PendingEntry", "Open", "Suspended"]);
+
+        var sort = Builders<BsonDocument>.Sort.Descending("updated_at");
+        var latest = await positions
+            .Find(filter)
+            .Sort(sort)
+            .Limit(1)
+            .Project(Builders<BsonDocument>.Projection.Include("updated_at"))
+            .FirstOrDefaultAsync(ct);
+
+        if (latest is null) return null;
+
+        var val = latest.GetValue("updated_at", BsonNull.Value);
+        return val.IsBsonNull ? null : (DateTime?)val.ToUniversalTime();
+    }
+
+    /// <summary>Equity-base sync timestamp from the latest equity_curve entry.</summary>
+    private async Task<DateTime?> ReadEquityBaseSyncAsync(
+        string userId, CancellationToken ct)
+    {
+        var equityCurve = _database.GetCollection<BsonDocument>("equity_curve");
+        var filter = Builders<BsonDocument>.Filter.Eq("user_id", userId);
+        var sort = Builders<BsonDocument>.Sort.Descending("session_date");
+
+        var latest = await equityCurve
+            .Find(filter)
+            .Sort(sort)
+            .Limit(1)
+            .Project(Builders<BsonDocument>.Projection.Include("session_date"))
+            .FirstOrDefaultAsync(ct);
+
+        if (latest is null) return null;
+
+        var val = latest.GetValue("session_date", BsonNull.Value);
+        if (val.IsBsonNull) return null;
+
+        // session_date is stored as DateTime, convert to UTC
+        return val.ToUniversalTime();
     }
 }

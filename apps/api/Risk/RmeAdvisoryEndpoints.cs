@@ -82,6 +82,8 @@ public static class RmeAdvisoryEndpoints
                 entry_blocked_reason = health.EntryBlockedReason,
                 drawdown_advisory = health.DrawdownAdvisory,
                 health_status = health.HealthStatus,
+                data_freshness_timestamp = health.DataFreshnessTimestamp,
+                drawdown_mode_level = health.DrawdownModeLevel,
             });
         });
 

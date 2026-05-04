@@ -1,9 +1,11 @@
 "use client";
 
-// Persistent portfolio health strip for the chart page (P6-T27).
-// Shows equity, heat, drawdown, position count, and overall health.
+// Persistent portfolio health strip for the dashboard and chart page (P6-T27, P6-T28).
+// Shows equity, heat, drawdown, position count, drawdown mode, overall health,
+// and a portfolio-level freshness indicator.
 //
-// REQ-CHART-* (advisory subset): persistent portfolio context.
+// REQ-DASH-012: RME portfolio health strip with freshness indicator.
+// T-9: "Data as of: {timestamp}" = min(LADS, LMDS, equity-base timestamps).
 
 import { useEffect, useState } from "react";
 import { Pill } from "@/components/primitives";
@@ -22,6 +24,8 @@ interface PortfolioHealth {
   entry_blocked_reason: string | null;
   drawdown_advisory: string | null;
   health_status: "good" | "caution" | "warning" | "critical";
+  data_freshness_timestamp: string | null;
+  drawdown_mode_level: string | null;
 }
 
 // ── Colours ───────────────────────────────────────────────────────────────────
@@ -33,6 +37,24 @@ function healthBg(status: string): string {
     case "warning": return "var(--warn-bg)";
     case "critical": return "var(--down-bg)";
     default: return "transparent";
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatFreshnessTimestamp(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
   }
 }
 
@@ -141,6 +163,29 @@ export default function PortfolioHealthStrip() {
         <span className="t-num-sm" style={{ color: "var(--fg-1)" }}>
           {health.open_position_count}
         </span>
+      </span>
+
+      {/* Drawdown mode level (REQ-DASH-012) */}
+      {health.drawdown_mode_level && (
+        <>
+          <div style={{ width: 1, height: 20, background: "var(--line-2)" }} />
+          <span style={{ color: "var(--warn-500)", fontSize: 11, whiteSpace: "nowrap" }}>
+            {health.drawdown_mode_level}
+          </span>
+        </>
+      )}
+
+      {/* Data freshness indicator (T-9 / REQ-DASH-012) */}
+      <div style={{ flex: 1 }} />
+      <span
+        style={{
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+          color: "var(--fg-3)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Data as of: {formatFreshnessTimestamp(health.data_freshness_timestamp)}
       </span>
 
       {/* Drawdown advisory */}
