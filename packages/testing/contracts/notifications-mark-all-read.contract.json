@@ -1,0 +1,11 @@
+{
+  "endpoint": "/api/v1/notifications/mark-all-read",
+  "method": "POST",
+  "auth": "required",
+  "description": "Mark all unread notifications for the current user as read",
+  "responseFields": [
+    { "path": "status", "type": "string", "required": true, "description": "Result status: all_read" },
+    { "path": "count", "type": "number", "required": true, "description": "Number of notifications marked as read" }
+  ],
+  "statusCodes": [200, 401]
+}

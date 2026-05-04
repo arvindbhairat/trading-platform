@@ -1,0 +1,16 @@
+{
+  "endpoint": "/api/v1/chart/{symbol}?timeframe={timeframe}&from={from}&to={to}",
+  "method": "GET",
+  "auth": "none",
+  "description": "Returns OHLCV chart data for the specified symbol and timeframe (REQ-HIST-011, REQ-TIMEFRAME-004)",
+  "responseFields": [
+    { "path": "[].timestamp", "type": "string", "required": true, "description": "Candle timestamp (ISO 8601 date)" },
+    { "path": "[].open", "type": "number", "required": true, "description": "Opening price" },
+    { "path": "[].high", "type": "number", "required": true, "description": "Highest price" },
+    { "path": "[].low", "type": "number", "required": true, "description": "Lowest price" },
+    { "path": "[].close", "type": "number", "required": true, "description": "Closing price" },
+    { "path": "[].volume", "type": "number", "required": true, "description": "Trading volume" }
+  ],
+  "statusCodes": [200, 404],
+  "notes": "Returns an array of OHLCV records. Returns 404 if symbol is not found in symbol master."
+}

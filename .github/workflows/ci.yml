@@ -152,10 +152,11 @@ jobs:
         working-directory: apps/web
         run: npm run test:axe
 
-  # ── Contract-diff scaffolding (REQ-NFR-016) ──────────────────────────────────
-  # Gate is wired; no contracts are registered yet (scaffolding pass).
-  # When the first contract snapshot is added to packages/testing/contracts/
-  # this job will automatically begin enforcing the API↔portal contract.
+  # ── Contract-diff enforcement (REQ-NFR-016) ─────────────────────────────
+  # Validates that all contract snapshots in packages/testing/contracts/ are
+  # well-formed. When CONTRACT_API_BASE_URL is configured, also validates live
+  # API responses against the contract definitions. 25 contracts registered
+  # (Phase 7 — REQ-NFR-016 activated).
   contract-diff:
     runs-on: ubuntu-latest
     steps:

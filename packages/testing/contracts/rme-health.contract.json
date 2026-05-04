@@ -1,0 +1,21 @@
+{
+  "endpoint": "/api/v1/rme/health",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns portfolio health data for the persistent health strip (P6-T27)",
+  "responseFields": [
+    { "path": "account_equity", "type": "number", "required": true, "description": "Current account equity value" },
+    { "path": "portfolio_heat_pct", "type": "number", "required": true, "description": "Current portfolio heat as percentage" },
+    { "path": "max_heat_pct", "type": "number", "required": true, "description": "Maximum allowed heat percentage" },
+    { "path": "drawdown_pct", "type": "number", "required": true, "description": "Current drawdown from peak" },
+    { "path": "high_water_mark", "type": "number", "required": true, "description": "Portfolio high water mark value" },
+    { "path": "open_position_count", "type": "number", "required": true, "description": "Number of open positions" },
+    { "path": "entry_blocked", "type": "boolean", "required": true, "description": "Whether new entries are blocked" },
+    { "path": "entry_blocked_reason", "type": "string", "required": false, "description": "Reason entry is blocked" },
+    { "path": "drawdown_advisory", "type": "boolean", "required": true, "description": "Whether drawdown advisory is active" },
+    { "path": "health_status", "type": "string", "required": true, "description": "Overall health status: healthy, warning, critical" },
+    { "path": "data_freshness_timestamp", "type": "string", "required": true, "description": "ISO 8601 timestamp of last data refresh" },
+    { "path": "drawdown_mode_level", "type": "number", "required": false, "description": "Drawdown mode enforcement level" }
+  ],
+  "statusCodes": [200, 401]
+}

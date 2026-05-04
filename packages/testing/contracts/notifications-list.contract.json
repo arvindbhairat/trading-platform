@@ -1,0 +1,24 @@
+{
+  "endpoint": "/api/v1/notifications?limit={limit}&skip={skip}&type={type}&symbol={symbol}",
+  "method": "GET",
+  "auth": "required",
+  "description": "User notification feed with filtering and pagination (REQ-NOTIFY-012, REQ-PROFILE-006)",
+  "responseFields": [
+    { "path": "[].id", "type": "string", "required": true, "description": "Notification document ID" },
+    { "path": "[].notification_type", "type": "string", "required": true, "description": "Notification type identifier" },
+    { "path": "[].type_label", "type": "string", "required": true, "description": "Human-readable type label" },
+    { "path": "[].is_critical", "type": "boolean", "required": true, "description": "Whether notification is critical" },
+    { "path": "[].signal_type_name", "type": "string", "required": false, "description": "Signal type name for signal-related notifications" },
+    { "path": "[].timeframe", "type": "string", "required": false, "description": "Timeframe for signal-related notifications" },
+    { "path": "[].symbol", "type": "string", "required": false, "description": "Associated symbol" },
+    { "path": "[].content", "type": "string", "required": true, "description": "Notification content/body" },
+    { "path": "[].deep_link", "type": "string", "required": false, "description": "Deep link URL for navigation" },
+    { "path": "[].generated_at", "type": "string", "required": true, "description": "ISO 8601 generation timestamp" },
+    { "path": "[].is_read", "type": "boolean", "required": true, "description": "Whether notification has been read" },
+    { "path": "[].telegram_delivery_status", "type": "string", "required": false, "description": "Telegram delivery status" },
+    { "path": "[].telegram_delivery_attempts", "type": "number", "required": false, "description": "Number of delivery attempts" },
+    { "path": "[].delivery_failed", "type": "boolean", "required": false, "description": "Whether delivery failed" },
+    { "path": "[].error_details", "type": "string", "required": false, "description": "Error details when delivery failed" }
+  ],
+  "statusCodes": [200, 401]
+}

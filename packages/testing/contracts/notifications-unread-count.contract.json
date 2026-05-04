@@ -1,0 +1,11 @@
+{
+  "endpoint": "/api/v1/notifications/unread-count",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns critical and total unread notification counts (REQ-NOTIFY-014)",
+  "responseFields": [
+    { "path": "total_unread", "type": "number", "required": true, "description": "Total unread notification count" },
+    { "path": "critical_unread", "type": "number", "required": true, "description": "Critical unread notification count" }
+  ],
+  "statusCodes": [200, 401]
+}

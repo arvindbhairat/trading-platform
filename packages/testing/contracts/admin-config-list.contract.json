@@ -1,0 +1,23 @@
+{
+  "endpoint": "/api/v1/admin/config?category={category}",
+  "method": "GET",
+  "auth": "required",
+  "description": "List all sys_config entries, optionally filtered by category (REQ-CONFIG-005/007)",
+  "responseFields": [
+    { "path": "entries", "type": "array", "required": true, "description": "Array of sys_config entries" },
+    { "path": "entries[].key", "type": "string", "required": true, "description": "Config key identifier" },
+    { "path": "entries[].category", "type": "string", "required": true, "description": "Config category" },
+    { "path": "entries[].valueType", "type": "string", "required": true, "description": "Value type: string, number, boolean" },
+    { "path": "entries[].value", "type": "string", "required": false, "description": "Current value (null for null)" },
+    { "path": "entries[].defaultValue", "type": "string", "required": false, "description": "Default value (null if none)" },
+    { "path": "entries[].description", "type": "string", "required": true, "description": "Human-readable description" },
+    { "path": "entries[].appliesTo", "type": "array", "required": true, "description": "Array of component names this applies to" },
+    { "path": "entries[].isEditable", "type": "boolean", "required": true, "description": "Whether this entry can be edited" },
+    { "path": "entries[].requiresRestart", "type": "boolean", "required": true, "description": "Whether changes require restart" },
+    { "path": "entries[].status", "type": "string", "required": true, "description": "Entry status: active, deprecated" },
+    { "path": "entries[].updatedAt", "type": "string", "required": true, "description": "ISO 8601 last update timestamp" },
+    { "path": "entries[].updatedByUserId", "type": "string", "required": true, "description": "User ID of last editor" },
+    { "path": "entries[].version", "type": "number", "required": true, "description": "Document version for OCC" }
+  ],
+  "statusCodes": [200, 401]
+}

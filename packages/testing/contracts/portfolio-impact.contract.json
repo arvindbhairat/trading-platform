@@ -1,0 +1,21 @@
+{
+  "endpoint": "/api/v1/portfolio/impact",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns pre-trade portfolio impact (heat, sector exposure, entry status) (P6-T22)",
+  "responseFields": [
+    { "path": "portfolio_heat_pct", "type": "number", "required": true, "description": "Current portfolio heat as percentage" },
+    { "path": "max_heat_pct", "type": "number", "required": true, "description": "Maximum allowed heat percentage" },
+    { "path": "total_open_risk", "type": "number", "required": true, "description": "Total open risk in INR" },
+    { "path": "account_equity", "type": "number", "required": true, "description": "Current account equity" },
+    { "path": "open_position_count", "type": "number", "required": true, "description": "Number of open positions" },
+    { "path": "suspended_position_count", "type": "number", "required": true, "description": "Number of suspended positions" },
+    { "path": "entry_blocked", "type": "boolean", "required": true, "description": "Whether new entries are blocked" },
+    { "path": "entry_blocked_reason", "type": "string", "required": false, "description": "Reason entry is blocked (null when not blocked)" },
+    { "path": "sector_exposures", "type": "array", "required": false, "description": "Per-sector exposure breakdown" },
+    { "path": "sector_exposures[].sector", "type": "string", "required": false, "description": "Sector name" },
+    { "path": "sector_exposures[].exposure_pct", "type": "number", "required": false, "description": "Exposure percentage for this sector" },
+    { "path": "sector_exposures[].open_risk", "type": "number", "required": false, "description": "Open risk in INR for this sector" }
+  ],
+  "statusCodes": [200, 401]
+}

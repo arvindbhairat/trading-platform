@@ -1,0 +1,14 @@
+{
+  "endpoint": "/api/v1/portfolio/summary",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns portfolio-level KPIs (REQ-DASH-002)",
+  "responseFields": [
+    { "path": "total_invested", "type": "number", "required": true, "description": "Total amount invested across all holdings" },
+    { "path": "total_market_value", "type": "number", "required": true, "description": "Total current market value" },
+    { "path": "total_unrealized_pnl", "type": "number", "required": true, "description": "Total unrealized profit/loss in INR" },
+    { "path": "total_unrealized_pnl_percent", "type": "number", "required": true, "description": "Total unrealized PnL as percentage" },
+    { "path": "position_count", "type": "number", "required": true, "description": "Number of open positions" }
+  ],
+  "statusCodes": [200, 401]
+}

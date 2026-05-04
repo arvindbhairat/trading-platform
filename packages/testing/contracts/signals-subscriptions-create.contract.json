@@ -1,0 +1,27 @@
+{
+  "endpoint": "/api/v1/signals/subscriptions",
+  "method": "POST",
+  "auth": "required",
+  "description": "Create a new Signal Subscription (REQ-STRAT-007a, REQ-STRAT-017b)",
+  "requestFields": [
+    { "path": "name", "type": "string", "required": true, "description": "Subscription name" },
+    { "path": "signal_type_id", "type": "string", "required": true, "description": "Signal type identifier" },
+    { "path": "timeframe", "type": "string", "required": false, "description": "Signal timeframe (default: daily)" },
+    { "path": "parameters", "type": "object", "required": false, "description": "Signal parameters" },
+    { "path": "rme_configuration", "type": "object", "required": false, "description": "Initial RME configuration" }
+  ],
+  "responseFields": [
+    { "path": "id", "type": "string", "required": true, "description": "New subscription document ID" },
+    { "path": "user_id", "type": "string", "required": true, "description": "Owner user ID" },
+    { "path": "name", "type": "string", "required": true, "description": "Subscription name" },
+    { "path": "signal_type_id", "type": "string", "required": true, "description": "Signal type identifier" },
+    { "path": "timeframe", "type": "string", "required": true, "description": "Signal timeframe" },
+    { "path": "status", "type": "string", "required": true, "description": "Subscription status: Active" },
+    { "path": "is_paused", "type": "boolean", "required": true, "description": "False for new subscriptions" },
+    { "path": "has_pending_version", "type": "boolean", "required": true, "description": "Whether a pending version exists" },
+    { "path": "version_count", "type": "number", "required": true, "description": "Total number of versions (1 for new)" },
+    { "path": "created_at", "type": "string", "required": true, "description": "ISO 8601 creation timestamp" },
+    { "path": "updated_at", "type": "string", "required": true, "description": "ISO 8601 update timestamp" }
+  ],
+  "statusCodes": [201, 400, 401]
+}

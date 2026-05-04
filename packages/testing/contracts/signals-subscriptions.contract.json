@@ -1,0 +1,24 @@
+{
+  "endpoint": "/api/v1/signals/subscriptions",
+  "method": "GET",
+  "auth": "required",
+  "description": "List all signal subscriptions for the authenticated user (REQ-STRAT-007b)",
+  "responseFields": [
+    { "path": "[].id", "type": "string", "required": true, "description": "Subscription document ID" },
+    { "path": "[].user_id", "type": "string", "required": true, "description": "Owner user ID" },
+    { "path": "[].name", "type": "string", "required": true, "description": "Subscription name" },
+    { "path": "[].signal_type_id", "type": "string", "required": true, "description": "Signal type identifier" },
+    { "path": "[].timeframe", "type": "string", "required": true, "description": "Signal timeframe (daily, weekly, etc.)" },
+    { "path": "[].parameters", "type": "object", "required": false, "description": "Signal parameters (BsonDocument)" },
+    { "path": "[].status", "type": "string", "required": true, "description": "Subscription status: Active, Paused" },
+    { "path": "[].is_paused", "type": "boolean", "required": true, "description": "Convenience flag: true when status is Paused" },
+    { "path": "[].current_version.version_id", "type": "string", "required": false, "description": "Current live version ID" },
+    { "path": "[].current_version.version_number", "type": "number", "required": false, "description": "Current version number" },
+    { "path": "[].current_version.effective_from", "type": "string", "required": false, "description": "ISO 8601 effective-from timestamp" },
+    { "path": "[].has_pending_version", "type": "boolean", "required": true, "description": "Whether a pending version exists" },
+    { "path": "[].version_count", "type": "number", "required": true, "description": "Total number of versions" },
+    { "path": "[].created_at", "type": "string", "required": true, "description": "ISO 8601 creation timestamp" },
+    { "path": "[].updated_at", "type": "string", "required": true, "description": "ISO 8601 last update timestamp" }
+  ],
+  "statusCodes": [200, 401]
+}

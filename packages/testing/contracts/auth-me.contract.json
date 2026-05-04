@@ -1,0 +1,12 @@
+{
+  "endpoint": "/api/v1/auth/me",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns the current authenticated user's identity — proves JWT auth boundary works",
+  "responseFields": [
+    { "path": "sub", "type": "string", "required": true, "description": "User identifier (provider:providerKey format)" },
+    { "path": "email", "type": "string", "required": true, "description": "User email from OAuth provider" },
+    { "path": "name", "type": "string", "required": true, "description": "User display name from OAuth provider" }
+  ],
+  "statusCodes": [200, 401]
+}

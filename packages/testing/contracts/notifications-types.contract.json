@@ -1,0 +1,12 @@
+{
+  "endpoint": "/api/v1/notifications/types",
+  "method": "GET",
+  "auth": "required",
+  "description": "List available notification types with labels and critical flags for the portal filter UI",
+  "responseFields": [
+    { "path": "[].type", "type": "string", "required": true, "description": "Notification type identifier" },
+    { "path": "[].label", "type": "string", "required": true, "description": "Human-readable label" },
+    { "path": "[].is_critical", "type": "boolean", "required": true, "description": "Whether this type is critical" }
+  ],
+  "statusCodes": [200, 401]
+}

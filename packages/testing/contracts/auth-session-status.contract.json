@@ -1,0 +1,15 @@
+{
+  "endpoint": "/api/v1/auth/session/status",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns session lifecycle state — drives frontend routing to correct screen (REQ-SESSION-007/010/011/012/013)",
+  "responseFields": [
+    { "path": "state", "type": "string", "required": true, "description": "Session lifecycle state: active, pending_approval, pending_acknowledgement, fyers_required, fyers_dirty, fyers_dirty_admin, deactivated" },
+    { "path": "expires_at", "type": "string", "required": true, "description": "Session expiry timestamp in ISO 8601 format" },
+    { "path": "step_up.valid", "type": "boolean", "required": false, "description": "Whether step-up re-authentication is valid (admin only)" },
+    { "path": "step_up.authenticated_at", "type": "string", "required": false, "description": "Step-up authentication timestamp (admin only)" },
+    { "path": "step_up.expires_at", "type": "string", "required": false, "description": "Step-up expiry timestamp (admin only, null when not valid)" }
+  ],
+  "statusCodes": [200, 401],
+  "notes": "Fields under step_up are present only when the user is an admin. Non-admin users receive state + expires_at only."
+}

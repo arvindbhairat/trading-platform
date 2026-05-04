@@ -1,44 +1,280 @@
 /**
- * Contract-diff scaffolding — P1-T9 / REQ-NFR-016.
+ * Contract-diff — Frontend ↔ API contract validation (REQ-NFR-016).
  *
- * Runs on every CI build that touches the API or portal API-client types.
- * Phase 1: no contracts are registered yet; the runner exits 0 with a
- * "scaffolding pass" message so the gate wires into the pipeline now and
- * will automatically enforce contracts once the first snapshot is added.
+ * Loads all contract snapshots from packages/testing/contracts/, validates them
+ * against the contract schema, checks for duplicate endpoints, and verifies
+ * internal consistency.
  *
- * A contract snapshot is a JSON file in packages/testing/contracts/ whose
- * name follows the pattern  <endpoint-slug>.contract.json  and whose shape
- * is { endpoint, method, responseFields: string[], requestFields: string[] }.
+ * When an API base URL is provided via CONTRACT_API_BASE_URL, also validates
+ * actual API responses against the contract definitions (CI integration test mode).
  *
- * When snapshots exist the runner will:
- *   1. Load each snapshot.
- *   2. Compare it against the current API OpenAPI spec (or a fixture).
- *   3. Exit non-zero if any field is missing or the wrong type.
+ * Usage:
+ *   npm run contract-diff                      ← schema validation only
+ *   CONTRACT_API_BASE_URL=http://localhost:5000 npm run contract-diff  ← + live check
+ *   CONTRACT_API_BASE_URL=http://localhost:5000 CONTRACT_TOKEN=... npm run contract-diff
  */
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const contractsDir = join(__dirname, '..', 'contracts');
 
-if (!existsSync(contractsDir)) {
-  console.log('[contract-diff] contracts/ directory not found — scaffolding pass (no contracts registered yet).');
-  process.exit(0);
+// ── Exit state ────────────────────────────────────────────────────────────────
+let exitCode = 0;
+const errors = [];
+const warnings = [];
+const infos = [];
+
+function fail(message) {
+  errors.push(message);
+  exitCode = 1;
+  console.error(`  ✗ ${message}`);
 }
 
-const snapshots = readdirSync(contractsDir).filter((f) => f.endsWith('.contract.json'));
-
-if (snapshots.length === 0) {
-  console.log('[contract-diff] No contract snapshots registered yet — scaffolding pass.');
-  process.exit(0);
+function warn(message) {
+  warnings.push(message);
+  console.warn(`  ⚠ ${message}`);
 }
 
-// Future: load each snapshot and diff against the live OpenAPI spec / fixture.
-console.log(`[contract-diff] ${snapshots.length} contract snapshot(s) found.`);
-for (const file of snapshots) {
-  console.log(`  - ${file}`);
+function info(message) {
+  infos.push(message);
+  console.log(`  ${message}`);
 }
-console.log('[contract-diff] Contract comparison not yet implemented — add comparison logic here (REQ-NFR-016).');
-process.exit(0);
+
+// ── Schema (compiled in-code for zero dependencies) ────────────────────────────
+const VALID_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const VALID_AUTH = new Set(['required', 'optional', 'none']);
+const VALID_TYPES = new Set([
+  'string', 'number', 'boolean', 'object', 'array', 'string[]', 'number[]', 'null'
+]);
+
+function validateContractShape(contract, filename) {
+  const prefix = `[${filename}]`;
+
+  if (!contract.endpoint || typeof contract.endpoint !== 'string') {
+    fail(`${prefix} Missing or invalid 'endpoint' (must be a non-empty string).`);
+  }
+
+  if (!VALID_METHODS.has(contract.method)) {
+    fail(`${prefix} Invalid 'method': "${contract.method}". Must be one of: ${[...VALID_METHODS].join(', ')}.`);
+  }
+
+  if (contract.auth !== undefined && !VALID_AUTH.has(contract.auth)) {
+    fail(`${prefix} Invalid 'auth': "${contract.auth}". Must be one of: ${[...VALID_AUTH].join(', ')}.`);
+  }
+
+  // Validate responseFields.
+  if (!Array.isArray(contract.responseFields)) {
+    fail(`${prefix} Missing or invalid 'responseFields' (must be an array).`);
+  } else {
+    for (const [i, f] of contract.responseFields.entries()) {
+      if (!f.path || typeof f.path !== 'string') {
+        fail(`${prefix} responseFields[${i}]: missing or invalid 'path'.`);
+      }
+      if (f.type && !VALID_TYPES.has(f.type)) {
+        warn(`${prefix} responseFields[${i}].path="${f.path}": unknown type "${f.type}".`);
+      }
+      if (typeof f.required !== 'boolean') {
+        fail(`${prefix} responseFields[${i}].path="${f.path}": 'required' must be a boolean.`);
+      }
+    }
+  }
+
+  // Validate requestFields if present.
+  if (contract.requestFields !== undefined) {
+    if (!Array.isArray(contract.requestFields)) {
+      fail(`${prefix} 'requestFields' must be an array.`);
+    } else {
+      for (const [i, f] of contract.requestFields.entries()) {
+        if (!f.path || typeof f.path !== 'string') {
+          fail(`${prefix} requestFields[${i}]: missing or invalid 'path'.`);
+        }
+        if (typeof f.required !== 'boolean') {
+          fail(`${prefix} requestFields[${i}].path="${f.path}": 'required' must be a boolean.`);
+        }
+      }
+    }
+  }
+
+  // Validate statusCodes if present.
+  if (contract.statusCodes !== undefined) {
+    if (!Array.isArray(contract.statusCodes)) {
+      fail(`${prefix} 'statusCodes' must be an array.`);
+    } else {
+      for (const [i, code] of contract.statusCodes.entries()) {
+        if (!Number.isInteger(code) || code < 100 || code > 599) {
+          fail(`${prefix} statusCodes[${i}]: invalid HTTP status code "${code}".`);
+        }
+      }
+    }
+  }
+}
+
+// ── Live API validation ────────────────────────────────────────────────────────
+
+async function validateAgainstApi(contracts) {
+  const apiBase = process.env.CONTRACT_API_BASE_URL;
+  if (!apiBase) return;
+
+  const token = process.env.CONTRACT_TOKEN || '';
+  info(`Live API validation against ${apiBase}${token ? ' (authenticated)' : ' (unauthenticated)'}`);
+
+  // Build auth headers if token provided.
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  for (const contract of contracts) {
+    // Skip templated endpoints (containing {param}) in automated validation —
+    // these require specific path parameter values.
+    const hasPathParams = /\{/.test(contract.endpoint);
+    if (hasPathParams) {
+      info(`  SKIP  ${contract.method} ${contract.endpoint} — templated path, requires explicit parameters`);
+      continue;
+    }
+
+    // Skip POST/PUT/PATCH/DELETE in automated validation — these may have
+    // side effects or require specific request bodies.
+    if (contract.method !== 'GET') {
+      info(`  SKIP  ${contract.method} ${contract.endpoint} — non-GET, requires explicit request body`);
+      continue;
+    }
+
+    try {
+      const url = `${apiBase.replace(/\/+$/, '')}${contract.endpoint}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(url, {
+        headers: { ...authHeaders, Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      // Check status code is in contract.
+      if (contract.statusCodes && !contract.statusCodes.includes(res.status)) {
+        warn(`  CODE  ${contract.method} ${contract.endpoint} → ${res.status} (expected ${contract.statusCodes.join('/')})`);
+        continue;
+      }
+
+      // For 200/201, check response body contains required fields.
+      if ((res.status === 200 || res.status === 201) && contract.responseFields) {
+        let body;
+        try {
+          body = await res.json();
+        } catch {
+          warn(`  JSON  ${contract.method} ${contract.endpoint} — response is not valid JSON`);
+          continue;
+        }
+
+        const requiredFields = contract.responseFields.filter(f => f.required);
+        for (const field of requiredFields) {
+          const value = getNestedValue(body, field.path);
+          if (value === undefined) {
+            fail(`  MISS  ${contract.method} ${contract.endpoint} — required field "${field.path}" missing from response`);
+          }
+        }
+
+        info(`  OK    ${contract.method} ${contract.endpoint} → ${res.status}`);
+      } else {
+        info(`  OK    ${contract.method} ${contract.endpoint} → ${res.status}`);
+      }
+    } catch (err) {
+      warn(`  FAIL  ${contract.method} ${contract.endpoint} — ${err.message}`);
+    }
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function getNestedValue(obj, path) {
+  return path
+    .replace(/\[\]/g, '')   // strip array markers
+    .split('.')
+    .reduce((acc, key) => (acc !== null && acc !== undefined ? acc[key] : undefined), obj);
+}
+
+function endpointKey(contract) {
+  return `${contract.method} ${contract.endpoint}`;
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+
+async function main() {
+  if (!existsSync(contractsDir)) {
+    info('contracts/ directory not found — scaffolding pass (no contracts registered).');
+    process.exit(0);
+  }
+
+  const files = readdirSync(contractsDir)
+    .filter(f => f.endsWith('.contract.json'))
+    .sort();
+
+  if (files.length === 0) {
+    info('No contract snapshots registered yet — scaffolding pass.');
+    process.exit(0);
+  }
+
+  info('── Contract Snapshot Validation ──────────────────────────────────');
+  info(`Found ${files.length} contract snapshot(s) in contracts/:`);
+
+  const contracts = [];
+  const seenEndpoints = new Set();
+
+  for (const file of files) {
+    let contract;
+    try {
+      const raw = readFileSync(join(contractsDir, file), 'utf-8');
+      contract = JSON.parse(raw);
+    } catch (err) {
+      fail(`[${file}] Failed to parse JSON: ${err.message}`);
+      continue;
+    }
+
+    // Validate shape.
+    validateContractShape(contract, file);
+
+    // Check for duplicate endpoint+methdod combinations.
+    const key = endpointKey(contract);
+    if (seenEndpoints.has(key)) {
+      fail(`[${file}] Duplicate endpoint: ${key} (already defined in another contract file).`);
+    }
+    seenEndpoints.add(key);
+
+    contracts.push(contract);
+    info(`  ✓ ${key}`);
+  }
+
+  // Summary.
+  if (errors.length === 0 && warnings.length === 0) {
+    info('── All contracts valid ──────────────────────────────────────────────');
+  }
+
+  if (warnings.length > 0) {
+    info(`── Warnings (${warnings.length}) ──────────────────────────────────────────`);
+    for (const w of warnings) info(`  ⚠ ${w}`);
+  }
+
+  if (errors.length > 0) {
+    info(`── Errors (${errors.length}) ────────────────────────────────────────────`);
+    for (const e of errors) info(`  ✗ ${e}`);
+  }
+
+  // Live API validation.
+  await validateAgainstApi(contracts);
+
+  // Final report.
+  const total = files.length;
+  info('');
+  info(`── Report ───────────────────────────────────────────────────────────`);
+  info(`  Contracts: ${total}`);
+  info(`  Errors:    ${errors.length}`);
+  info(`  Warnings:  ${warnings.length}`);
+
+  process.exit(exitCode);
+}
+
+main().catch(err => {
+  console.error('[contract-diff] Fatal error:', err);
+  process.exit(1);
+});

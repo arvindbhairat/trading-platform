@@ -1,0 +1,12 @@
+{
+  "endpoint": "/api/v1/auth/providers",
+  "method": "GET",
+  "auth": "none",
+  "description": "List supported OAuth providers — always returns all three unconditionally (REQ-AUTH-011)",
+  "responseFields": [
+    { "path": "providers", "type": "array", "required": true, "description": "Array of OAuth provider objects" },
+    { "path": "providers[].name", "type": "string", "required": true, "description": "Provider identifier: google, microsoft, facebook" },
+    { "path": "providers[].loginUrl", "type": "string", "required": true, "description": "OAuth initiation URL for this provider" }
+  ],
+  "statusCodes": [200]
+}

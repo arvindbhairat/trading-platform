@@ -1,0 +1,10 @@
+{
+  "endpoint": "/api/v1/admin/config/categories",
+  "method": "GET",
+  "auth": "required",
+  "description": "List distinct sys_config categories",
+  "responseFields": [
+    { "path": "categories", "type": "array", "required": true, "description": "Array of distinct category names" }
+  ],
+  "statusCodes": [200, 401]
+}

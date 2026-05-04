@@ -1,0 +1,10 @@
+{
+  "endpoint": "/api/v1/notifications/{id}/read",
+  "method": "POST",
+  "auth": "required",
+  "description": "Mark a single notification as read",
+  "responseFields": [
+    { "path": "status", "type": "string", "required": true, "description": "Result status: read" }
+  ],
+  "statusCodes": [200, 400, 401]
+}

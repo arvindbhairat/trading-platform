@@ -1,0 +1,11 @@
+{
+  "endpoint": "/api/v1/chart/{symbol}/last",
+  "method": "GET",
+  "auth": "none",
+  "description": "Returns the most recent candle date available for the symbol",
+  "responseFields": [
+    { "path": "symbol", "type": "string", "required": true, "description": "NSE trading symbol" },
+    { "path": "lastCandleDate", "type": "string", "required": false, "description": "ISO 8601 date of last candle (null when no data)" }
+  ],
+  "statusCodes": [200, 404]
+}

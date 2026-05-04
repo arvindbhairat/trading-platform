@@ -1,0 +1,9 @@
+{
+  "endpoint": "/api/v1/healthz",
+  "method": "GET",
+  "auth": "none",
+  "description": "Health check endpoint — ASP.NET Core built-in MapHealthChecks, returns plain text 'Healthy' / 'Degraded' / 'Unhealthy'",
+  "responseFields": [],
+  "statusCodes": [200, 503],
+  "notes": "This endpoint uses MapHealthChecks which returns plain text, not JSON. Field validation is N/A."
+}

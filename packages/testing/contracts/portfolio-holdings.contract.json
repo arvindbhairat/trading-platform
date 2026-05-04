@@ -1,0 +1,19 @@
+{
+  "endpoint": "/api/v1/portfolio/holdings",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns all open holdings with current PnL data (REQ-DASH-010)",
+  "responseFields": [
+    { "path": "holdings", "type": "array", "required": true, "description": "Array of open holdings" },
+    { "path": "holdings[].symbol", "type": "string", "required": true, "description": "NSE trading symbol" },
+    { "path": "holdings[].quantity", "type": "number", "required": true, "description": "Current position quantity" },
+    { "path": "holdings[].average_buy_price", "type": "number", "required": true, "description": "Average buy price per share" },
+    { "path": "holdings[].total_invested", "type": "number", "required": true, "description": "Total amount invested" },
+    { "path": "holdings[].current_price", "type": "number", "required": true, "description": "Current market price" },
+    { "path": "holdings[].current_market_value", "type": "number", "required": true, "description": "Current market value of holding" },
+    { "path": "holdings[].unrealized_pnl", "type": "number", "required": true, "description": "Unrealized profit/loss in INR" },
+    { "path": "holdings[].unrealized_pnl_percent", "type": "number", "required": true, "description": "Unrealized PnL as percentage" },
+    { "path": "holdings[].holding_period_days", "type": "number", "required": true, "description": "Days since entry" }
+  ],
+  "statusCodes": [200, 401]
+}

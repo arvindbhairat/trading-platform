@@ -1,0 +1,18 @@
+{
+  "endpoint": "/api/v1/auth/linked-identities",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns the user's linked secondary OAuth identities (REQ-RECOVERY-001, REQ-PROFILE-009)",
+  "responseFields": [
+    { "path": "primary_provider", "type": "string", "required": true, "description": "Primary OAuth provider" },
+    { "path": "primary_email", "type": "string", "required": true, "description": "Masked primary email" },
+    { "path": "linked_identities", "type": "array", "required": true, "description": "Array of linked identity objects" },
+    { "path": "linked_identities[].provider", "type": "string", "required": true, "description": "OAuth provider name" },
+    { "path": "linked_identities[].email", "type": "string", "required": true, "description": "Masked email for linked identity" },
+    { "path": "linked_identities[].linked_at", "type": "string", "required": true, "description": "ISO 8601 timestamp when linked" },
+    { "path": "total_count", "type": "number", "required": true, "description": "Number of linked identities" },
+    { "path": "max_allowed", "type": "number", "required": true, "description": "Maximum allowed linked identities" },
+    { "path": "single_warning", "type": "boolean", "required": true, "description": "Warning when no secondary identity linked" }
+  ],
+  "statusCodes": [200, 401, 403]
+}

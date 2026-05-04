@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SignalStack Frontend ↔ API Contract Snapshot",
+  "description": "Schema for contract snapshot files that define the expected shape of API responses consumed by the frontend. Each file represents one API endpoint contract.",
+  "type": "object",
+  "required": ["endpoint", "method", "responseFields"],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "API path template (e.g., /api/v1/portfolio/holdings). Path parameters use {param} syntax."
+    },
+    "method": {
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+      "description": "HTTP method"
+    },
+    "auth": {
+      "type": "string",
+      "enum": ["required", "optional", "none"],
+      "description": "Whether authentication is required for this endpoint",
+      "default": "required"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this endpoint does"
+    },
+    "requestFields": {
+      "type": "array",
+      "description": "Expected fields in the request body (for POST/PUT/PATCH only)",
+      "items": {
+        "type": "object",
+        "required": ["path", "type", "required"],
+        "properties": {
+          "path": { "type": "string", "description": "Dot-notation field path (e.g., symbol, rme_configuration.rme_profile_id)" },
+          "type": { "type": "string", "description": "JSON type: string, number, boolean, object, array, string[]" },
+          "required": { "type": "boolean", "description": "Whether this field is required" },
+          "description": { "type": "string", "description": "Purpose of the field" }
+        }
+      }
+    },
+    "responseFields": {
+      "type": "array",
+      "description": "Expected fields in the response body",
+      "items": {
+        "type": "object",
+        "required": ["path", "type", "required"],
+        "properties": {
+          "path": { "type": "string", "description": "Dot-notation field path (e.g., holdings[].symbol, step_up.valid)" },
+          "type": { "type": "string", "description": "JSON type: string, number, boolean, object, array, string[], number[], or null" },
+          "required": { "type": "boolean", "description": "Whether this field is always present" },
+          "description": { "type": "string", "description": "Purpose of the field" }
+        }
+      }
+    },
+    "statusCodes": {
+      "type": "array",
+      "description": "HTTP status codes this endpoint can return",
+      "items": { "type": "number" }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional contract notes or caveats"
+    }
+  }
+}

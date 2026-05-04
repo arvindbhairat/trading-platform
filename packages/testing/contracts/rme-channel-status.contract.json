@@ -1,0 +1,14 @@
+{
+  "endpoint": "/api/v1/rme/channel-status",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns RME channel registry capacity and usage (RME-L1)",
+  "responseFields": [
+    { "path": "active_position_count", "type": "number", "required": true, "description": "Number of active position channels" },
+    { "path": "max_active_positions", "type": "number", "required": true, "description": "Maximum allowed active positions" },
+    { "path": "usage_pct", "type": "number", "required": true, "description": "Capacity usage percentage" },
+    { "path": "warning_active", "type": "boolean", "required": true, "description": "Whether capacity warning is active (over 80%)" },
+    { "path": "warning_message", "type": "string", "required": false, "description": "Capacity warning message" }
+  ],
+  "statusCodes": [200, 401]
+}

@@ -1,0 +1,29 @@
+{
+  "endpoint": "/api/v1/rme/advisory?symbol={symbol}",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns RME advisory data for the selected symbol on the chart page (P6-T27, REQ-CHART-003/004)",
+  "responseFields": [
+    { "path": "position_exists", "type": "boolean", "required": true, "description": "Whether a position exists for this symbol" },
+    { "path": "state", "type": "string", "required": false, "description": "Position lifecycle state (null when no position)" },
+    { "path": "entry_price", "type": "number", "required": false, "description": "Position entry price" },
+    { "path": "average_entry_price", "type": "number", "required": false, "description": "Average entry price across all lots" },
+    { "path": "quantity", "type": "number", "required": false, "description": "Current position quantity" },
+    { "path": "stop_loss", "type": "number", "required": false, "description": "Stop loss price" },
+    { "path": "active_stop", "type": "number", "required": false, "description": "Currently active stop price" },
+    { "path": "trailing_stop", "type": "number", "required": false, "description": "Trailing stop price" },
+    { "path": "trailing_stop_active", "type": "boolean", "required": false, "description": "Whether trailing stop is active" },
+    { "path": "current_r_multiple", "type": "number", "required": false, "description": "Current R-multiple of the position" },
+    { "path": "unrealized_pnl", "type": "number", "required": false, "description": "Unrealized profit/loss" },
+    { "path": "risk_amount", "type": "number", "required": false, "description": "Position risk amount" },
+    { "path": "add_advisory_active", "type": "boolean", "required": false, "description": "Whether add advisory is active" },
+    { "path": "reduce_advisory_active", "type": "boolean", "required": false, "description": "Whether reduce advisory is active" },
+    { "path": "exit_advisory_active", "type": "boolean", "required": false, "description": "Whether exit advisory is active" },
+    { "path": "add_level", "type": "number", "required": false, "description": "Add level price" },
+    { "path": "reduce_level", "type": "number", "required": false, "description": "Reduce level price" },
+    { "path": "time_stop_date", "type": "string", "required": false, "description": "Time stop date in ISO 8601 format" },
+    { "path": "open_position_count", "type": "number", "required": true, "description": "Total open positions across portfolio" },
+    { "path": "subscription_name", "type": "string", "required": false, "description": "Name of the subscription generating this position" }
+  ],
+  "statusCodes": [200, 400, 401]
+}

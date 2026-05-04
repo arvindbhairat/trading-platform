@@ -1,0 +1,10 @@
+{
+  "endpoint": "/api/v1/auth/csrf",
+  "method": "GET",
+  "auth": "none",
+  "description": "Returns a CSRF token and sets the XSRF-TOKEN cookie (REQ-SEC-001)",
+  "responseFields": [
+    { "path": "csrfToken", "type": "string", "required": true, "description": "CSRF token for use in X-CSRF-TOKEN header on mutating requests" }
+  ],
+  "statusCodes": [200]
+}
