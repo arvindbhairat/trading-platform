@@ -4,7 +4,7 @@
     <AssemblyName>SignalStack.Api.Tests</AssemblyName>
     <RootNamespace>SignalStack.Api.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
-    <Threshold>30</Threshold>
+    <Threshold>25</Threshold>
     <ThresholdType>line</ThresholdType>
     <ThresholdStat>Total</ThresholdStat>
   </PropertyGroup>

@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import Home from '../src/app/page';
 import RootLayout from '../src/app/layout';
 
@@ -26,10 +27,10 @@ vi.mock('next/font/google', () => ({
 // render tests, we just verify the component renders without throwing.
 describe('Home page', () => {
   it('renders without throwing', () => {
-    const element = Home();
-    expect(element).toBeTruthy();
-    // Home now returns the Shell layout component (type is a function component).
-    expect(typeof element.type).toBe('function');
+    // Use renderToString instead of calling the component directly, since
+    // DashboardPage uses useState and other hooks that require a React renderer.
+    const html = renderToString(createElement(Home));
+    expect(html).toBeTruthy();
   });
 });
 
@@ -46,6 +47,7 @@ describe('RootLayout', () => {
     const element = RootLayout({ children: child });
     const body = element.props.children as React.ReactElement;
     expect(body?.type).toBe('body');
-    expect(body?.props?.children).toBe(child);
+    // RootLayout wraps children in AppProviders, so they appear one level deeper.
+    expect(body?.props?.children?.props?.children).toBe(child);
   });
 });

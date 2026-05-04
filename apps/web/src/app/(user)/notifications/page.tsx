@@ -15,7 +15,6 @@ import {
   Select,
   Field,
   Icon,
-  userNavItems,
   userNavItemsWithNotificationCount,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
