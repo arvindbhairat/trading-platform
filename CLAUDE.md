@@ -75,7 +75,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Never make startup-critical configuration depend only on MongoDB.
 - Never introduce secrets into source control, fixtures, or docs.
 - Never deploy the Worker Service as more than one running instance until the Phase C multi-instance partitioning extension in ADR-0003 is delivered and accepted in a new ADR. Azure App Service scale-out, auto-scale rules, and VM scale-sets must remain disabled for the Worker Service. Scale-out silently breaks the per-position channel invariant and causes concurrent writes on the same position document. The API service is unaffected and may scale horizontally.
-- Never introduce custom styles in `apps/web` outside the design system tokens defined in `globals.css`. All colors, spacing, font sizes, and shadows must use design tokens. All UI components must reuse or extend `src/components/primitives.tsx`. Before implementing any UI, consult `design_system/mock_screens/` and `design_system/preview/`. See `docs/engineering-standards.md` § "Design System Standards" for the full rules.
+- **Design system enforcement is mandatory before any UI code is written.** Before implementing any UI component in `apps/web`, follow the design gate procedure in `execution_plan/agent.md` step 5: (1) read the relevant mock screen from `design_system/mock_screens/`, (2) map components from `apps/web/src/components/primitives.tsx`, (3) use only design tokens from `apps/web/src/app/globals.css`. Never introduce hardcoded colors, spacing, font sizes, shadows, or inline styles with arbitrary values. All colors must use `--bg-*`, `--fg-*`, `--brand-*`, `--up-*`, `--down-*`, `--warn-*`, `--info-*`, `--neutral-*`, `--line-*` tokens. All spacing must use `var(--s-*)`. All type must use `t-*` classes. Verification step 7 checks compliance — the task log must record the mock screen consulted and any violations found. See `docs/engineering-standards.md` § "Design System Standards" for the full reference rules.
 
 ## Working Style
 
@@ -84,7 +84,7 @@ Unless the repository evolves in another direction, use these defaults:
 - update the canonical docs when a requirement actually changes
 - keep implementations simple, typed, observable, and testable
 - avoid speculative rewrites when incremental delivery is possible
-- enforce the design system strictly: start every UI change from `design_system/mock_screens/`, map components from `src/components/primitives.tsx`, and use tokens from `globals.css` — never hardcode visual values
+- enforce the design system strictly via the `execution_plan/agent.md` step 5 design gate: start every UI change from `design_system/mock_screens/`, map components from `src/components/primitives.tsx`, use tokens from `globals.css`, and validate against `design_system/preview/` — never hardcode visual values; record compliance in the task log
 
 ## Code Discovery
 

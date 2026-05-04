@@ -11,7 +11,8 @@ Execute **exactly one** next pending task from `execution_plan/status.json`, wit
 - `docs/requirements-spec.md` — source of truth for product requirements. **Cite REQ-IDs.**
 - `docs/system-architecture.md` — architecture explanation; system boundaries.
 - `docs/implementation-roadmap.md` — phased delivery sequence (do not invent new requirements).
-- `docs/engineering-standards.md` — reusable engineering and testing standards.
+- `docs/engineering-standards.md` — reusable engineering and testing standards, including mandatory Design System Standards (§ "Design System Standards").
+- `design_system/` — canonical UI source of truth: tokens (`colors_and_type.css`), mock screens (`mock_screens/`), UI kits (`ui_kits/`), preview files (`preview/`).
 - `docs/system-config.md` — runtime configuration tiers and `sys_config` seed table.
 - `docs/data-management.md` — MongoDB collection catalogue, TTL/Online Archive.
 - `docs/portfolio-risk-guidelines.md` — RME defaults.
@@ -75,6 +76,14 @@ Each task carries:
 
 - Perform the minimum code / docs / config changes necessary to satisfy the task's **Vertical slice** and the REQ-IDs listed under **REQ**.
 - Keep work atomic and idempotent. Prefer adding new artefacts over rewriting existing ones (except where the task is explicitly a rewrite).
+- **Design gate for UI work.** If the task touches `apps/web` or any frontend component, before writing any code:
+  1. Read the corresponding mock screen in `design_system/mock_screens/` for the feature being built
+  2. Read the relevant UI kit components in `design_system/ui_kits/` for the portal being built (user-portal or admin-portal)
+  3. Map required components from `apps/web/src/components/primitives.tsx` — these are the production TypeScript mirror of the design system primitives; do not copy from `design_system/mock_screens/primitives.jsx` directly without converting
+  4. Use only design tokens from `apps/web/src/app/globals.css` — spacing (`var(--s-*)`), colors (`--bg-*`/`--fg-*`/`--brand-*`/`--up-*`/`--down-*`/`--warn-*`/`--info-*`/`--neutral-*`/`--line-*`), type classes (`t-h1`–`t-label-sm`, `t-body-*`, `t-num-*`), radii (`var(--r-*)`)
+  5. Validate layout and hierarchy against `design_system/preview/` reference HTML files before finalising
+  6. Document which mock screen was consulted in the task log under **Design system compliance**
+  Do not introduce hardcoded colors, spacing, font sizes, shadows, or inline styles with arbitrary values.
 - Do not regenerate the plan; do not reset progress.
 
 ### 6) Conflict handling (required)
@@ -97,6 +106,11 @@ then:
 ### 7) Verify (required)
 
 - Run the smallest reasonable verification for the task: lint / build / test commands if available and fast, or reasoned verification if the runtime dependency is unavailable in the environment.
+- **Design compliance (UI tasks).** If the task touched `apps/web` or any frontend component:
+  - Grep the changed files for hardcoded style violations: `color: "#`, `padding: "`, `font-size:`, `margin: "` — confirm zero new violations
+  - Confirm all new UI components extend or compose from `src/components/primitives.tsx` rather than duplicating existing primitives
+  - Confirm the visual output matches the corresponding `design_system/mock_screens/` reference in layout, spacing, and hierarchy
+  - Record the mock screen consulted and the compliance check result in the task log under **Design system compliance**
 - For each REQ-ID listed under **REQ**, assert that it is observably true (the test, the code path, the config row, the migration — whatever the task scope demands).
 - Record what you verified per REQ-ID in the task log.
 
@@ -111,6 +125,7 @@ then:
   - Actions taken.
   - Files changed / created (paths).
   - Verification performed (commands / tests, or reasoning when tests unavailable). Map to each REQ-ID.
+  - Design system compliance (mock screen consulted, violations found, if UI task).
   - Frozen-after-author confirmation (if applicable).
   - Conflict found (only if step 6 fired).
   - REQ coverage delta (REQ-IDs satisfied this run / total REQ-IDs scoped to the phase).
