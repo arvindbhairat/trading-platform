@@ -89,6 +89,13 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
         services.AddSingleton<IStopLoss, TrailingStopLoss>();
 
+        // P6-T15: Trailing stop (ATR-based).
+        // AtrTrailingStopLoss — stop trails at an ATR-based distance below the
+        // highest price observed since entry. Falls back to the configured default
+        // fixed distance percentage when ATR is unavailable.
+        // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
+        services.AddSingleton<IStopLoss, AtrTrailingStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
@@ -100,9 +107,11 @@ public static class RmeModuleExtensions
         // (REQ-RME-006e).
         services.AddSingleton<IEquityBaseDivergenceService, EquityBaseDivergenceService>();
 
-        // P6-T5: Synchronous trailing-stop recalculation (ADR-0003 carve-out).
-        // Replaced by concrete implementations in P6-T14/T15.
-        services.AddSingleton<ITrailingStopSyncService, NoOpTrailingStopSyncService>();
+        // P6-T15: Synchronous trailing-stop recalculation (ADR-0003 carve-out).
+        // TrailingStopSyncService — applies ATR-based trailing-stop updates
+        // synchronously before LMDS/LADS pollers start for the new session.
+        // Not routed through the per-position channel (REQ-RME-CONC-005).
+        services.AddSingleton<ITrailingStopSyncService, TrailingStopSyncService>();
 
         // Background service — skeleton only; real work added by P6-T24.
         services.AddHostedService<RmeBackgroundService>();
