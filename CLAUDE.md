@@ -85,3 +85,11 @@ Unless the repository evolves in another direction, use these defaults:
 - keep implementations simple, typed, observable, and testable
 - avoid speculative rewrites when incremental delivery is possible
 - enforce the design system strictly: start every UI change from `design_system/mock_screens/`, map components from `src/components/primitives.tsx`, and use tokens from `globals.css` — never hardcode visual values
+
+## Code Discovery
+
+This project uses an **agent-driven on-the-fly code indexing** approach — no generated index files, no scripts, no maintenance. See `CODE-INDEX.md` (root) for the full reference.
+
+- **During build-phase execution** (`execution_plan/agent.md`): Step 1 ("Load state and discover code") runs a set of Glob calls automatically at session start to give the agent a complete file inventory for the task.
+- **During live trials or bug fixes**: Read `BUG-FIX-PROTOCOL.md` (root) for the 7-step procedure to identify affected files via REQ-ID lookup in task logs, Grep, and the Explore agent.
+- **REQ-ID to file mapping**: Grep `execution_plan/task_logs/*.md` for the REQ-ID — every task log records which files were changed for which requirements.

@@ -40,11 +40,21 @@ Each task carries:
 
 ## Step-by-step procedure (do this in order)
 
-### 1) Load state (required)
+### 1) Load state and discover code (required)
 
 - Read `execution_plan/status.json`.
 - Let `nextTask = current_task_id` if non-empty, else first entry in `pending_tasks`.
 - If both are empty: stop and report completion.
+- Run code discovery: use Glob to scan source directories so the agent has the full file inventory for this session. This costs ~7 Glob calls and eliminates "which file is that in" during the task.
+  ```
+  Glob("apps/**/*.cs")                 # all .NET source files
+  Glob("apps/web/src/**/*.ts*")        # frontend source files
+  Glob("apps/web/*.ts")                # root-level TS (next.config.ts, middleware.ts)
+  Glob("apps/web/__tests__/**/*.ts*")  # frontend test files
+  Glob("packages/**/*.cs")             # shared .NET packages
+  Glob("tests/**/*.cs")                # .NET test files
+  Glob("tests/**/*.ts*")               # TypeScript test files
+  ```
 
 ### 2) Validate dependencies (required)
 
