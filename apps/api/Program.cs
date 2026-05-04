@@ -327,6 +327,9 @@ app.MapAdminSystemHealthEndpoints();
 // Admin phase transition + gate management endpoints — P8-T3 / REQ-LEGAL-001/005/005a
 app.MapAdminPhaseEndpoints();
 
+// Admin Legal Posture widget endpoint — P8-T4 / REQ-LEGAL-010
+app.MapAdminLegalPostureEndpoints();
+
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
 

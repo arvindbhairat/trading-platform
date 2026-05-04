@@ -10,7 +10,7 @@
 // 7-day daily breakdown, per-job retry, Symbol Validity Probe banner, and
 // maintenance window display (A-14).
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -122,6 +122,27 @@ interface SymbolProbeSummary {
   show_banner: boolean;
 }
 
+interface LegalPostureData {
+  current_phase: string;
+  approved_user_count: number;
+  tester_ceiling: number;
+  fyers_app_type: "personal" | "commercial";
+  tos_version: string;
+  privacy_version: string;
+  disclaimer_version: string;
+  tester_acknowledgement_version: string;
+  sebi_opinion: {
+    received: boolean;
+    received_date: string | null;
+  };
+  legal_review_received: boolean;
+  runbook_catalog: {
+    total: number;
+    authored: number;
+    reviewed_in_90_days: number;
+  };
+}
+
 type Notification = { type: "success" | "error"; message: string };
 
 // ── Page Component ─────────────────────────────────────────────────────
@@ -134,6 +155,7 @@ export default function AdminHomePage() {
   const [coverage, setCoverage] = useState<CoverageData | null>(null);
   const [health, setHealth] = useState<SystemHealthData | null>(null);
   const [svpSummary, setSvpSummary] = useState<SymbolProbeSummary | null>(null);
+  const [legalPosture, setLegalPosture] = useState<LegalPostureData | null>(null);
   const [dismissing, setDismissing] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
@@ -149,11 +171,12 @@ export default function AdminHomePage() {
         return;
       }
 
-      const [summaryRes, coverageRes, healthRes, svpRes] = await Promise.all([
+      const [summaryRes, coverageRes, healthRes, svpRes, legalRes] = await Promise.all([
         apiFetch("/api/v1/admin/transfer-recovery-summary"),
         apiFetch("/api/v1/admin/calendar/coverage"),
         apiFetch("/api/v1/admin/system-health"),
         apiFetch("/api/v1/admin/symbol-probe/summary"),
+        apiFetch("/api/v1/admin/legal-posture"),
       ]);
 
       if (!summaryRes.ok) {
@@ -178,6 +201,11 @@ export default function AdminHomePage() {
       if (svpRes.ok) {
         const svpData: SymbolProbeSummary = await svpRes.json();
         setSvpSummary(svpData);
+      }
+
+      if (legalRes.ok) {
+        const legalData: LegalPostureData = await legalRes.json();
+        setLegalPosture(legalData);
       }
 
       const data: TransferRecoverySummary = await summaryRes.json();
@@ -687,16 +715,114 @@ export default function AdminHomePage() {
                   </div>
                 </Card>
 
-                {/* Platform overview placeholder */}
-                <Card>
-                  <div style={{ padding: "var(--s-4) var(--s-5)", borderBottom: "1px solid var(--border-1)" }}>
-                    <h2 style={{ margin: 0 }}>Platform overview</h2>
+                {/* ── Legal Posture Widget (P8-T4 / REQ-LEGAL-010) ────── */}
+                <Card accent={legalPosture && withinTenPercent(legalPosture.approved_user_count, legalPosture.tester_ceiling) ? "warn" : undefined}>
+                  <div
+                    style={{ padding: "var(--s-4) var(--s-5)", borderBottom: "1px solid var(--border-1)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                    onClick={() => router.push("/admin/config")}
+                  >
+                    <h2 style={{ margin: 0 }}>Legal posture</h2>
+                    {legalPosture && (
+                      <Pill tone={legalPosture.current_phase === "A" ? "info" : legalPosture.current_phase === "B" ? "warn" : "up"}>
+                        Phase {legalPosture.current_phase}
+                      </Pill>
+                    )}
                   </div>
-                  <div style={{ padding: "var(--s-5)" }}>
-                    <p className="t-body-sm" style={{ color: "var(--t-3)" }}>
-                      Legal posture, user statistics, and other platform overview information will appear here once the Phase 8 admin operations infrastructure is operational.
-                    </p>
-                  </div>
+                  {legalPosture ? (
+                    <div style={{ padding: "var(--s-5)", display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+                      {/* Row: User capacity */}
+                      <Row
+                        label="Approved users"
+                        onClick={() => router.push("/admin/approvals")}
+                      >
+                        <span className="t-num-sm">{legalPosture.approved_user_count}</span>
+                        <span style={{ color: "var(--fg-3)", margin: "0 2px" }}>/</span>
+                        <span className="t-num-sm">{legalPosture.tester_ceiling}</span>
+                        {withinTenPercent(legalPosture.approved_user_count, legalPosture.tester_ceiling) && (
+                          <Pill tone="warn" dot>Near cap</Pill>
+                        )}
+                      </Row>
+
+                      {/* Row: FYERS app type */}
+                      <Row
+                        label="FYERS app"
+                        onClick={() => router.push("/admin/config")}
+                      >
+                        <Pill tone={legalPosture.fyers_app_type === "commercial" ? "up" : "warn"}>
+                          {legalPosture.fyers_app_type}
+                        </Pill>
+                      </Row>
+
+                      {/* Row: Document versions */}
+                      <Row label="Document versions" onClick={() => router.push("/admin/config")}>
+                        <span className="t-body-sm" style={{ color: "var(--fg-2)" }}>
+                          ToS <strong>{legalPosture.tos_version}</strong> · PP <strong>{legalPosture.privacy_version}</strong> · DF <strong>{legalPosture.disclaimer_version}</strong> · TA <strong>{legalPosture.tester_acknowledgement_version}</strong>
+                        </span>
+                      </Row>
+
+                      {/* Row: SEBI opinion */}
+                      <Row
+                        label="SEBI opinion"
+                        onClick={() => router.push("/admin/config")}
+                      >
+                        {legalPosture.sebi_opinion.received ? (
+                          <span className="t-body-sm" style={{ color: "var(--up-500)" }}>
+                            Received {legalPosture.sebi_opinion.received_date}
+                          </span>
+                        ) : (
+                          <Pill tone="warn">Not received</Pill>
+                        )}
+                      </Row>
+
+                      {/* Row: Legal review */}
+                      <Row
+                        label="Legal review"
+                        onClick={() => router.push("/admin/config")}
+                      >
+                        <Pill tone={legalPosture.legal_review_received ? "up" : "warn"}>
+                          {legalPosture.legal_review_received ? "Received" : "Missing"}
+                        </Pill>
+                      </Row>
+
+                      {/* Row: Calendar coverage */}
+                      <Row
+                        label="Calendar coverage"
+                        onClick={() => router.push("/admin/calendar")}
+                      >
+                        {coverage && coverage.unconfirmed_count > 0 ? (
+                          <Pill tone="warn">{coverage.unconfirmed_count} unconfirmed</Pill>
+                        ) : (
+                          <span className="t-body-sm" style={{ color: "var(--up-500)" }}>Complete</span>
+                        )}
+                      </Row>
+
+                      {/* Row: Runbook catalog */}
+                      <Row
+                        label="Runbook catalog"
+                        onClick={() => router.push("/admin/config")}
+                      >
+                        <span className="t-body-sm" style={{ color: "var(--fg-2)" }}>
+                          <span className="t-num-sm">{legalPosture.runbook_catalog.authored}</span>
+                          <span style={{ color: "var(--fg-3)", margin: "0 2px" }}>/</span>
+                          <span className="t-num-sm">{legalPosture.runbook_catalog.total}</span>
+                          <span style={{ color: "var(--fg-3)", marginLeft: "var(--s-3)" }}>
+                            · {legalPosture.runbook_catalog.reviewed_in_90_days} reviewed in 90d
+                          </span>
+                        </span>
+                      </Row>
+
+                      {/* Info footer */}
+                      <div style={{ borderTop: "1px solid var(--line-1)", paddingTop: "var(--s-3)", marginTop: "var(--s-1)" }}>
+                        <p className="t-body-sm" style={{ color: "var(--fg-3)", fontSize: "11px", margin: 0 }}>
+                          Click any field to navigate to the relevant detail view.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "var(--s-5)" }}>
+                      <p className="t-body-sm" style={{ color: "var(--fg-3)" }}>Loading legal posture data…</p>
+                    </div>
+                  )}
                 </Card>
               </div>
             </div>
@@ -708,6 +834,39 @@ export default function AdminHomePage() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+function withinTenPercent(current: number, ceiling: number): boolean {
+  return ceiling > 0 && current >= ceiling * 0.9;
+}
+
+/** A labeled row used inside the Legal Posture widget. */
+function Row({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "var(--s-1) 0",
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      <span className="t-label-sm" style={{ color: "var(--fg-3)", minWidth: "130px" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
