@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using SignalStack.Api.Portfolio;
 
 namespace Microsoft.AspNetCore.Routing;
@@ -19,9 +21,11 @@ public static class PortfolioEndpoints
         // ── GET /api/v1/portfolio/holdings ─────────────────────────────────
         // Returns all open holdings with current PnL data.
         // REQ-DASH-010: symbol, quantity, avg buy, current price, market value, PnL.
+        // REQ-PLC-010(c): corporate_action_warning_active flag per holding.
         portfolio.MapGet("/holdings", async (
             HttpContext context,
-            HoldingsService holdingsService) =>
+            HoldingsService holdingsService,
+            IMongoDatabase database) =>
         {
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -29,6 +33,10 @@ public static class PortfolioEndpoints
 
             var holdings = await holdingsService.ComputeHoldingsAsync(
                 userId, context.RequestAborted);
+
+            // Build set of symbols with open CA suspension incidents.
+            var caSymbols = await GetCaSuspensionSymbolsAsync(
+                database, userId, context.RequestAborted);
 
             var result = holdings.Select(h => new
             {
@@ -41,6 +49,7 @@ public static class PortfolioEndpoints
                 unrealized_pnl = h.UnrealizedPnl,
                 unrealized_pnl_percent = h.UnrealizedPnlPercent,
                 holding_period_days = h.HoldingPeriodDays,
+                corporate_action_warning_active = caSymbols.Contains(h.Symbol),
             }).ToList();
 
             return Results.Ok(new { holdings = result });
@@ -48,10 +57,12 @@ public static class PortfolioEndpoints
 
         // ── GET /api/v1/portfolio/holdings/{symbol} ───────────────────────
         // Returns holding detail for a single symbol.
+        // REQ-PLC-010(c): corporate_action_warning_active flag.
         portfolio.MapGet("/holdings/{symbol}", async (
             string symbol,
             HttpContext context,
-            HoldingsService holdingsService) =>
+            HoldingsService holdingsService,
+            IMongoDatabase database) =>
         {
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -62,6 +73,9 @@ public static class PortfolioEndpoints
 
             if (holding is null)
                 return Results.NotFound(new { error = $"No open holding found for symbol '{symbol}'." });
+
+            var caSymbols = await GetCaSuspensionSymbolsAsync(
+                database, userId, context.RequestAborted);
 
             return Results.Ok(new
             {
@@ -74,6 +88,7 @@ public static class PortfolioEndpoints
                 unrealized_pnl = holding.UnrealizedPnl,
                 unrealized_pnl_percent = holding.UnrealizedPnlPercent,
                 holding_period_days = holding.HoldingPeriodDays,
+                corporate_action_warning_active = caSymbols.Contains(holding.Symbol),
                 lots = holding.Lots.Select(l => new
                 {
                     trade_id = l.TradeId,
@@ -142,5 +157,51 @@ public static class PortfolioEndpoints
         });
 
         return app;
+    }
+
+    /// <summary>
+    /// Returns the set of symbols that have open corporate_action_suspension
+    /// incidents for the given user (REQ-PLC-010(c)).
+    /// </summary>
+    private static async Task<HashSet<string>> GetCaSuspensionSymbolsAsync(
+        IMongoDatabase database, string userId, CancellationToken ct)
+    {
+        // Get this user's positions to build a position_id → symbol map.
+        var positions = database.GetCollection<BsonDocument>("positions");
+        var userPositionFilter = Builders<BsonDocument>.Filter.Eq("user_id", userId);
+        var userPositions = await positions.Find(userPositionFilter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("symbol"))
+            .ToListAsync(ct);
+
+        if (userPositions.Count == 0)
+            return [];
+
+        var posIdToSymbol = new Dictionary<string, string>();
+        foreach (var pos in userPositions)
+        {
+            var posId = pos["_id"].AsGuid.ToString();
+            var symbol = pos.GetValue("symbol", "").AsString;
+            if (!string.IsNullOrEmpty(symbol))
+                posIdToSymbol[posId] = symbol;
+        }
+
+        if (posIdToSymbol.Count == 0)
+            return [];
+
+        // Find open CA suspension incidents for this user's positions.
+        var incidents = database.GetCollection<BsonDocument>("rme_incidents");
+        var incidentFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.In("position_id", posIdToSymbol.Keys),
+            Builders<BsonDocument>.Filter.Eq("incident_type", "corporate_action_suspension"),
+            Builders<BsonDocument>.Filter.Eq("status", "open"));
+        var caIncidents = await incidents.Find(incidentFilter).ToListAsync(ct);
+
+        return caIncidents
+            .Select(i => i.GetValue("position_id", BsonNull.Value)?.AsString)
+            .Where(id => id is not null && posIdToSymbol.ContainsKey(id))
+            .Select(id => posIdToSymbol[id!])
+            .ToHashSet();
     }
 }

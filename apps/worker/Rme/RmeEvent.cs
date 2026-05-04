@@ -48,6 +48,30 @@ public record DrawdownStateChangedEvent : RmeEvent
 /// <summary>Admin kill-switch activated; all active positions must be suspended.</summary>
 public record KillSwitchActivatedEvent : RmeEvent;
 
+/// <summary>
+/// Corporate action discontinuity detected between FYERS-reported holding state
+/// and FIFO-derived position state (REQ-PLC-010, REQ-PORT-016).
+/// Dispatched by the CorporateActionDetectionService after a LADS sync cycle.
+/// The RME consumer transitions the position to Suspended (corporate_action_detected).
+/// </summary>
+public record CorporateActionDetectedEvent : RmeEvent
+{
+    /// <summary>Quantity reported by FYERS for the holding.</summary>
+    public required decimal FyersQuantity { get; init; }
+
+    /// <summary>Average cost per unit derived from FYERS-reported holding value.</summary>
+    public required decimal FyersAvgCost { get; init; }
+
+    /// <summary>Quantity derived from FIFO trade ledger.</summary>
+    public required decimal FifoQuantity { get; init; }
+
+    /// <summary>Average buy price derived from FIFO trade ledger.</summary>
+    public required decimal FifoAvgCost { get; init; }
+
+    /// <summary>Absolute percentage difference between FYERS and FIFO average cost.</summary>
+    public required decimal DeltaPercent { get; init; }
+}
+
 public enum LevelType
 {
     Stop,

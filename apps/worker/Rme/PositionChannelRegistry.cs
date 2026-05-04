@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Api.Notifications;
+using SignalStack.Api.Users;
 using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Rme;
@@ -27,14 +29,16 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
     private readonly IRmeEventConsumer _consumer;
     private readonly IPositionRepository _positionRepository;
     private readonly IMongoDatabase _database;
+    private readonly INotificationWriter _notificationWriter;
 
     public PositionChannelRegistry(
         ILogger<PositionChannelRegistry> logger,
         IOptions<PositionChannelOptions> options,
         IRmeEventConsumer consumer,
         IPositionRepository positionRepository,
-        IMongoDatabase database)
-        : this(logger, options, consumer, positionRepository, database, WorkerTelemetry.Meter) { }
+        IMongoDatabase database,
+        INotificationWriter notificationWriter)
+        : this(logger, options, consumer, positionRepository, database, notificationWriter, WorkerTelemetry.Meter) { }
 
     internal PositionChannelRegistry(
         ILogger<PositionChannelRegistry> logger,
@@ -42,6 +46,7 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
         IRmeEventConsumer consumer,
         IPositionRepository positionRepository,
         IMongoDatabase database,
+        INotificationWriter notificationWriter,
         Meter meter)
     {
         _logger = logger;
@@ -49,6 +54,7 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
         _consumer = consumer;
         _positionRepository = positionRepository;
         _database = database;
+        _notificationWriter = notificationWriter;
 
         // REQ-RME-CONC-004: platform-wide max backlog gauge
         meter.CreateObservableGauge(
@@ -225,7 +231,7 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
             // If the consumer returned the same instance (no change), skip the write
             if (ReferenceEquals(updatedPosition, position) && outputs.Count == 0)
             {
-                ApplyOutputs(positionId, outputs);
+                await ApplyOutputsAsync(positionId, outputs, position, evt, cancellationToken);
                 return;
             }
 
@@ -238,7 +244,7 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
             if (result.Success)
             {
                 // Write accepted — apply side-effect descriptors
-                ApplyOutputs(positionId, outputs);
+                await ApplyOutputsAsync(positionId, outputs, position, evt, cancellationToken);
                 _logger.LogDebug(
                     "Position {PositionId} updated to version {Version} after {EventType}.",
                     positionId, result.NewVersion, evt.GetType().Name);
@@ -280,10 +286,13 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
 
     /// <summary>
     /// Applies side-effect descriptors from RME outputs.
-    /// Writes <c>rme_incidents</c> and <c>audit_events</c> records as required
-    /// by the transition side-effects (REQ-RME-CONC-007, REQ-PLC-005a).
+    /// Writes <c>rme_incidents</c>, <c>audit_events</c>, and notification records
+    /// as required by the transition side-effects (REQ-RME-CONC-007, REQ-PLC-005a,
+    /// REQ-PLC-010(c)).
     /// </summary>
-    private void ApplyOutputs(Guid positionId, IReadOnlyList<RmeOutput> outputs)
+    private async Task ApplyOutputsAsync(Guid positionId, IReadOnlyList<RmeOutput> outputs,
+        PositionDocument? position = null, RmeEvent? evt = null,
+        CancellationToken cancellationToken = default)
     {
         foreach (var output in outputs)
         {
@@ -311,6 +320,14 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
                     output.Transition?.ReasonCode ?? "(none)");
 
                 WriteIncidentFromOutput(positionId, output);
+            }
+
+            // REQ-PLC-010(c): write user-facing and admin notifications when a
+            // corporate action discontinuity triggers a suspension.
+            if (output.Transition?.ReasonCode == "corporate_action_detected"
+                && position is not null && evt is CorporateActionDetectedEvent cae)
+            {
+                await WriteCaNotificationsAsync(positionId, position, cae, cancellationToken);
             }
 
             // REQ-PLC-005a: write audit_events for all ADMIN-source transitions.
@@ -343,6 +360,7 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
                 "extreme_gap_event" => "suspension_gap_event",
                 "kill_switch_activated" => "suspension_kill_switch",
                 "user_signal_suspended" => "suspension_signal_suspended",
+                "corporate_action_detected" => "corporate_action_suspension",
                 "account_deactivated" => "suspension_account_deactivated",
                 "signal_type_disabled" => "suspension_signal_disabled",
                 "subscription_paused" => "suspension_subscription_paused",
@@ -430,6 +448,90 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
             _logger.LogError(ex,
                 "Failed to write concurrency_conflict_unresolved incident for position {PositionId}.",
                 positionId);
+        }
+    }
+
+    /// <summary>
+    /// Writes user-facing <c>corporate_action_warning</c> and admin
+    /// <c>admin_corporate_action_discontinuity</c> notifications when a
+    /// corporate action discontinuity suspends a position (REQ-PLC-010(c)).
+    /// </summary>
+    private async Task WriteCaNotificationsAsync(
+        Guid positionId, PositionDocument position, CorporateActionDetectedEvent cae,
+        CancellationToken ct)
+    {
+        try
+        {
+            // ── Resolve user's MongoDB ObjectId from the users collection ────
+            var usersCollection = _database.GetCollection<UserDocument>("users");
+            var userFilter = Builders<UserDocument>.Filter.Eq(u => u.UserId, position.UserId);
+            var userDoc = await usersCollection.Find(userFilter).FirstOrDefaultAsync(ct);
+            if (userDoc is null)
+            {
+                _logger.LogError(
+                    "CA notification: user {UserId} not found for position {PositionId}. " +
+                    "Skipping notification writing.",
+                    position.UserId, positionId);
+                return;
+            }
+
+            var userObjectId = userDoc.Id;
+            var now = DateTime.UtcNow;
+
+            // ── User-facing notification ────────────────────────────────────
+            var userNotification = new NotificationDocument
+            {
+                Id = ObjectId.GenerateNewId(),
+                UserId = userObjectId,
+                NotificationType = NotificationType.CorporateActionWarning,
+                Symbol = position.Symbol,
+                Content = $"A corporate action has been detected for {position.Symbol}. " +
+                    $"FYERS reports avg cost ₹{cae.FyersAvgCost:F2} (qty {cae.FyersQuantity}) vs " +
+                    $"FIFO avg cost ₹{cae.FifoAvgCost:F2} (qty {cae.FifoQuantity}), " +
+                    $"delta {cae.DeltaPercent:F1}%. The position has been suspended pending " +
+                    $"admin review. No action is needed from you at this time. " +
+                    "Trading signals and risk management for NSE stocks involve market risk. " +
+                    "Past performance does not guarantee future results.",
+                GeneratedAt = now,
+                TelegramDeliveryStatus = "pending",
+                TelegramDeliveryAttempts = 0,
+                IsRead = false,
+                IsAdminNotification = false,
+            };
+
+            // ── Admin notification ──────────────────────────────────────────
+            var adminNotification = new NotificationDocument
+            {
+                Id = ObjectId.GenerateNewId(),
+                UserId = ObjectId.Empty, // platform-wide, not user-scoped
+                NotificationType = NotificationType.AdminCorporateActionDiscontinuity,
+                Symbol = position.Symbol,
+                Content = $"Corporate action discontinuity detected for {position.Symbol} " +
+                    $"(position {positionId}). " +
+                    $"FYERS: qty={cae.FyersQuantity}, avgCost=₹{cae.FyersAvgCost:F2}. " +
+                    $"FIFO: qty={cae.FifoQuantity}, avgCost=₹{cae.FifoAvgCost:F2}. " +
+                    $"Delta={cae.DeltaPercent:F1}%. Position {positionId} suspended. " +
+                    "Admin re-anchor required via admin portal per REQ-ADMIN-016(c).",
+                GeneratedAt = now,
+                TelegramDeliveryStatus = "pending",
+                TelegramDeliveryAttempts = 0,
+                IsRead = false,
+                IsAdminNotification = true,
+            };
+
+            await _notificationWriter.WriteBatchAsync(
+                [userNotification, adminNotification], ct);
+
+            _logger.LogInformation(
+                "CA notifications written for position {PositionId}: " +
+                "corporate_action_warning (user {UserId}) and " +
+                "admin_corporate_action_discontinuity.",
+                positionId, position.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to write CA notifications for position {PositionId}.", positionId);
         }
     }
 

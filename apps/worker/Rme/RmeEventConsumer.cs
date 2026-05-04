@@ -142,6 +142,7 @@ internal sealed class RmeEventConsumer : IRmeEventConsumer
         },
         DrawdownStateChangedEvent => null, // advisory-only, no state transition
         KillSwitchActivatedEvent => TransitionReason.KillSwitchActivated,
+        CorporateActionDetectedEvent => TransitionReason.CorporateActionDetected,
         TrailingStopUpdateEvent => null, // ADR-0003 carve-out, handled synchronously
         _ => null,
     };
@@ -182,6 +183,10 @@ internal sealed class RmeEventConsumer : IRmeEventConsumer
                 "Reduce advisory: price has reached the reduce level.",
             (KillSwitchActivatedEvent, _) =>
                 "Kill switch activated. Position suspended.",
+            (CorporateActionDetectedEvent cae, _) =>
+                $"Corporate action detected: FYERS avg cost ₹{cae.FyersAvgCost:F2} vs " +
+                $"FIFO avg cost ₹{cae.FifoAvgCost:F2} (delta {cae.DeltaPercent:F1}%). " +
+                "Position suspended per REQ-PLC-010.",
             (_, not null) =>
                 $"Position event: source={source}, reason={reason}.",
             _ => null,

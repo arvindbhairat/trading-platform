@@ -55,6 +55,7 @@ public sealed class LiveAccountDataSyncService
     private readonly IntentReconciliationService _reconciliationService;
     private readonly IPositionChannelRegistry _channelRegistry;
     private readonly IPositionRepository _positionRepository;
+    private readonly CorporateActionDetectionService _caDetectionService;
 
     // ── OTEL metrics (REQ-PORT-021a(a)) ──────────────────────────────────
     private static readonly Counter<long> CycleAbortedCounter = WorkerTelemetry.Meter
@@ -87,7 +88,8 @@ public sealed class LiveAccountDataSyncService
         TradeIngestionService ingestionService,
         IntentReconciliationService reconciliationService,
         IPositionChannelRegistry channelRegistry,
-        IPositionRepository positionRepository)
+        IPositionRepository positionRepository,
+        CorporateActionDetectionService caDetectionService)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -98,6 +100,7 @@ public sealed class LiveAccountDataSyncService
         _reconciliationService = reconciliationService ?? throw new ArgumentNullException(nameof(reconciliationService));
         _channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
         _positionRepository = positionRepository ?? throw new ArgumentNullException(nameof(positionRepository));
+        _caDetectionService = caDetectionService ?? throw new ArgumentNullException(nameof(caDetectionService));
     }
 
     /// <summary>
@@ -164,7 +167,8 @@ public sealed class LiveAccountDataSyncService
 
                 // P5-T9: trade data from FYERS intraday API to be passed here.
                 // For now, empty list — ingestion is a no-op when no trades.
-                await SyncUserAccountAsync(user, accountSyncCollection, [], ct);
+                // P8-T13: FYERS holdings data to be passed here for CA detection.
+                await SyncUserAccountAsync(user, accountSyncCollection, [], [], ct);
                 processedCount++;
             }
             catch (MongoException ex)
@@ -370,11 +374,17 @@ public sealed class LiveAccountDataSyncService
     /// <c>ledger_snapshot_version</c> after the durable write. The fencing
     /// token guards against stale writes; if a fencing abort is detected
     /// the version is NOT incremented (REQ-PORT-031b invariant A-11).
+    ///
+    /// After trade ingestion, CA detection runs against FYERS-reported holdings
+    /// (REQ-PORT-016, REQ-PLC-010). When a discontinuity is found, a
+    /// <see cref="CorporateActionDetectedEvent"/> is enqueued to the per-position
+    /// channel, which triggers position suspension (corporate_action_detected).
     /// </summary>
     private async Task SyncUserAccountAsync(
         UserSyncInfo user,
         IMongoCollection<BsonDocument> accountSyncCollection,
         IReadOnlyList<RawTrade> rawTrades,
+        IReadOnlyList<FyersHolding> fyersHoldings,
         CancellationToken ct)
     {
         // ── Step 1: Acquire the per-user trade-ledger write lock ────────────
@@ -437,7 +447,68 @@ public sealed class LiveAccountDataSyncService
                 }
             }
 
-            // ── Step 2b: LADS intent-reconciliation safety net (REQ-ORDER-015c) ──
+            // ── Step 2b: Corporate action discontinuity detection (REQ-PORT-016, REQ-PLC-010) ──
+            // After trade ingestion, compare FYERS-reported holdings against
+            // FIFO-derived position state. When a discontinuity meets either
+            // condition (quantity mismatch or cost delta exceeding threshold),
+            // emit a CorporateActionDetectedEvent through the per-position channel.
+            // The RME consumer transitions the position to Suspended
+            // (corporate_action_detected) per REQ-PLC-010.
+            // Non-critical: failures are logged but do not block the sync.
+            if (fyersHoldings.Count > 0)
+            {
+                try
+                {
+                    var discontinuities = await _caDetectionService.DetectAsync(
+                        user.UserId, fyersHoldings, ct);
+
+                    foreach (var disc in discontinuities)
+                    {
+                        // Find the Open position for this symbol to enqueue the event.
+                        var openPositions = await _positionRepository.GetByUserIdAndStateAsync(
+                            user.UserId, PositionState.Open, ct);
+                        var position = openPositions.FirstOrDefault(p =>
+                            string.Equals(p.Symbol, disc.Symbol, StringComparison.OrdinalIgnoreCase));
+
+                        if (position is null)
+                        {
+                            _logger.LogWarning(
+                                "CA detection: no Open position found for symbol {Symbol} (user {UserId}). " +
+                                "Discontinuity recorded but no position to suspend.",
+                                disc.Symbol, user.UserId);
+                            continue;
+                        }
+
+                        var caEvent = new CorporateActionDetectedEvent
+                        {
+                            PositionId = position.PositionId,
+                            OccurredAt = DateTimeOffset.UtcNow,
+                            Source = "CORPORATE_ACTION",
+                            FyersQuantity = disc.FyersQuantity,
+                            FyersAvgCost = disc.FyersAvgCost,
+                            FifoQuantity = disc.FifoQuantity,
+                            FifoAvgCost = disc.FifoAvgCost,
+                            DeltaPercent = disc.AvgCostDeltaPercent,
+                        };
+
+                        await _channelRegistry.EnqueueAsync(caEvent, ct);
+
+                        _logger.LogWarning(
+                            "CA detection: emitted CorporateActionDetectedEvent for position {PositionId} " +
+                            "(symbol: {Symbol}, user: {UserId}, delta: {Delta:F1}%).",
+                            position.PositionId, disc.Symbol, user.UserId, disc.AvgCostDeltaPercent);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "CA detection: failed for user {UserId}. " +
+                        "Trade ingestion completed; CA detection is non-critical.",
+                        user.UserId);
+                }
+            }
+
+            // ── Step 2c: LADS intent-reconciliation safety net (REQ-ORDER-015c) ──
             // Runs after trade ingestion to reconcile observed FYERS trades against
             // intent_ledger records. Handles callback-matched stamping, callback-missed
             // promotion, unresolved timeout, and orphan detection.

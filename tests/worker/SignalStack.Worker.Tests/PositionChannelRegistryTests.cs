@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Moq;
+using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
 using Xunit;
 
@@ -19,6 +20,8 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
     public void Dispose() => _meter.Dispose();
 
+    private static readonly INotificationWriter _notificationWriter = Mock.Of<INotificationWriter>();
+
     private PositionChannelRegistry BuildRegistry(
         IRmeEventConsumer consumer,
         IPositionRepository repository,
@@ -28,7 +31,8 @@ public sealed class PositionChannelRegistryTests : IDisposable
             Options.Create(options ?? new PositionChannelOptions()),
             consumer,
             repository,
-            _database);
+            _database,
+            _notificationWriter);
 
     // ─── REQ-RME-CONC-001 / Vertical slice ───────────────────────────────────
 

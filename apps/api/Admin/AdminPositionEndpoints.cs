@@ -196,8 +196,152 @@ public static class AdminPositionEndpoints
                 actionType: "position_force_closed");
         }).RequireAuthorization();
 
+        // POST /api/v1/admin/positions/{positionId}/reanchor
+        // Re-anchors and releases a CORPORATE_ACTION-suspended position.
+        // Step-up gated. The admin provides corrected quantity and entry price
+        // reflecting the corporate action adjustment (split, bonus, rights, etc.).
+        // Closes the associated rme_incidents record and transitions the position
+        // to Open (or PendingEntry if the corrected entry price is zero).
+        // REQ-ADMIN-016(c): corporate_action-sourced suspensions require this
+        // dedicated resolution flow (no direct state-flip release).
+        admin.MapPost("/positions/{positionId}/reanchor", async (
+            string positionId,
+            ReanchorRequest body,
+            HttpContext context,
+            ISessionRepository sessionRepo,
+            IAuditEventRepository auditRepo,
+            IUserRepository userRepo,
+            IMongoDatabase database) =>
+        {
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+
+            // Verify admin role.
+            var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
+            if (user is null || user.Role != UserRole.Admin)
+                return Results.Forbid();
+
+            // REQ-SEC-011: validate step-up.
+            var jti = context.User.FindFirst("jti")?.Value ?? "";
+            var session = await sessionRepo.FindBySessionTokenAsync(jti, context.RequestAborted);
+            var stepUpValid = session?.StepUpAuthenticatedAt.HasValue == true
+                && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
+            if (!stepUpValid)
+            {
+                return Results.Json(
+                    new { error = "step_up_required" },
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            if (!Guid.TryParse(positionId, out var posGuid))
+                return Results.BadRequest(new { error = "invalid_position_id" });
+
+            var positions = database.GetCollection<BsonDocument>("positions");
+            var incidents = database.GetCollection<BsonDocument>("rme_incidents");
+            var ct = context.RequestAborted;
+
+            // Read current position.
+            var current = await positions
+                .Find(Builders<BsonDocument>.Filter.Eq("_id", posGuid))
+                .FirstOrDefaultAsync(ct);
+
+            if (current is null)
+                return Results.NotFound(new { error = "position_not_found" });
+
+            var currentState = current.GetValue("state", "").AsString;
+            if (currentState != StateSuspended)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "not_suspended",
+                    message = "Only suspended positions can be re-anchored.",
+                    current_state = currentState
+                });
+            }
+
+            // Verify there is an open rme_incidents record for a corporate action suspension.
+            var caIncident = await incidents
+                .Find(Builders<BsonDocument>.Filter.And(
+                    Builders<BsonDocument>.Filter.Eq("position_id", positionId),
+                    Builders<BsonDocument>.Filter.Eq("incident_type", "corporate_action_suspension"),
+                    Builders<BsonDocument>.Filter.Eq("status", "open")))
+                .FirstOrDefaultAsync(ct);
+
+            if (caIncident is null)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "not_corporate_action_suspension",
+                    message = "Position is suspended but no open corporate_action_suspension " +
+                              "incident record exists. Use the standard release endpoint " +
+                              "for non-CA suspensions."
+                });
+            }
+
+            var now = DateTime.UtcNow;
+
+            // Write audit event before mutation.
+            await auditRepo.RecordStepUpGatedAsync(
+                userId,
+                "position_reanchored",
+                now,
+                session!.StepUpEventId!.Value,
+                details: new Dictionary<string, object?>
+                {
+                    ["position_id"] = positionId,
+                    ["previous_state"] = currentState,
+                    ["new_quantity"] = body.Quantity,
+                    ["new_entry_price"] = body.EntryPrice,
+                    ["justification"] = body.Justification,
+                },
+                cancellationToken: ct);
+
+            // Determine restoration state.
+            var restoreState = body.EntryPrice == 0m ? StatePendingEntry : StateOpen;
+
+            // Update position: apply re-anchored values and release from suspension.
+            var positionFilter = Builders<BsonDocument>.Filter.Eq("_id", posGuid);
+            var positionUpdate = Builders<BsonDocument>.Update
+                .Set("state", restoreState)
+                .Set("quantity", (double)body.Quantity)
+                .Set("entry_price", (double)body.EntryPrice)
+                .Set("updated_at", now.ToString("o"));
+
+            await positions.UpdateOneAsync(positionFilter, positionUpdate, cancellationToken: ct);
+
+            // Close the incident record.
+            var incidentFilter = Builders<BsonDocument>.Filter.Eq("_id", caIncident["_id"]);
+            var incidentUpdate = Builders<BsonDocument>.Update
+                .Set("status", "resolved")
+                .Set("resolved_at", now.ToString("o"))
+                .Set("resolved_by", userId)
+                .Set("updated_at", now.ToString("o"));
+
+            await incidents.UpdateOneAsync(incidentFilter, incidentUpdate, cancellationToken: ct);
+
+            return Results.Ok(new
+            {
+                position_id = positionId,
+                previous_state = currentState,
+                restored_state = restoreState,
+                quantity = body.Quantity,
+                entry_price = body.EntryPrice,
+                message = $"Position re-anchored and released from CA suspension. " +
+                          $"Restored to {restoreState} with qty={body.Quantity}, entryPrice={body.EntryPrice}."
+            });
+        }).RequireAuthorization();
+
         return app;
     }
+
+    /// <summary>
+    /// Request body for the re-anchor endpoint.
+    /// </summary>
+    private sealed record ReanchorRequest(
+        decimal Quantity,
+        decimal EntryPrice,
+        string? Justification = null);
 
     private static async Task<IResult> ModifyPositionStateAsync(
         HttpContext context,

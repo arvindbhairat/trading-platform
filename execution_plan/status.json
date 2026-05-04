@@ -138,10 +138,10 @@
     "P8-T9",
     "P8-T10",
     "P8-T11",
-    "P8-T12"
+    "P8-T12",
+    "P8-T13"
   ],
   "pending_tasks": [
-    "P8-T13",
     "P8-T15",
     "P8-T16",
     "P8-T14",
@@ -533,9 +533,12 @@
       "REQ-ACCESS-001",
       "REQ-SEC-010",
       "REQ-NFR-014",
-      "engineering-standards § Load-test SLO targets"
+      "engineering-standards § Load-test SLO targets",
+      "REQ-PLC-010",
+      "REQ-PORT-016",
+      "REQ-ADMIN-016c"
     ],
     "P9": []
   },
-  "last_updated": "2026-05-04T20:54:05Z"
+  "last_updated": "2026-05-04T21:16:41Z"
 }
