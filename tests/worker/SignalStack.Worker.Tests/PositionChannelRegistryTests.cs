@@ -563,6 +563,13 @@ file sealed class DelegatingPositionRepository : IPositionRepository
         return Task.FromResult(OnGetNonTerminal?.Invoke() ?? new List<PositionDocument>());
     }
 
+    public Task<List<PositionDocument>> GetNonTerminalByUserIdAsync(
+        string userId, CancellationToken ct = default)
+    {
+        var all = OnGetNonTerminal?.Invoke() ?? new List<PositionDocument>();
+        return Task.FromResult(all.Where(p => p.UserId == userId).ToList());
+    }
+
     public Task<List<PositionDocument>> GetByUserIdAndStateAsync(
         string userId, PositionState state, CancellationToken ct = default)
     {
@@ -619,6 +626,17 @@ file sealed class MongoPositionRepositoryStub : IPositionRepository
     {
         return Task.FromResult(_store.Values
             .Where(e => e.Doc.State != PositionState.Closed && e.Doc.State != PositionState.Rejected)
+            .Select(e => e.Doc)
+            .ToList());
+    }
+
+    public Task<List<PositionDocument>> GetNonTerminalByUserIdAsync(
+        string userId, CancellationToken ct = default)
+    {
+        return Task.FromResult(_store.Values
+            .Where(e => e.Doc.UserId == userId
+                     && e.Doc.State != PositionState.Closed
+                     && e.Doc.State != PositionState.Rejected)
             .Select(e => e.Doc)
             .ToList());
     }

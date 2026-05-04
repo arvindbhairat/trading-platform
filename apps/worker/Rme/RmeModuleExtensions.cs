@@ -32,6 +32,12 @@ public static class RmeModuleExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // ── P6-T19: Portfolio heat calculator + correlated industry groups ────
+        services
+            .AddOptions<CorrelatedIndustryGroupOptions>()
+            .BindConfiguration(CorrelatedIndustryGroupOptions.SectionName)
+            .ValidateOnStart();
+
         // ── P6-T3: Position lifecycle state machine ─────────────────────────
         // ITransitionValidator — immutable, thread-safe, encodes the full
         // authoritative state-transition matrix (REQ-PLC-002a).
@@ -125,6 +131,12 @@ public static class RmeModuleExtensions
         // synchronously before LMDS/LADS pollers start for the new session.
         // Not routed through the per-position channel (REQ-RME-CONC-005).
         services.AddSingleton<ITrailingStopSyncService, TrailingStopSyncService>();
+
+        // ── P6-T19: Portfolio heat calculator + maximum enforcement ────────────
+        // IPortfolioHeatCalculator computes current portfolio heat from open
+        // positions and equity base, and enforces the configured maximum heat
+        // threshold (REQ-HEAT-001, REQ-HEAT-002, REQ-HEAT-003).
+        services.AddSingleton<IPortfolioHeatCalculator, PortfolioHeatCalculator>();
 
         // Background service — skeleton only; real work added by P6-T24.
         services.AddHostedService<RmeBackgroundService>();

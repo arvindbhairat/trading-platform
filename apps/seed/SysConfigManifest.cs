@@ -63,6 +63,7 @@ public static class SysConfigManifest
         new("risk.equity_override_stale_days",         "risk",           "number",  "30",   "Days after which an equity-base override is considered stale.",                                                     "REQ-RME-006c"),
         new("risk.equity_base.external_divergence_warn_pct","risk",      "number",  "15",   "Divergence threshold percentage between FYERS total and platform-visible equity before advisory fires.",            "REQ-RME-006e"),
         new("risk.default.portfolio_heat_warning_threshold_pct","risk",  "number",  "4",    "Portfolio heat warning threshold percentage.",                                                                      "REQ-ORDER-012"),
+        new("risk.correlated_industry_groups",           "risk",           "string",  "[{\"group_name\":\"Banking & Finance\",\"industry_names\":[\"Banking\",\"Finance\"]},{\"group_name\":\"Metals\",\"industry_names\":[\"Metals\",\"Metal Products\"]},{\"group_name\":\"Oil & Gas\",\"industry_names\":[\"Oil\",\"Gas\"]}]", "Correlated industry groups as JSON array of {group_name, industry_names[]}.", "REQ-SIZING-014a"),
 
         // ── rme ───────────────────────────────────────────────────────────
         new("rme.channel.backlog_warn_depth",          "rme",            "number",  "20",   "Per-position channel backlog depth warning threshold.",                                                             "REQ-RME-CONC-004"),

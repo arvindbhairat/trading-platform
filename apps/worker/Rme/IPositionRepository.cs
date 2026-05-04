@@ -38,6 +38,14 @@ public interface IPositionRepository
     Task<List<PositionDocument>> GetNonTerminalAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Load all non-terminal (PendingEntry, Open, Suspended) position documents
+    /// for a specific user. Used by the portfolio heat calculator to compute
+    /// per-user heat contributions (REQ-HEAT-001, REQ-HEAT-002).
+    /// </summary>
+    Task<List<PositionDocument>> GetNonTerminalByUserIdAsync(
+        string userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Load all positions for a given user in a specific state.
     /// Used by LADS to find PendingEntry positions after fill detection,
     /// and by EODSR to find existing positions before creating new ones.

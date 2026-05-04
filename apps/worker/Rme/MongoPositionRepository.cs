@@ -71,6 +71,16 @@ internal sealed class MongoPositionRepository : IPositionRepository
             .ToListAsync(ct);
     }
 
+    public async Task<List<PositionDocument>> GetNonTerminalByUserIdAsync(
+        string userId, CancellationToken ct = default)
+    {
+        return await _collection
+            .Find(p => p.UserId == userId
+                    && p.State != PositionState.Closed
+                    && p.State != PositionState.Rejected)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<PositionDocument>> GetByUserIdAndStateAsync(
         string userId, PositionState state, CancellationToken ct = default)
     {

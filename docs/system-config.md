@@ -283,6 +283,7 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `risk.default.max_concurrent_positions` | risk | number | 20 | REQ-HEAT-005 |
 | `risk.default.min_cash_reserve_pct` | risk | number | 20 | REQ-HEAT-007 |
 | `risk.default.max_portfolio_heat_pct` | risk | number | 5 | REQ-HEAT-002 |
+| `risk.correlated_industry_groups` | risk | string | `[{"group_name":"Banking & Finance","industry_names":["Banking","Finance"]},{"group_name":"Metals","industry_names":["Metals","Metal Products"]},{"group_name":"Oil & Gas","industry_names":["Oil","Gas"]}]` | REQ-SIZING-014a |
 | `risk.drawdown.daily_loss_limit_pct` | risk | number | 2 | REQ-DRDN-002 |
 | `risk.drawdown.weekly_loss_limit_pct` | risk | number | 4 | REQ-DRDN-002 |
 | `risk.drawdown.monthly_loss_limit_pct` | risk | number | 6 | REQ-DRDN-002 |
