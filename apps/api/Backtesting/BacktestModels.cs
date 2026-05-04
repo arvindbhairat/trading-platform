@@ -13,6 +13,12 @@ public sealed record BacktestOptions
     public decimal StartingEquity { get; init; } = 1_000_000m;
     public string? RmeConfigurationJson { get; init; }
     public string? SignalParametersJson { get; init; }
+
+    /// <summary>
+    /// Optional symbol filter — when set, only these symbols are evaluated.
+    /// P6-T23: used by profile optimisation for single-symbol backtests.
+    /// </summary>
+    public List<string>? Symbols { get; init; }
 }
 
 /// <summary>Complete output of a backtest run. REQ-BTSTORE-003/006.</summary>

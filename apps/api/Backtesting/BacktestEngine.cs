@@ -82,13 +82,22 @@ public sealed class BacktestEngine
         var indicatorLength = 30; // default slow period for MA crossover
         var minSessions = indicatorLength * sessionsPerCandle;
 
-        // Load active universe
-        var allSymbols = await _symbolRepo.GetAllAsync(archived: false, ct);
-        var activeSymbols = allSymbols
-            .Where(s => !string.IsNullOrWhiteSpace(s.SqlTableNameSuffix))
-            .Select(s => s.Symbol)
-            .OrderBy(s => s)
-            .ToList();
+        // Load active universe (or use supplied symbol filter)
+        List<string> activeSymbols;
+        if (options.Symbols is { Count: > 0 })
+        {
+            activeSymbols = options.Symbols;
+            _logger.LogInformation("Using explicit symbol filter: {Symbols}", string.Join(", ", activeSymbols));
+        }
+        else
+        {
+            var allSymbols = await _symbolRepo.GetAllAsync(archived: false, ct);
+            activeSymbols = allSymbols
+                .Where(s => !string.IsNullOrWhiteSpace(s.SqlTableNameSuffix))
+                .Select(s => s.Symbol)
+                .OrderBy(s => s)
+                .ToList();
+        }
 
         _logger.LogInformation("Backtest universe has {Count} active symbols.", activeSymbols.Count);
 
