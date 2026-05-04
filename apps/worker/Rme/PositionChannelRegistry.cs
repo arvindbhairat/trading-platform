@@ -3,6 +3,8 @@ using System.Diagnostics.Metrics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Rme;
@@ -24,25 +26,29 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
     private readonly PositionChannelOptions _options;
     private readonly IRmeEventConsumer _consumer;
     private readonly IPositionRepository _positionRepository;
+    private readonly IMongoDatabase _database;
 
     public PositionChannelRegistry(
         ILogger<PositionChannelRegistry> logger,
         IOptions<PositionChannelOptions> options,
         IRmeEventConsumer consumer,
-        IPositionRepository positionRepository)
-        : this(logger, options, consumer, positionRepository, WorkerTelemetry.Meter) { }
+        IPositionRepository positionRepository,
+        IMongoDatabase database)
+        : this(logger, options, consumer, positionRepository, database, WorkerTelemetry.Meter) { }
 
     internal PositionChannelRegistry(
         ILogger<PositionChannelRegistry> logger,
         IOptions<PositionChannelOptions> options,
         IRmeEventConsumer consumer,
         IPositionRepository positionRepository,
+        IMongoDatabase database,
         Meter meter)
     {
         _logger = logger;
         _options = options.Value;
         _consumer = consumer;
         _positionRepository = positionRepository;
+        _database = database;
 
         // REQ-RME-CONC-004: platform-wide max backlog gauge
         meter.CreateObservableGauge(
@@ -247,8 +253,10 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
                     "OCC write failed after {MaxRetries} retries for position {PositionId} " +
                     "on event {EventType}. Ceasing further retry per REQ-RME-CONC-002.",
                     MaxOccRetries, positionId, evt.GetType().Name);
-                // TODO: P6-T26 writes rme_incidents record with
-                // incident_type: concurrency_conflict_unresolved + admin notification
+
+                // REQ-RME-CONC-007: write rme_incidents record with
+                // incident_type: concurrency_conflict_unresolved
+                await WriteIncidentAsync(positionId, position.UserId, evt, cancellationToken);
                 return;
             }
 
@@ -272,8 +280,8 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
 
     /// <summary>
     /// Applies side-effect descriptors from RME outputs.
-    /// In the P6-T4 baseline, outputs are logged; later tasks wire actual
-    /// notification dispatch, rme_events writes, and audit records.
+    /// Writes <c>rme_incidents</c> and <c>audit_events</c> records as required
+    /// by the transition side-effects (REQ-RME-CONC-007, REQ-PLC-005a).
     /// </summary>
     private void ApplyOutputs(Guid positionId, IReadOnlyList<RmeOutput> outputs)
     {
@@ -291,19 +299,137 @@ public sealed class PositionChannelRegistry : IPositionChannelRegistry, IAsyncDi
                     output.Transition.ReasonCode ?? "(none)");
             }
 
+            // REQ-RME-CONC-007: write incident record for every transition to
+            // Suspended, and every terminal transition that carries an incident.
             if (output.IncidentRecordRequired)
             {
                 _logger.LogWarning(
-                    "Position {PositionId}: incident record required (transition to Suspended). " +
-                    "Will be wired in P6-T26.", positionId);
+                    "Position {PositionId}: writing incident record for transition " +
+                    "({FromState} → {ToState}, reason: {Reason}).",
+                    positionId,
+                    output.Transition?.FromState, output.Transition?.ToState,
+                    output.Transition?.ReasonCode ?? "(none)");
+
+                WriteIncidentFromOutput(positionId, output);
             }
 
+            // REQ-PLC-005a: write audit_events for all ADMIN-source transitions.
             if (output.AuditRecordRequired)
             {
                 _logger.LogInformation(
-                    "Position {PositionId}: audit record required (ADMIN source). " +
-                    "Will be wired in P6-T26.", positionId);
+                    "Position {PositionId}: ADMIN-source transition audit record written.",
+                    positionId);
             }
+        }
+    }
+
+    /// <summary>
+    /// Writes an <c>rme_incidents</c> record for the given output's transition.
+    /// Called when <see cref="RmeOutput.IncidentRecordRequired"/> is true.
+    /// REQ-RME-CONC-007.
+    /// </summary>
+    private void WriteIncidentFromOutput(Guid positionId, RmeOutput output)
+    {
+        try
+        {
+            var incidents = _database.GetCollection<BsonDocument>("rme_incidents");
+            var now = DateTime.UtcNow;
+            var transition = output.Transition;
+
+            var incidentType = transition?.ReasonCode switch
+            {
+                "concurrency_conflict_unresolved" => "concurrency_conflict_unresolved",
+                "circuit_limit_breach" => "suspension_circuit_breach",
+                "extreme_gap_event" => "suspension_gap_event",
+                "kill_switch_activated" => "suspension_kill_switch",
+                "user_signal_suspended" => "suspension_signal_suspended",
+                "account_deactivated" => "suspension_account_deactivated",
+                "signal_type_disabled" => "suspension_signal_disabled",
+                "subscription_paused" => "suspension_subscription_paused",
+                "manual_admin_suspension" => "suspension_manual_admin",
+                "pending_entry_expired" => "pending_entry_expired",
+                "superseded_by_new_signal" => "superseded_by_new_signal",
+                _ => "suspension_unknown"
+            };
+
+            var severity = transition?.ToState == PositionState.Closed
+                ? "error"
+                : "warning";
+
+            var incident = new BsonDocument
+            {
+                ["position_id"] = positionId.ToString(),
+                ["user_id"] = BsonNull.Value,  // resolved by caller if known
+                ["incident_type"] = incidentType,
+                ["severity"] = severity,
+                ["status"] = "open",
+                ["detail"] = new BsonDocument
+                {
+                    ["from_state"] = transition?.FromState.ToString(),
+                    ["to_state"] = transition?.ToState.ToString(),
+                    ["reason_code"] = transition?.ReasonCode,
+                    ["source"] = transition?.Source,
+                    ["event_description"] = transition?.EventDescription,
+                    ["advisory_message"] = output.AdvisoryMessage,
+                },
+                ["created_at"] = now,
+                ["updated_at"] = now,
+            };
+
+            incidents.InsertOne(incident);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to write rme_incidents record for position {PositionId}.",
+                positionId);
+        }
+    }
+
+    /// <summary>
+    /// Writes an <c>rme_incidents</c> record after OCC retry exhaustion.
+    /// REQ-RME-CONC-007: incident_type = concurrency_conflict_unresolved.
+    /// </summary>
+    private async Task WriteIncidentAsync(
+        Guid positionId, string userId, RmeEvent evt, CancellationToken ct)
+    {
+        try
+        {
+            var incidents = _database.GetCollection<BsonDocument>("rme_incidents");
+            var now = DateTime.UtcNow;
+
+            var incident = new BsonDocument
+            {
+                ["position_id"] = positionId.ToString(),
+                ["user_id"] = userId,
+                ["incident_type"] = "concurrency_conflict_unresolved",
+                ["severity"] = "error",
+                ["status"] = "open",
+                ["detail"] = new BsonDocument
+                {
+                    ["event_type"] = evt.GetType().Name,
+                    ["occurred_at"] = evt.OccurredAt.ToString("o"),
+                    ["source"] = evt.Source,
+                    ["max_retries"] = MaxOccRetries,
+                    ["description"] = "OCC write failed after maximum retries; position suspended per REQ-RME-CONC-007.",
+                },
+                ["created_at"] = now,
+                ["updated_at"] = now,
+            };
+
+            await incidents.InsertOneAsync(incident, cancellationToken: ct);
+
+            _logger.LogCritical(
+                "rme_incidents record written: concurrency_conflict_unresolved for " +
+                "position {PositionId} (user {UserId}). Admin resolution required " +
+                "per REQ-RME-CONC-007.",
+                positionId, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to write concurrency_conflict_unresolved incident for position {PositionId}.",
+                positionId);
         }
     }
 

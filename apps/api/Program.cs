@@ -298,6 +298,9 @@ app.MapAdminSignalTypeEndpoints();
 // Admin position management endpoints (suspend/release/force-close) — P6-T25 / REQ-ADMIN-016, REQ-PLC-005a
 app.MapAdminPositionEndpoints();
 
+// Admin incident dashboard endpoints — P6-T26 / REQ-RME-CONC-007
+app.MapAdminIncidentEndpoints();
+
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
 
