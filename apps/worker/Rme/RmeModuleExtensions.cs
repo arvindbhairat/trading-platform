@@ -96,6 +96,12 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
         services.AddSingleton<IStopLoss, AtrTrailingStopLoss>();
 
+        // P6-T16: Swing Low Stop — places the stop below the most recent swing low
+        // price with a configurable buffer percentage. Falls back to the default
+        // fixed distance percentage when swing low is unavailable or not below entry.
+        // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
+        services.AddSingleton<IStopLoss, SwingLowStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();

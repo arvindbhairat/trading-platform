@@ -82,6 +82,17 @@ public sealed class RmeModuleOptions
     public double DefaultTrailingStopPercent { get; set; } = 10.0;
 
     /// <summary>
+    /// Default buffer percentage applied below the swing low price.
+    /// The Swing Low Stop places the stop at <c>SwingLowPrice × (1 - bufferPct/100)</c>
+    /// to ensure the stop is strictly below the identified swing low, reducing
+    /// the likelihood of premature stop-outs on swing-low retests.
+    /// Mapped from sys_config <c>risk.stop.swing_low_buffer_pct</c>.
+    /// Default: 0.0 (stop placed exactly at the swing low price).
+    /// </summary>
+    [Range(0.0, 10.0)]
+    public double DefaultSwingLowBufferPct { get; set; } = 0.0;
+
+    /// <summary>
     /// Drawdown threshold at which position-size reduction begins.
     /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
     /// model starts reducing the recommended position size proportionally, reaching
