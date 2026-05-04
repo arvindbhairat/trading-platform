@@ -32,3 +32,14 @@ public sealed record SignedPayloadError(
     string? Message,
     DateTime? LastSuccessfulSyncAt = null
 );
+
+/// <summary>
+/// Request body for the intent callback endpoint.
+/// Called by the frontend after the FYERS widget <c>finished</c> callback fires.
+/// P7-T7 / REQ-ORDER-015/015e/015f.
+/// </summary>
+public sealed record IntentCallbackRequest(
+    string Nonce,
+    string Status,
+    string? RequestToken = null
+);

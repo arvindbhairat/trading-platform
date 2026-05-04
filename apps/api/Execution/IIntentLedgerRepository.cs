@@ -18,4 +18,15 @@ public interface IIntentLedgerRepository
     /// is thrown if the nonce already exists.
     /// </summary>
     Task CreateIntentAsync(IntentLedgerDocument intent, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates an intent record based on the FYERS widget <c>finished</c> callback.
+    /// Sets status to <c>matched</c> or <c>submission_failed</c>, records
+    /// <c>match_source = "callback"</c>, and persists <c>request_token</c>
+    /// and <c>callback_received_at</c>.
+    /// P7-T7 / REQ-ORDER-015/015e/015f.
+    /// </summary>
+    /// <returns>The matched intent document, or null if the nonce was not found.</returns>
+    Task<IntentLedgerDocument?> UpdateIntentFromCallbackAsync(
+        string nonce, string status, string? requestToken, CancellationToken ct = default);
 }

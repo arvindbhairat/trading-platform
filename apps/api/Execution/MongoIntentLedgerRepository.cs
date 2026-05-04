@@ -23,4 +23,36 @@ public sealed class MongoIntentLedgerRepository : IIntentLedgerRepository
     {
         await _intents.InsertOneAsync(intent, cancellationToken: ct);
     }
+
+    /// <inheritdoc />
+    public async Task<IntentLedgerDocument?> UpdateIntentFromCallbackAsync(
+        string nonce, string status, string? requestToken, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var update = Builders<IntentLedgerDocument>.Update
+            .Set(d => d.Status, status)
+            .Set(d => d.MatchSource, "callback")
+            .Set(d => d.CallbackReceivedAt, now)
+            .Set(d => d.UpdatedAt, now);
+
+        if (requestToken is not null)
+            update = update.Set(d => d.RequestToken, requestToken);
+
+        var filter = Builders<IntentLedgerDocument>.Filter.Eq(d => d.Nonce, nonce);
+
+        var options = new FindOneAndUpdateOptions<IntentLedgerDocument>
+        {
+            ReturnDocument = ReturnDocument.After,
+        };
+
+        try
+        {
+            return await _intents.FindOneAndUpdateAsync(filter, update, options, ct);
+        }
+        catch (MongoWriteException)
+        {
+            return null;
+        }
+    }
 }

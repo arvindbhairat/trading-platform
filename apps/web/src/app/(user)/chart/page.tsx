@@ -21,6 +21,7 @@ import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live
 import RmeAdvisoryPanel from "@/components/RmeAdvisoryPanel";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
+import FyersButtonWidget from "@/components/FyersButtonWidget";
 import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,17 @@ export default function ChartPage() {
   // ── Phase 1 modal state (P7-T4) ─────────────────────────────────────────
   const [modalAction, setModalAction] = useState<"entry" | "add" | "reduce" | "exit" | null>(null);
   const showModal = modalAction !== null;
+
+  // ── FYERS widget state (P7-T7) ──────────────────────────────────────────
+  const [activeFyersOrder, setActiveFyersOrder] = useState<{
+    symbol: string;
+    signedPayload: {
+      nonce: string;
+      data_attributes: Record<string, string>;
+      payload_hash: string;
+      expires_at_unix: number;
+    };
+  } | null>(null);
 
   // -------------------------------------------------------------------
   // Load historical OHLCV data
@@ -229,27 +241,39 @@ export default function ChartPage() {
     // The data will be reloaded by the useEffect above.
   };
 
-  // ── Phase 1 modal handlers (P7-T4) ─────────────────────────────────────
+  // ── Phase 1 modal handlers (P7-T4) + FYERS widget (P7-T7) ────────────────
 
   const handleCloseModal = useCallback(() => {
     setModalAction(null);
   }, []);
 
   const handleProceed = useCallback((params: ProceedParams) => {
-    // P7-T5: Signed payload is available in params.signedPayload.
-    // P7-T6 (next task): writes intent_ledger record before widget activation.
-    // P7-T7 (subsequent): renders <fyers-button> and wires finished callback.
-    //
-    // For now, validate that we have a signed payload before closing the modal.
-    // The actual intent write and widget activation are wired in P7-T6 and P7-T7.
-    if (!params.signedPayload && !params.signedPayloadError) {
-      console.warn("[Phase1Modal] Proceeding without signed payload — awaiting P7-T6/T7 wiring.");
-    }
-    if (params.signedPayloadError) {
-      console.warn("[Phase1Modal] Signed payload has an error:", params.signedPayloadError);
-      // Still close the modal — the user sees the error in the modal.
+    // P7-T7: When a valid signed payload exists, transition to the FYERS
+    // button widget. The intent_ledger record was already written by the
+    // signed-payload endpoint (P7-T6). The widget renders <fyers-button>
+    // with backend-signed data-* attributes and handles the finished callback.
+    if (params.signedPayload && !params.signedPayloadError) {
+      setActiveFyersOrder({
+        symbol: params.symbol,
+        signedPayload: params.signedPayload,
+      });
+    } else {
+      // No signed payload or error — just close the modal.
+      // The user already saw the error in the modal UI.
+      console.warn("[ChartPage] Proceeding without valid signed payload:", params.signedPayloadError);
     }
     setModalAction(null);
+  }, []);
+
+  const handleFyersWidgetDismiss = useCallback(() => {
+    setActiveFyersOrder(null);
+  }, []);
+
+  const handleFyersWidgetComplete = useCallback((nonce: string, status: string) => {
+    // Intent record has been updated. Keep the result visible until
+    // the user dismisses it. The onDismiss handler will clear state.
+    // The intent status (matched/submission_failed) is shown in the widget.
+    console.debug("[ChartPage] FYERS order complete:", nonce, status);
   }, []);
 
   const handleSearch = () => {
@@ -521,6 +545,16 @@ export default function ChartPage() {
           currentPrice={currentPrice}
           onClose={handleCloseModal}
           onProceed={handleProceed}
+        />
+      )}
+
+      {/* FYERS button widget — P7-T7 / REQ-ORDER-015/015e/015f */}
+      {activeFyersOrder && (
+        <FyersButtonWidget
+          symbol={activeFyersOrder.symbol}
+          signedPayload={activeFyersOrder.signedPayload}
+          onDismiss={handleFyersWidgetDismiss}
+          onComplete={handleFyersWidgetComplete}
         />
       )}
     </Shell>

@@ -139,6 +139,41 @@ public static class ExecutionEndpoints
             }
         });
 
+        // ── POST /api/v1/execution/intent/callback ────────────────────────────
+        // Called by the frontend after receiving the FYERS widget finished callback.
+        // Updates the intent_ledger record to matched or submission_failed.
+        // P7-T7 / REQ-ORDER-015/015e/015f.
+        execution.MapPost("/intent/callback", async (
+            HttpContext context,
+            IIntentLedgerRepository intentLedger,
+            IntentCallbackRequest request) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(request.Nonce))
+                return Results.BadRequest(new { error = "nonce is required." });
+
+            var validStatuses = new[] { IntentStatus.Matched, IntentStatus.SubmissionFailed };
+            if (!validStatuses.Contains(request.Status))
+                return Results.BadRequest(new { error = $"status must be one of: {string.Join(", ", validStatuses)}." });
+
+            var updated = await intentLedger.UpdateIntentFromCallbackAsync(
+                request.Nonce, request.Status, request.RequestToken, context.RequestAborted);
+
+            if (updated is null)
+                return Results.NotFound(new { error = "Intent not found for the given nonce or already updated." });
+
+            return Results.Ok(new
+            {
+                nonce = updated.Nonce,
+                status = updated.Status,
+                match_source = updated.MatchSource,
+                callback_received_at = updated.CallbackReceivedAt,
+            });
+        });
+
         return app;
     }
 }
