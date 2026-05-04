@@ -20,6 +20,7 @@ import { apiFetch } from "@/lib/auth";
 import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live-quotes";
 import RmeAdvisoryPanel from "@/components/RmeAdvisoryPanel";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
+import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
 import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,10 @@ export default function ChartPage() {
   const [connStatus, setConnStatus] = useState<ConnectionStatus>("disconnected");
   const [, setConnMessage] = useState<string | undefined>();
   const [searchInput, setSearchInput] = useState("SBIN");
+
+  // ── Phase 1 modal state (P7-T4) ─────────────────────────────────────────
+  const [modalAction, setModalAction] = useState<"entry" | "add" | "reduce" | "exit" | null>(null);
+  const showModal = modalAction !== null;
 
   // -------------------------------------------------------------------
   // Load historical OHLCV data
@@ -223,6 +228,20 @@ export default function ChartPage() {
     setChangePct(0);
     // The data will be reloaded by the useEffect above.
   };
+
+  // ── Phase 1 modal handlers (P7-T4) ─────────────────────────────────────
+
+  const handleCloseModal = useCallback(() => {
+    setModalAction(null);
+  }, []);
+
+  const handleProceed = useCallback((params: ProceedParams) => {
+    // Placeholder for P7-T5+ (signed-payload endpoint + FYERS widget activation).
+    // Currently the ProceedParams are captured; the next task wires the
+    // signed-payload endpoint and Phase 2 widget invocation.
+    console.log("[Phase1Modal] Proceed:", params);
+    setModalAction(null);
+  }, []);
 
   const handleSearch = () => {
     const input = searchInput.trim().toUpperCase();
@@ -424,6 +443,53 @@ export default function ChartPage() {
               currentPrice={currentPrice}
               priceColor={priceColor}
             />
+
+            {/* Phase 1 action buttons — P7-T4 / REQ-ORDER-007 */}
+            <Card style={{ padding: 14, marginTop: "var(--s-4)" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--fg-3)", marginBottom: 10 }}>
+                Execution actions
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <Btn
+                  variant="success"
+                  size="md"
+                  icon="plus"
+                  full
+                  onClick={() => setModalAction("entry")}
+                >
+                  Open position
+                </Btn>
+                <Btn
+                  variant="primary"
+                  size="md"
+                  icon="trending-up"
+                  full
+                  onClick={() => setModalAction("add")}
+                >
+                  Increase
+                </Btn>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Btn
+                    variant="secondary"
+                    size="md"
+                    icon="trending-down"
+                    full
+                    onClick={() => setModalAction("reduce")}
+                  >
+                    Reduce
+                  </Btn>
+                  <Btn
+                    variant="danger"
+                    size="md"
+                    icon="arrow-up-right"
+                    full
+                    onClick={() => setModalAction("exit")}
+                  >
+                    Close
+                  </Btn>
+                </div>
+              </div>
+            </Card>
           </div>
         </div>
 
@@ -436,6 +502,18 @@ export default function ChartPage() {
           </div>
         )}
       </div>
+
+      {/* Phase 1 platform modal — P7-T4 / REQ-ORDER-007 */}
+      {showModal && modalAction && (
+        <Phase1Modal
+          symbol={symbol}
+          symbolName={symbolName}
+          actionType={modalAction}
+          currentPrice={currentPrice}
+          onClose={handleCloseModal}
+          onProceed={handleProceed}
+        />
+      )}
     </Shell>
   );
 }
