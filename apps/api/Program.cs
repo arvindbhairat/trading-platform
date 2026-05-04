@@ -230,6 +230,11 @@ app.UseMiddleware<SessionValidationMiddleware>();
 // CSRF enforcement on authenticated mutations — REQ-SEC-001 defence-in-depth.
 app.UseMiddleware<CsrfMiddleware>();
 
+// Admin impersonation write-rejection middleware — REQ-ADMIN-015.
+// Must run after SessionValidationMiddleware so the session is loaded,
+// and before all mutation endpoints.
+app.UseMiddleware<ImpersonationMiddleware>();
+
 // Phase A constraint enforcement — REQ-LEGAL-002.
 // Blocks billing/payment endpoints with HTTP 403 during Phase A;
 // passes through when phase is B or C.
@@ -329,6 +334,9 @@ app.MapAdminPhaseEndpoints();
 
 // Admin Legal Posture widget endpoint — P8-T4 / REQ-LEGAL-010
 app.MapAdminLegalPostureEndpoints();
+
+// Admin impersonation endpoints — P8-T5 / REQ-ADMIN-015, REQ-PRIVACY-012
+app.MapImpersonationEndpoints();
 
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();

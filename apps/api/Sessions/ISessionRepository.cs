@@ -41,4 +41,33 @@ public interface ISessionRepository
         DateTime stepUpAuthenticatedAt,
         ObjectId stepUpEventId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts impersonation for this session: stores the target user ID,
+    /// start time, and initialises the activity timer.
+    /// REQ-ADMIN-015.
+    /// </summary>
+    Task StartImpersonationAsync(
+        string sessionToken,
+        string targetUserId,
+        DateTime startedAt,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stops impersonation for this session: clears impersonation fields.
+    /// REQ-ADMIN-015.
+    /// </summary>
+    Task StopImpersonationAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the last-activity timestamp for an active impersonation session.
+    /// Called on every authenticated request during impersonation for idle-timeout tracking.
+    /// REQ-ADMIN-015.
+    /// </summary>
+    Task UpdateImpersonationActivityAsync(
+        string sessionToken,
+        DateTime activityAt,
+        CancellationToken cancellationToken = default);
 }

@@ -23,6 +23,7 @@ import {
   adminNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -160,6 +161,16 @@ export default function AdminHomePage() {
   const [notification, setNotification] = useState<Notification | null>(null);
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
 
+  // ── Impersonation state (P8-T5 / REQ-ADMIN-015) ──────────────────────
+  const [impTargetUserId, setImpTargetUserId] = useState("");
+  const [impStarting, setImpStarting] = useState(false);
+  const [impError, setImpError] = useState<string | null>(null);
+  const [impStatus, setImpStatus] = useState<{
+    active: boolean;
+    target_user_id?: string;
+    target_display_name?: string;
+  } | null>(null);
+
   // ── Data fetching ────────────────────────────────────────────────────
 
   const fetchSummary = useCallback(async () => {
@@ -256,6 +267,79 @@ export default function AdminHomePage() {
     }
   }
 
+  // ── Impersonation handlers (P8-T5 / REQ-ADMIN-015) ─────────────────
+
+  async function handleStartImpersonation() {
+    if (!impTargetUserId.trim()) return;
+    setImpStarting(true);
+    setImpError(null);
+
+    try {
+      const res = await apiFetch("/api/v1/admin/impersonation/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_user_id: impTargetUserId.trim() }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 401 && body.error === "step_up_required") {
+          // Initiate step-up re-authentication.
+          const stepUpRes = await apiFetch("/api/v1/auth/step-up/init", {
+            method: "POST",
+          });
+          if (stepUpRes.ok) {
+            const { step_up_url } = await stepUpRes.json();
+            window.location.href = step_up_url;
+            return;
+          }
+          setImpError("Step-up required. Please re-authenticate.");
+        } else {
+          setImpError(body.error ?? "Failed to start impersonation");
+        }
+        setImpStarting(false);
+        return;
+      }
+
+      const data = await res.json();
+      setImpStatus({
+        active: true,
+        target_user_id: data.target_user_id,
+        target_display_name: data.target_display_name,
+      });
+      setImpTargetUserId("");
+    } catch (err) {
+      setImpError(err instanceof Error ? err.message : "Start failed");
+    } finally {
+      setImpStarting(false);
+    }
+  }
+
+  async function handleStopImpersonation() {
+    try {
+      const res = await apiFetch("/api/v1/admin/impersonation/stop", {
+        method: "POST",
+      });
+      if (res.ok) {
+        setImpStatus(null);
+      }
+    } catch {
+      // Ignore.
+    }
+  }
+
+  // Fetch impersonation status on mount.
+  useEffect(() => {
+    apiFetch("/api/v1/admin/impersonation/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.active) {
+          setImpStatus(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   async function handleRetryJob(jobType: string) {
     setTriggeringJob(jobType);
     setNotification(null);
@@ -339,6 +423,9 @@ export default function AdminHomePage() {
   return (
     <Shell current="home" navItems={adminNavItems}>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
+        {/* Impersonation banner (P8-T5 / REQ-ADMIN-015) */}
+        <ImpersonationBanner />
+
         {/* Header */}
         <div
           style={{
@@ -823,6 +910,69 @@ export default function AdminHomePage() {
                       <p className="t-body-sm" style={{ color: "var(--fg-3)" }}>Loading legal posture data…</p>
                     </div>
                   )}
+                </Card>
+
+                {/* ── Impersonation (P8-T5 / REQ-ADMIN-015) ──────────── */}
+                <Card>
+                  <div style={{ padding: "var(--s-4) var(--s-5)", borderBottom: "1px solid var(--border-1)" }}>
+                    <h2 style={{ margin: 0 }}>View as user</h2>
+                  </div>
+                  <div style={{ padding: "var(--s-5)" }}>
+                    {impStatus?.active ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
+                          <Icon name="eye" size={16} />
+                          <span className="t-body-sm" style={{ fontWeight: 600 }}>
+                            Viewing as {impStatus.target_display_name ?? impStatus.target_user_id}
+                          </span>
+                        </div>
+                        <p className="t-body-sm" style={{ color: "var(--fg-3)", margin: 0 }}>
+                          Write operations are blocked. All actions are audited.
+                        </p>
+                        <div>
+                          <Btn variant="secondary" size="sm" onClick={handleStopImpersonation}>
+                            Stop viewing
+                          </Btn>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+                        <p className="t-body-sm" style={{ color: "var(--fg-3)", margin: 0 }}>
+                          Enter a user ID to view their portal data. Step-up re-authentication is required.
+                        </p>
+                        <div style={{ display: "flex", gap: "var(--s-2)" }}>
+                          <input
+                            type="text"
+                            value={impTargetUserId}
+                            onChange={(e) => setImpTargetUserId(e.target.value)}
+                            placeholder="e.g. google:12345"
+                            style={{
+                              flex: 1,
+                              padding: "var(--s-2) var(--s-3)",
+                              border: "1px solid var(--line-2)",
+                              borderRadius: "var(--r-1)",
+                              background: "var(--bg-1)",
+                              color: "var(--fg-1)",
+                              fontSize: "13px",
+                            }}
+                          />
+                          <Btn
+                            variant="primary"
+                            size="sm"
+                            onClick={handleStartImpersonation}
+                            disabled={impStarting || !impTargetUserId.trim()}
+                          >
+                            {impStarting ? "Starting…" : "View"}
+                          </Btn>
+                        </div>
+                        {impError && (
+                          <span className="t-body-sm" style={{ color: "var(--down-500)", fontSize: "12px" }}>
+                            {impError}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </Card>
               </div>
             </div>

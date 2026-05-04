@@ -92,4 +92,47 @@ public sealed class MongoSessionRepository : ISessionRepository
 
         await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
     }
+
+    // REQ-ADMIN-015: start impersonation — stores target user ID and timestamps.
+    public async Task StartImpersonationAsync(
+        string sessionToken,
+        string targetUserId,
+        DateTime startedAt,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<SessionDocument>.Filter.Eq(s => s.SessionToken, sessionToken);
+        var update = Builders<SessionDocument>.Update
+            .Set(s => s.ImpersonatingUserId, targetUserId)
+            .Set(s => s.ImpersonationStartedAt, startedAt)
+            .Set(s => s.ImpersonationLastActivityAt, startedAt);
+
+        await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+    }
+
+    // REQ-ADMIN-015: stop impersonation — clears all impersonation fields.
+    public async Task StopImpersonationAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<SessionDocument>.Filter.Eq(s => s.SessionToken, sessionToken);
+        var update = Builders<SessionDocument>.Update
+            .Unset(s => s.ImpersonatingUserId)
+            .Unset(s => s.ImpersonationStartedAt)
+            .Unset(s => s.ImpersonationLastActivityAt);
+
+        await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+    }
+
+    // REQ-ADMIN-015: update the last-activity timestamp during impersonation.
+    public async Task UpdateImpersonationActivityAsync(
+        string sessionToken,
+        DateTime activityAt,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<SessionDocument>.Filter.Eq(s => s.SessionToken, sessionToken);
+        var update = Builders<SessionDocument>.Update
+            .Set(s => s.ImpersonationLastActivityAt, activityAt);
+
+        await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+    }
 }

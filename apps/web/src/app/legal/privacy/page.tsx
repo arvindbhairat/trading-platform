@@ -66,7 +66,7 @@ export default function PrivacyPage() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={h2style}>4. Data Retention</h2>
+        <h2 style={h2style}>6. Data Retention</h2>
         <p style={pStyle}>
           Personal data is retained only as long as necessary for the purposes
           disclosed in this Policy or as required by law. Account data is
@@ -79,7 +79,7 @@ export default function PrivacyPage() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={h2style}>5. Data Sharing and Transfers</h2>
+        <h2 style={h2style}>4. Data Sharing and Transfers</h2>
         <p style={pStyle}>
           Personal data is stored in Azure India regions (Central India or South
           India). Third-party processors — including FYERS, Telegram, and cloud
@@ -91,7 +91,26 @@ export default function PrivacyPage() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={h2style}>6. Your Rights</h2>
+        <h2 style={h2style}>5. Admin Access to User Data</h2>
+        <p style={pStyle}>
+          For operational support, troubleshooting, and platform diagnostics, the
+          platform admin may access a read-only view of your account data. This
+          includes your display name, trading data (positions, holdings, broker
+          orders), platform-derived analytics (portfolio snapshot, equity curve,
+          RME state), scan and subscription configuration, notification history,
+          and settings. Financial credentials (FYERS token) are never transferred
+          to the admin view.
+        </p>
+        <p style={{ ...pStyle, marginTop: "12px" }}>
+          Each instance of admin access to your account is recorded in the audit
+          log with a timestamp, the identity of the admin, and the purpose of
+          access. You may request a copy of these audit records through the
+          grievance officer.
+        </p>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={h2style}>7. Your Rights</h2>
         <p style={pStyle}>
           Under the DPDP Act, you have the right to: (a) access your personal
           data; (b) request correction of inaccurate data; (c) request erasure
@@ -103,7 +122,7 @@ export default function PrivacyPage() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={h2style}>7. Grievance Officer</h2>
+        <h2 style={h2style}>8. Grievance Officer</h2>
         <p style={pStyle}>
           During Phase A, the platform admin serves as the grievance officer.
           Contact: the platform admin through the Contact and Grievances page
@@ -114,7 +133,7 @@ export default function PrivacyPage() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={h2style}>8. Changes to This Policy</h2>
+        <h2 style={h2style}>9. Changes to This Policy</h2>
         <p style={pStyle}>
           This Privacy Policy may be updated from time to time. When the version
           is bumped, you will be required to accept the updated Policy on your

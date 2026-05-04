@@ -84,6 +84,90 @@ public sealed class InMemorySessionRepository : ISessionRepository
                 UserAgent = doc.UserAgent,
                 MfaVerifiedAt = doc.MfaVerifiedAt,
                 StepUpAuthenticatedAt = stepUpAuthenticatedAt,
+                ImpersonatingUserId = doc.ImpersonatingUserId,
+                ImpersonationStartedAt = doc.ImpersonationStartedAt,
+                ImpersonationLastActivityAt = doc.ImpersonationLastActivityAt,
+            };
+            _byToken[sessionToken] = updated;
+        }
+        return Task.CompletedTask;
+    }
+
+    // REQ-ADMIN-015: start impersonation
+    public Task StartImpersonationAsync(
+        string sessionToken,
+        string targetUserId,
+        DateTime startedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (_byToken.TryGetValue(sessionToken, out var doc))
+        {
+            var updated = new SessionDocument
+            {
+                Id = doc.Id,
+                UserId = doc.UserId,
+                SessionToken = doc.SessionToken,
+                IssuedAt = doc.IssuedAt,
+                ExpiresAt = doc.ExpiresAt,
+                UserAgent = doc.UserAgent,
+                MfaVerifiedAt = doc.MfaVerifiedAt,
+                StepUpAuthenticatedAt = doc.StepUpAuthenticatedAt,
+                StepUpEventId = doc.StepUpEventId,
+                ImpersonatingUserId = targetUserId,
+                ImpersonationStartedAt = startedAt,
+                ImpersonationLastActivityAt = startedAt,
+            };
+            _byToken[sessionToken] = updated;
+        }
+        return Task.CompletedTask;
+    }
+
+    // REQ-ADMIN-015: stop impersonation
+    public Task StopImpersonationAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (_byToken.TryGetValue(sessionToken, out var doc))
+        {
+            var updated = new SessionDocument
+            {
+                Id = doc.Id,
+                UserId = doc.UserId,
+                SessionToken = doc.SessionToken,
+                IssuedAt = doc.IssuedAt,
+                ExpiresAt = doc.ExpiresAt,
+                UserAgent = doc.UserAgent,
+                MfaVerifiedAt = doc.MfaVerifiedAt,
+                StepUpAuthenticatedAt = doc.StepUpAuthenticatedAt,
+                StepUpEventId = doc.StepUpEventId,
+            };
+            _byToken[sessionToken] = updated;
+        }
+        return Task.CompletedTask;
+    }
+
+    // REQ-ADMIN-015: update activity timestamp
+    public Task UpdateImpersonationActivityAsync(
+        string sessionToken,
+        DateTime activityAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (_byToken.TryGetValue(sessionToken, out var doc))
+        {
+            var updated = new SessionDocument
+            {
+                Id = doc.Id,
+                UserId = doc.UserId,
+                SessionToken = doc.SessionToken,
+                IssuedAt = doc.IssuedAt,
+                ExpiresAt = doc.ExpiresAt,
+                UserAgent = doc.UserAgent,
+                MfaVerifiedAt = doc.MfaVerifiedAt,
+                StepUpAuthenticatedAt = doc.StepUpAuthenticatedAt,
+                StepUpEventId = doc.StepUpEventId,
+                ImpersonatingUserId = doc.ImpersonatingUserId,
+                ImpersonationStartedAt = doc.ImpersonationStartedAt,
+                ImpersonationLastActivityAt = activityAt,
             };
             _byToken[sessionToken] = updated;
         }

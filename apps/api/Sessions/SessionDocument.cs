@@ -49,4 +49,21 @@ public sealed class SessionDocument
     [BsonElement("step_up_event_id")]
     [BsonIgnoreIfNull]
     public ObjectId? StepUpEventId { get; init; }
+
+    // REQ-ADMIN-015: admin impersonation — when set, the admin is viewing the
+    // portal as this target user.  Non-null means impersonation is active.
+    [BsonElement("impersonating_user_id")]
+    [BsonIgnoreIfNull]
+    public string? ImpersonatingUserId { get; init; }
+
+    // REQ-ADMIN-015: when impersonation started (UTC). Null when not impersonating.
+    [BsonElement("impersonation_started_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? ImpersonationStartedAt { get; init; }
+
+    // REQ-ADMIN-015: last activity during impersonation (UTC), used for idle timeout.
+    // Reset on each authenticated request while impersonating.
+    [BsonElement("impersonation_last_activity_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? ImpersonationLastActivityAt { get; init; }
 }
