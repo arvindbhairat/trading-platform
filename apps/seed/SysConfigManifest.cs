@@ -179,6 +179,9 @@ public static class SysConfigManifest
         new("notifications.email.sender_domain",       "notifications",  "string",  "",     "Sender domain for platform notification emails.",                                                                   "REQ-NOTIFY-020",        IsPerDeployment: true),
         new("notifications.email.sender_address",      "notifications",  "string",  "",     "Sender address for platform notification emails.",                                                                  "REQ-NOTIFY-020",        IsPerDeployment: true),
 
+        // ── retention ─────────────────────────────────────────────────────
+        new("retention.audit_events.archive_threshold_days","retention","number","730","Archive threshold for audit_events in days. Events older than this move to Online Archive (data-management.md).","REQ-DATA-001"),
+
         // ── Sentinel (written on every run, not strictly per-deployment) ──
         // platform.seed.version is handled specially by the seeder (upserted each run)
     ];

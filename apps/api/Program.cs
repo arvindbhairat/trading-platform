@@ -315,6 +315,9 @@ app.MapRmeAdvisoryEndpoints();
 // Execution assistance endpoints — P7-T3 / pre-flight check endpoint
 app.MapExecutionEndpoints();
 
+// Admin audit event query endpoints — P8-T1 / helper APIs for audit_events collection
+app.MapAdminAuditEndpoints();
+
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
 
