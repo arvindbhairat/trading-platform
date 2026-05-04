@@ -90,6 +90,9 @@ builder.Services.AddPldWebSocketServices();
 // Phase A constraint enforcement services — REQ-LEGAL-002
 builder.Services.AddPhaseConstraintServices();
 
+// Phase transition gating service — P8-T3 / REQ-LEGAL-001/005/005a
+builder.Services.AddSingleton<PhaseGateService>();
+
 // Data subject rights workflow — REQ-PRIVACY-004 (P2-T21)
 builder.Services.AddPrivacyRequestManagement();
 
@@ -320,6 +323,9 @@ app.MapAdminAuditEndpoints();
 
 // Admin system health dashboard endpoints — P8-T2 / REQ-ADMIN-014, A-14
 app.MapAdminSystemHealthEndpoints();
+
+// Admin phase transition + gate management endpoints — P8-T3 / REQ-LEGAL-001/005/005a
+app.MapAdminPhaseEndpoints();
 
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();

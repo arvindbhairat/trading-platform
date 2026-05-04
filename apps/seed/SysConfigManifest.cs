@@ -165,6 +165,19 @@ public static class SysConfigManifest
         new("legal.privacy.current_version",           "legal",          "string",  "v1",   "Current Privacy Policy version identifier.",                                                                        "REQ-LEGAL-008"),
         new("legal.tester_acknowledgement.current_version","legal",      "string",  "v1",   "Current tester acknowledgement version identifier.",                                                                "REQ-LEGAL-004"),
         new("legal.disclaimer.long_version",           "legal",          "string",  "v1",   "Current long-form disclaimer version identifier.",                                                                  "REQ-LEGAL-007"),
+        // ── Phase transition gates (P8-T3 / REQ-LEGAL-005/005a) ───────────
+        new("legal.sebi_opinion.received",             "legal",          "boolean","false", "SEBI classification opinion received (REQ-LEGAL-005a).",                                                           "REQ-LEGAL-005a"),
+        new("legal.sebi_opinion.document_ref",         "legal",          "string",  "",     "Document reference for the SEBI classification opinion (REQ-LEGAL-005a).",                                         "REQ-LEGAL-005a"),
+        new("legal.sebi_opinion.lawyer_name",          "legal",          "string",  "",     "Name of the SEBI-registered lawyer who provided the classification opinion (REQ-LEGAL-005a).",                    "REQ-LEGAL-005a"),
+        new("legal.sebi_opinion.lawyer_sebi_reg",      "legal",          "string",  "",     "SEBI registration number of the lawyer (REQ-LEGAL-005a).",                                                         "REQ-LEGAL-005a"),
+        new("legal.sebi_opinion.received_date",        "legal",          "string",  "",     "Date the SEBI classification opinion was received (REQ-LEGAL-005a).",                                             "REQ-LEGAL-005a"),
+        new("legal.phase_b.legal_review_received",     "legal",          "boolean","false", "Legal review from registered fintech lawyer received (REQ-LEGAL-005).",                                          "REQ-LEGAL-005"),
+        new("legal.phase_b.commercial_fyers_configured","legal",         "boolean","false", "Commercial FYERS API application configured (REQ-LEGAL-005).",                                                    "REQ-LEGAL-005"),
+        new("legal.phase_b.sebi_workstream_initiated", "legal",          "boolean","false", "SEBI registration workstream formally initiated (REQ-LEGAL-005).",                                               "REQ-LEGAL-005"),
+        new("legal.phase_b.runbook_catalog_complete",  "legal",          "boolean","false", "Full runbook catalog exists with reviews within 90 days (REQ-LEGAL-005).",                                      "REQ-LEGAL-005"),
+        new("legal.phase_c.sebi_registration_granted", "legal",          "boolean","false", "SEBI registration granted (REQ-LEGAL-005).",                                                                       "REQ-LEGAL-005"),
+        new("legal.phase_c.legal_review_commercial",   "legal",          "boolean","false", "Legal review updated for fee collection, billing, and public marketing (REQ-LEGAL-005).",                        "REQ-LEGAL-005"),
+        new("legal.phase_c.penetration_test_completed","legal",          "boolean","false", "External penetration test completed with high/critical findings remediated (REQ-LEGAL-005, REQ-SEC-010).",        "REQ-LEGAL-005"),
 
         // ── migrations ────────────────────────────────────────────────────
         new("migrations.dual_read_window.active",        "migrations",     "boolean","false","When true, per-symbol DDL changes accept both old and new schema read paths during fleet-wide migration (REQ-MIGRATION-005).", "REQ-MIGRATION-005"),

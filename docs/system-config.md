@@ -362,6 +362,18 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `legal.tos.current_version` | legal | string | `v1` | REQ-LEGAL-008 |
 | `legal.privacy.current_version` | legal | string | `v1` | REQ-LEGAL-008 |
 | `legal.tester_acknowledgement.current_version` | legal | string | `v1` | REQ-LEGAL-004 |
+| `legal.sebi_opinion.received` | legal | boolean | false | REQ-LEGAL-005a |
+| `legal.sebi_opinion.document_ref` | legal | string | *(empty — set when opinion received)* | REQ-LEGAL-005a |
+| `legal.sebi_opinion.lawyer_name` | legal | string | *(empty — set when opinion received)* | REQ-LEGAL-005a |
+| `legal.sebi_opinion.lawyer_sebi_reg` | legal | string | *(empty — set when opinion received)* | REQ-LEGAL-005a |
+| `legal.sebi_opinion.received_date` | legal | string | *(empty — set when opinion received)* | REQ-LEGAL-005a |
+| `legal.phase_b.legal_review_received` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_b.commercial_fyers_configured` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_b.sebi_workstream_initiated` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_b.runbook_catalog_complete` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_c.sebi_registration_granted` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_c.legal_review_commercial` | legal | boolean | false | REQ-LEGAL-005 |
+| `legal.phase_c.penetration_test_completed` | legal | boolean | false | REQ-LEGAL-005 |
 | `operations.universe.stale_after_days` | operations | number | 180 | REQ-UNIV-016 |
 | `operations.universe.archive_confirm_threshold_pct` | operations | number | 5 | REQ-UNIV-018 |
 | `operations.universe.rollback_retention_days` | operations | number | 30 | REQ-UNIV-019 |

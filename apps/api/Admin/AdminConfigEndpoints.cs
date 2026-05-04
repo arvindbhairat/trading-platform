@@ -96,6 +96,19 @@ public static class AdminConfigEndpoints
             var valueType = current.Contains("valueType") ? current["valueType"].AsString : "string";
             var priorValue = ExtractValue(current, "value");
 
+            // P8-T3 / REQ-LEGAL-001: phase transitions must use the dedicated
+            // phase transition endpoint with full gating validation.
+            if (key == "operations.phase.current")
+            {
+                return Results.BadRequest(new
+                {
+                    error = "use_dedicated_phase_endpoint",
+                    message = "Phase transitions must go through the dedicated " +
+                              "POST /api/v1/admin/phase/transition endpoint which " +
+                              "validates all gating conditions (REQ-LEGAL-005)."
+                });
+            }
+
             // REQ-SEC-011: step-up check for sensitive categories.
             // REQ-LEGAL-001: justification required for sensitive category edits.
             ObjectId? stepUpEventId = null;
