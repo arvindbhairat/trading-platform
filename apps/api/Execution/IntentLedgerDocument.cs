@@ -141,4 +141,12 @@ public static class IntentStatus
 
     /// <summary>Orphan intent acknowledged by admin or automatic cleanup.</summary>
     public const string OrphanAck = "orphan_ack";
+
+    /// <summary>
+    /// REQ-ADMIN-001c: terminal status applied when a user account is deactivated
+    /// and the intent was still in a non-terminal state (pending or awaiting_confirmation).
+    /// No further LADS reconciliation, callback processing, or FYERS order-state polling
+    /// may be applied to records with this status.
+    /// </summary>
+    public const string ExpiredAccountDeactivated = "expired_account_deactivated";
 }

@@ -49,6 +49,13 @@ public interface IUserRepository
     Task DeactivateAsync(string userId, CancellationToken ct = default);
 
     /// <summary>
+    /// REQ-ADMIN-001b: reactivates a previously deactivated user account.
+    /// Transitions status from deactivated → approved.
+    /// Returns false without writing if the user is not found or is not deactivated.
+    /// </summary>
+    Task<bool> ReactivateAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all users, optionally filtered by status (pending_approval / approved / deactivated).
     /// Ordered by createdAt descending.  Used by the admin user management page (P2-T12).
     /// </summary>

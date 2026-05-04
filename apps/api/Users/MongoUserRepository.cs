@@ -108,6 +108,21 @@ public sealed class MongoUserRepository : IUserRepository
         await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
 
+    // REQ-ADMIN-001b: reactivates a deactivated user — only works for deactivated users.
+    public async Task<bool> ReactivateAsync(string userId, CancellationToken ct = default)
+    {
+        var filter = Builders<UserDocument>.Filter.And(
+            Builders<UserDocument>.Filter.Eq(u => u.UserId, userId),
+            Builders<UserDocument>.Filter.Eq(u => u.Status, UserApprovalState.Deactivated));
+
+        var update = Builders<UserDocument>.Update
+            .Set(u => u.Status, UserApprovalState.Approved)
+            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+
+        var result = await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+        return result.ModifiedCount > 0;
+    }
+
     public async Task<List<UserDocument>> ListUsersAsync(
         string? statusFilter = null, CancellationToken ct = default)
     {

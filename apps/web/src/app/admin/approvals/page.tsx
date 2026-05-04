@@ -1,7 +1,8 @@
 "use client";
 
 // Admin user approvals page (P2-T12 / REQ-ROLE-004, REQ-SESSION-012/013).
-// Lists all users with their approval state and allows approve/deactivate actions.
+// P8-T6: enhanced with reactivate (REQ-ADMIN-001b), per-user signal
+// suspension (REQ-ADMIN-010), and signals_suspended display.
 // Audit events are recorded for each action.
 
 import { useEffect, useState, useCallback } from "react";
@@ -25,12 +26,14 @@ interface UserEntry {
   provider: string;
   role: string;
   status: string;
+  signalsSuspended: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 type StatusTab = "all" | "pending_approval" | "approved" | "deactivated";
 type Notification = { type: "success" | "error"; message: string };
+type ConfirmActionType = "approve" | "deactivate" | "reactivate";
 
 const STATUS_TABS: { id: StatusTab; label: string }[] = [
   { id: "all", label: "All" },
@@ -60,7 +63,7 @@ export default function AdminApprovalsPage() {
   const [confirmAction, setConfirmAction] = useState<{
     userId: string;
     email: string;
-    action: "approve" | "deactivate";
+    action: ConfirmActionType;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -108,23 +111,95 @@ export default function AdminApprovalsPage() {
     fetchData();
   }, [fetchData]);
 
-  // ── Action handlers ──────────────────────────────────────────────────
+  // ── Action helpers ───────────────────────────────────────────────────
+
+  async function handleStepUp(stepUpUrl?: string) {
+    if (stepUpUrl) {
+      window.location.href = stepUpUrl;
+      return true;
+    }
+    // If no step-up URL, try to initiate one.
+    const stepUpRes = await apiFetch("/api/v1/auth/step-up/init", {
+      method: "POST",
+    });
+    if (stepUpRes.ok) {
+      const { step_up_url } = await stepUpRes.json();
+      window.location.href = step_up_url;
+      return true;
+    }
+    return false;
+  }
+
+  async function executeSimpleAction(
+    userId: string,
+    action: string
+  ): Promise<Notification | null> {
+    try {
+      const res = await apiFetch(
+        `/api/v1/admin/users/${encodeURIComponent(userId)}/${action}`,
+        { method: "POST" }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 401 && body.error === "step_up_required") {
+          await handleStepUp();
+          return null; // Navigation will happen; suppress notification.
+        }
+        return { type: "error", message: body.error ?? `${action} failed` };
+      }
+
+      return { type: "success", message: `User ${action.replace("-", " ")} successful` };
+    } catch (err) {
+      return {
+        type: "error",
+        message: err instanceof Error ? err.message : `${action} failed`,
+      };
+    }
+  }
+
+  // ── Inline actions (signal suspend/enable — no confirmation) ─────────
+
+  async function handleSignalSuspend(userId: string) {
+    setNotification(null);
+    const result = await executeSimpleAction(userId, "signal-suspend");
+    if (result) setNotification(result);
+    fetchData();
+  }
+
+  async function handleSignalEnable(userId: string) {
+    setNotification(null);
+    const result = await executeSimpleAction(userId, "signal-enable");
+    if (result) setNotification(result);
+    fetchData();
+  }
+
+  // ── Confirmation-based actions ──────────────────────────────────────
 
   async function executeAction() {
     if (!confirmAction) return;
     setSubmitting(true);
     setNotification(null);
 
-    try {
-      const endpoint =
-        confirmAction.action === "approve"
-          ? `/api/v1/admin/users/${encodeURIComponent(confirmAction.userId)}/approve`
-          : `/api/v1/admin/users/${encodeURIComponent(confirmAction.userId)}/deactivate`;
+    const actionMap: Record<ConfirmActionType, string> = {
+      approve: "approve",
+      deactivate: "deactivate",
+      reactivate: "reactivate",
+    };
 
+    const endpoint = `/api/v1/admin/users/${encodeURIComponent(confirmAction.userId)}/${actionMap[confirmAction.action]}`;
+
+    try {
       const res = await apiFetch(endpoint, { method: "POST" });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 401 && body.error === "step_up_required") {
+          await handleStepUp();
+          setSubmitting(false);
+          setConfirmAction(null);
+          return;
+        }
         setNotification({
           type: "error",
           message: body.error ?? `${confirmAction.action} failed`,
@@ -134,10 +209,14 @@ export default function AdminApprovalsPage() {
         return;
       }
 
-      setNotification({
-        type: "success",
-        message: `User ${confirmAction.action === "approve" ? "approved" : "deactivated"}`,
-      });
+      const label =
+        confirmAction.action === "approve"
+          ? "approved"
+          : confirmAction.action === "reactivate"
+            ? "reactivated"
+            : "deactivated";
+
+      setNotification({ type: "success", message: `User ${label}` });
       setConfirmAction(null);
       fetchData();
     } catch (err) {
@@ -281,8 +360,9 @@ export default function AdminApprovalsPage() {
                   <th style={{ padding: "var(--s-3) var(--s-4)" }}>Name</th>
                   <th style={{ padding: "var(--s-3) var(--s-4)" }}>Provider</th>
                   <th style={{ padding: "var(--s-3) var(--s-4)" }}>Role</th>
+                  <th style={{ padding: "var(--s-3) var(--s-4)" }}>Signals</th>
                   <th style={{ padding: "var(--s-3) var(--s-4)" }}>Signed up</th>
-                  <th style={{ padding: "var(--s-3) var(--s-4)", width: "140px" }}>
+                  <th style={{ padding: "var(--s-3) var(--s-4)", width: "200px" }}>
                     Actions
                   </th>
                 </tr>
@@ -322,6 +402,15 @@ export default function AdminApprovalsPage() {
                       )}
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
+                      {entry.role !== "admin" && entry.status === "approved" && (
+                        entry.signalsSuspended ? (
+                          <Pill tone="warn">Suspended</Pill>
+                        ) : (
+                          <Pill tone="up">Active</Pill>
+                        )
+                      )}
+                    </td>
+                    <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                       <span
                         className="t-body-sm"
                         style={{ color: "var(--t-2)", whiteSpace: "nowrap" }}
@@ -352,18 +441,51 @@ export default function AdminApprovalsPage() {
                           Approve
                         </Btn>
                       ) : entry.status === "approved" ? (
+                        <div style={{ display: "flex", gap: "var(--s-1)", flexWrap: "wrap" }}>
+                          {entry.signalsSuspended ? (
+                            <Btn
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleSignalEnable(entry.userId)}
+                            >
+                              Enable signals
+                            </Btn>
+                          ) : (
+                            <Btn
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleSignalSuspend(entry.userId)}
+                            >
+                              Suspend signals
+                            </Btn>
+                          )}
+                          <Btn
+                            size="sm"
+                            variant="danger"
+                            onClick={() =>
+                              setConfirmAction({
+                                userId: entry.userId,
+                                email: entry.email,
+                                action: "deactivate",
+                              })
+                            }
+                          >
+                            Deactivate
+                          </Btn>
+                        </div>
+                      ) : entry.status === "deactivated" ? (
                         <Btn
                           size="sm"
-                          variant="danger"
+                          variant="primary"
                           onClick={() =>
                             setConfirmAction({
                               userId: entry.userId,
                               email: entry.email,
-                              action: "deactivate",
+                              action: "reactivate",
                             })
                           }
                         >
-                          Deactivate
+                          Reactivate
                         </Btn>
                       ) : (
                         <span
@@ -384,7 +506,13 @@ export default function AdminApprovalsPage() {
         {/* Confirmation dialog */}
         {confirmAction && (
           <Card
-            accent={confirmAction.action === "approve" ? "brand" : "warn"}
+            accent={
+              confirmAction.action === "approve"
+                ? "brand"
+                : confirmAction.action === "reactivate"
+                  ? "brand"
+                  : "warn"
+            }
             style={{
               marginTop: "var(--s-6)",
               padding: "var(--s-6)",
@@ -394,16 +522,23 @@ export default function AdminApprovalsPage() {
             <h3 style={{ marginBottom: "var(--s-2)" }}>
               {confirmAction.action === "approve"
                 ? "Approve user?"
-                : "Deactivate user?"}
+                : confirmAction.action === "reactivate"
+                  ? "Reactivate user?"
+                  : "Deactivate user?"}
             </h3>
             <p className="t-body-sm" style={{ marginBottom: "var(--s-4)" }}>
-              {confirmAction.action === "approve"
-                ? `This will approve ${confirmAction.email}. An audit event will be recorded.`
-                : `This will deactivate ${confirmAction.email}. The user will be locked out. An audit event will be recorded.`}
+              {confirmAction.action === "approve" &&
+                `This will approve ${confirmAction.email}. An audit event will be recorded.`}
+              {confirmAction.action === "reactivate" &&
+                `This will reactivate ${confirmAction.email}. The user's FYERS token remains dirty — they must re-authenticate with FYERS. Step-up re-authentication is required.`}
+              {confirmAction.action === "deactivate" &&
+                `This will deactivate ${confirmAction.email}. The user will be locked out, sessions invalidated, PendingEntry positions suspended, and FYERS tokens marked dirty. Step-up re-authentication is required.`}
             </p>
             <div style={{ display: "flex", gap: "var(--s-3)" }}>
               <Btn
-                variant={confirmAction.action === "approve" ? "primary" : "danger"}
+                variant={
+                  confirmAction.action === "deactivate" ? "danger" : "primary"
+                }
                 onClick={executeAction}
                 disabled={submitting}
               >
@@ -411,7 +546,9 @@ export default function AdminApprovalsPage() {
                   ? "Processing…"
                   : confirmAction.action === "approve"
                     ? "Confirm approve"
-                    : "Confirm deactivate"}
+                    : confirmAction.action === "reactivate"
+                      ? "Confirm reactivate"
+                      : "Confirm deactivate"}
               </Btn>
               <Btn
                 variant="ghost"
