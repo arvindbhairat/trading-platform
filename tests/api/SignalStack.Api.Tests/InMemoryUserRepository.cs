@@ -271,6 +271,17 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult(updated);
     }
 
+    public Task SetSignalsSuspendedAsync(
+        string userId, bool suspended, CancellationToken ct = default)
+    {
+        if (_byUserId.TryGetValue(userId, out var doc))
+        {
+            doc.SignalsSuspended = suspended;
+            doc.UpdatedAt = DateTime.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
+
     public Task SetEquityOverrideAsync(
         string userId, decimal? overrideValue, CancellationToken ct = default)
     {
