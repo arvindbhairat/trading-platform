@@ -51,4 +51,15 @@ public sealed class RmeModuleOptions
     /// </summary>
     [Range(0.5, 10.0)]
     public double AtrMultiplier { get; set; } = 2.0;
+
+    /// <summary>
+    /// Maximum portfolio heat as a percentage of account equity.
+    /// Portfolio Heat = Total Open Risk / Account Equity, expressed as a percentage.
+    /// The heat-based sizing model ensures that adding a new position does not push
+    /// total portfolio heat above this threshold.
+    /// Mapped from sys_config <c>risk.default.max_portfolio_heat_pct</c> (REQ-HEAT-002).
+    /// Default: 5.0 (5% of equity).
+    /// </summary>
+    [Range(1.0, 100.0)]
+    public double MaxPortfolioHeatPct { get; set; } = 5.0;
 }

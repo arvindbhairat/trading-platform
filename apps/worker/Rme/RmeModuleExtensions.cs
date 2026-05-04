@@ -57,6 +57,12 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Position Sizing Models).
         services.AddSingleton<ISizingModel, AtrSizingModel>();
 
+        // P6-T10: Portfolio Heat-based sizing model.
+        // HeatBasedSizingModel — sizes positions relative to current portfolio heat
+        // so total open risk stays within the configured maximum (REQ-HEAT-002).
+        // (portfolio-risk-guidelines § Position Sizing Models).
+        services.AddSingleton<ISizingModel, HeatBasedSizingModel>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
