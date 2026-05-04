@@ -4,7 +4,8 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "contract-diff": "node src/contract-diff.mjs"
+    "contract-diff": "node src/contract-diff.mjs",
+    "fyers-sdk-integrity": "node src/fyers-sdk-integrity.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.10.2"

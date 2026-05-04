@@ -8,12 +8,15 @@
 import { type ReactNode } from "react";
 import { PushAlertProvider } from "./PushAlertProvider";
 import { PushDegradationBanner } from "./PushDegradationBanner";
+import { FyersSdkProvider } from "./FyersSdkProvider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <PushAlertProvider>
-      <PushDegradationBanner />
-      {children}
-    </PushAlertProvider>
+    <FyersSdkProvider>
+      <PushAlertProvider>
+        <PushDegradationBanner />
+        {children}
+      </PushAlertProvider>
+    </FyersSdkProvider>
   );
 }

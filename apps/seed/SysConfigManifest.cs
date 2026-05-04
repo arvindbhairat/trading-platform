@@ -102,6 +102,8 @@ public static class SysConfigManifest
         new("integrations.fyers.quote_delay_seconds",  "integrations",   "number",  "0",    "FYERS quote delay in seconds (0 = real-time).",                                                                     "REQ-STOP-006c"),
         new("integrations.fyers.price_deviation_warning_pct","integrations","number","1",   "Price deviation warning threshold percentage.",                                                                     "REQ-ORDER-011"),
         new("integrations.fyers.rate_limit.reset_boundary","integrations","string", "utc_midnight","Budget projection reset boundary for FYERS rate limits.",                                                    "REQ-RATE-012"),
+        new("integrations.fyers.api_connect_sdk_url","integrations","string","https://api-connect-docs.fyers.in/fyers-lib.js","FYERS API Connect JS SDK URL pinned per the Branded Button Contract.",                                              "REQ-ORDER-016a"),
+        new("integrations.fyers.api_connect_sdk_expected_hash","integrations","string","30c38c3f785a11d9e5e3dd9864379d383830dd4be0462bce1a132a23c76aef4b","Expected SHA-256 hash of the FYERS API Connect SDK file for build-time integrity verification.",              "REQ-ORDER-016a", IsPerDeployment: true),
 
         new("integrations.truedata.rate_limit.per_second","integrations","number", "10",    "TrueData API rate limit: requests per second.",                                                                     "REQ-RATE-009"),
         new("integrations.truedata.rate_limit.per_minute","integrations","number", "200",   "TrueData API rate limit: requests per minute.",                                                                     "REQ-RATE-009"),

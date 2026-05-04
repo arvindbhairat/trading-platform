@@ -116,6 +116,25 @@ jobs:
           head: ${{ github.sha }}
           extra_args: --only-verified
 
+  # ── FYERS SDK integrity check (REQ-ORDER-016a) ──────────────────────────────
+  # Fetches the FYERS API Connect SDK from the pinned URL, computes its SHA-256
+  # hash, and compares against the expected hash in the pin file. A mismatch
+  # fails the build, requiring team review before the pin is updated.
+  fyers-sdk-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        run: npm ci
+
+      - name: FYERS SDK integrity check
+        run: npm --workspace @signalstack/testing run fyers-sdk-integrity
+
   # ── Axe-core WCAG 2.1 AA accessibility gate (REQ-ACCESS-001) ────────────────
   axe:
     runs-on: ubuntu-latest
