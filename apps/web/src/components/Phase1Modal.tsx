@@ -62,6 +62,13 @@ interface OrderContextData {
   position_state: string | null;
 }
 
+interface SignedPayloadResponse {
+  nonce: string;
+  data_attributes: Record<string, string>;
+  payload_hash: string;
+  expires_at_unix: number;
+}
+
 interface Props {
   symbol: string;
   symbolName?: string;
@@ -75,6 +82,8 @@ export interface ProceedParams {
   symbol: string;
   actionType: ActionType;
   quantity: number;
+  signedPayload: SignedPayloadResponse | null;
+  signedPayloadError: string | null;
 }
 
 // ── Action labels (self-directed language — REQ-LEGAL-006) ─────────────────────
@@ -126,6 +135,12 @@ export default function Phase1Modal({
   const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(new Set());
   const [deviationDismissed, setDeviationDismissed] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Signed-payload state (P7-T5 / REQ-ORDER-009b) ─────────────────────────
+  const [signedPayload, setSignedPayload] = useState<SignedPayloadResponse | null>(null);
+  const [signedPayloadLoading, setSignedPayloadLoading] = useState(false);
+  const [signedPayloadError, setSignedPayloadError] = useState<string | null>(null);
+  const signedPayloadCounterRef = useRef(0); // track freshness across renders
 
   // ── Fetch context data on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -258,6 +273,83 @@ export default function Phase1Modal({
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [symbol, actionType]);
+
+  // ── Signed-payload fetch (P7-T5 / REQ-ORDER-009b) ─────────────────────────
+  const fetchSignedPayload = useCallback(async (qty: number) => {
+    const counter = ++signedPayloadCounterRef.current;
+    setSignedPayloadLoading(true);
+
+    try {
+      const res = await apiFetch("/api/v1/execution/intent/signed-payload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol,
+          action: actionType,
+          quantity: qty,
+          order_type: "MARKET",
+          limit_price: null,
+        }),
+      });
+
+      // Only apply if this is still the latest request
+      if (counter !== signedPayloadCounterRef.current) return;
+
+      if (res.ok) {
+        const data = (await res.json()) as SignedPayloadResponse;
+        setSignedPayload(data);
+        setSignedPayloadError(null);
+      } else {
+        const errBody = await res.json().catch(() => null);
+        const reason = errBody?.error?.reason ?? "signing_failed";
+        const message = errBody?.error?.message ?? "Failed to create signed payload.";
+        setSignedPayloadError(
+          reason === "pending_intents_would_breach_heat" || reason === "lads_sustained_failure_active"
+            ? message
+            : "Order signing is currently unavailable. Please try again."
+        );
+        setSignedPayload(null);
+      }
+    } catch {
+      if (counter === signedPayloadCounterRef.current) {
+        setSignedPayloadError("Network error — order parameters could not be signed.");
+        setSignedPayload(null);
+      }
+    } finally {
+      if (counter === signedPayloadCounterRef.current) {
+        setSignedPayloadLoading(false);
+      }
+    }
+  }, [symbol, actionType]);
+
+  // ── Debounced signed-payload refresh on quantity change (P7-T5) ──────────
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (loading || error || quantity <= 0) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      fetchSignedPayload(quantity);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [quantity, loading, error, fetchSignedPayload]);
+
+  // ── Visibility-change refresh listener (REQ-ORDER-009c) ──────────────────
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && quantity > 0 && !loading && !error) {
+        fetchSignedPayload(quantity);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [quantity, loading, error, fetchSignedPayload]);
 
   // ── Warning acknowledgement ────────────────────────────────────────────
   const acknowledgeWarning = useCallback((warning: string) => {
@@ -799,6 +891,8 @@ export default function Phase1Modal({
                   symbol,
                   actionType,
                   quantity,
+                  signedPayload,
+                  signedPayloadError,
                 });
               }}
               style={{

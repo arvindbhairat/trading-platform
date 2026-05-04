@@ -1,13 +1,15 @@
 using System.Security.Claims;
+using Microsoft.IdentityModel.JsonWebTokens;
 using SignalStack.Api.Execution;
 
 namespace Microsoft.AspNetCore.Routing;
 
 /// <summary>
 /// Execution assistance API endpoints (Phase 7).
-/// Wires pre-flight checks and order context data for the Phase 1 modal.
+/// Wires pre-flight checks, order context, and signed-payload endpoint.
 /// P7-T3: Pre-flight check endpoint.
 /// P7-T4: Order context endpoint.
+/// P7-T5: Signed-payload endpoint.
 /// </summary>
 public static class ExecutionEndpoints
 {
@@ -93,6 +95,48 @@ public static class ExecutionEndpoints
                 has_position = result.HasPosition,
                 position_state = result.PositionState,
             });
+        });
+
+        // ── POST /api/v1/execution/intent/signed-payload ────────────────────
+        // Returns an HMAC-signed payload for the <fyers-button> element.
+        // Applies the multi-intent heat gate (EC-5) and LADS health gate (RME-R2)
+        // before signing. P7-T5 / REQ-ORDER-009b/009c.
+        execution.MapPost("/intent/signed-payload", async (
+            HttpContext context,
+            IIntentSigningService signingService,
+            SignedPayloadRequest request) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            var sessionId = context.User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value ?? "";
+
+            try
+            {
+                var result = await signingService.CreateSignedPayloadAsync(
+                    userId, sessionId, request, context.RequestAborted);
+
+                return Results.Ok(new
+                {
+                    nonce = result.Nonce,
+                    data_attributes = result.DataAttributes,
+                    payload_hash = result.PayloadHash,
+                    expires_at_unix = result.ExpiresAtUnix,
+                });
+            }
+            catch (SignedPayloadSigningException ex)
+            {
+                return Results.UnprocessableEntity(new
+                {
+                    error = new
+                    {
+                        reason = ex.Reason,
+                        message = ex.Error.Message,
+                        last_successful_sync_at = ex.Error.LastSuccessfulSyncAt,
+                    }
+                });
+            }
         });
 
         return app;

@@ -236,10 +236,19 @@ export default function ChartPage() {
   }, []);
 
   const handleProceed = useCallback((params: ProceedParams) => {
-    // Placeholder for P7-T5+ (signed-payload endpoint + FYERS widget activation).
-    // Currently the ProceedParams are captured; the next task wires the
-    // signed-payload endpoint and Phase 2 widget invocation.
-    console.log("[Phase1Modal] Proceed:", params);
+    // P7-T5: Signed payload is available in params.signedPayload.
+    // P7-T6 (next task): writes intent_ledger record before widget activation.
+    // P7-T7 (subsequent): renders <fyers-button> and wires finished callback.
+    //
+    // For now, validate that we have a signed payload before closing the modal.
+    // The actual intent write and widget activation are wired in P7-T6 and P7-T7.
+    if (!params.signedPayload && !params.signedPayloadError) {
+      console.warn("[Phase1Modal] Proceeding without signed payload — awaiting P7-T6/T7 wiring.");
+    }
+    if (params.signedPayloadError) {
+      console.warn("[Phase1Modal] Signed payload has an error:", params.signedPayloadError);
+      // Still close the modal — the user sees the error in the modal.
+    }
     setModalAction(null);
   }, []);
 
