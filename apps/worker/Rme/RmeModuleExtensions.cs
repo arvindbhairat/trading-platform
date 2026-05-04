@@ -76,6 +76,12 @@ public static class RmeModuleExtensions
         // default distance percentage (portfolio-risk-guidelines § Stop Loss Types).
         services.AddSingleton<IStopLoss, FixedStopLoss>();
 
+        // P6-T13: ATR-based stop loss.
+        // AtrStopLoss — stop set at ATR × multiplier below entry price.
+        // Falls back to the default fixed distance percentage when ATR is unavailable.
+        // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
+        services.AddSingleton<IStopLoss, AtrStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
