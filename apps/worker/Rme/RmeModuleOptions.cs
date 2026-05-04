@@ -64,6 +64,16 @@ public sealed class RmeModuleOptions
     public double MaxPortfolioHeatPct { get; set; } = 5.0;
 
     /// <summary>
+    /// Default fixed stop distance expressed as a percentage below the entry price.
+    /// Applied when no explicit <c>FixedStopPrice</c> is provided in the stop-loss
+    /// input's additional parameters.
+    /// (portfolio-risk-guidelines § Stop Loss Types — Fixed Stop Loss).
+    /// Default: 5.0 (5% below entry price).
+    /// </summary>
+    [Range(0.1, 50.0)]
+    public double DefaultFixedStopDistancePct { get; set; } = 5.0;
+
+    /// <summary>
     /// Drawdown threshold at which position-size reduction begins.
     /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
     /// model starts reducing the recommended position size proportionally, reaching

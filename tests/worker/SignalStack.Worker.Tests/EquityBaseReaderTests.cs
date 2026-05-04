@@ -453,21 +453,24 @@ public sealed class EquityBaseReaderTests : IDisposable
 
         var sizingModel = new FixedPercentageSizingModel(options, NullLogger<FixedPercentageSizingModel>.Instance);
 
+        var stopModel = new FixedStopLoss(options, NullLogger<FixedStopLoss>.Instance);
+
         var service = new RmeAdvisoryService(
             reader,
             new[] { sizingModel },
+            new IStopLoss[] { stopModel },
             NullLogger<RmeAdvisoryService>.Instance);
 
         // Act
         var advisory = await service.GetSizingRecommendationAsync(
             userId, "RELIANCE", 2500m,
-            "fixed_percentage", "fixed_stop",
+            "fixed_percentage", "FixedStop",
             default);
 
         // Assert — equity base = 200000, risk = 1% → risk amount = 2000
         Assert.Equal(200000m * 0.01m, advisory.RiskAmount);
         Assert.Equal("FixedPercentage", advisory.SizingModelUsed);
-        Assert.Equal("fixed_stop", advisory.StopTypeUsed);
+        Assert.Equal("FixedStop", advisory.StopTypeUsed);
     }
 
     [Fact]
@@ -494,6 +497,7 @@ public sealed class EquityBaseReaderTests : IDisposable
         var service = new RmeAdvisoryService(
             reader,
             new[] { sizingModel },
+            Array.Empty<IStopLoss>(),
             NullLogger<RmeAdvisoryService>.Instance);
 
         // Act

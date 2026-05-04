@@ -70,6 +70,12 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Position Sizing Models).
         services.AddSingleton<ISizingModel, DrawdownAdjustedSizingModel>();
 
+        // ── P6-T12: Stop models ─────────────────────────────────────────────────
+        // FixedStopLoss — stop set at a fixed price below entry. Reads the explicit
+        // FixedStopPrice from additional inputs or falls back to the configured
+        // default distance percentage (portfolio-risk-guidelines § Stop Loss Types).
+        services.AddSingleton<IStopLoss, FixedStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();
@@ -104,15 +110,18 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
 {
     private readonly IEquityBaseReader _equityBaseReader;
     private readonly IEnumerable<ISizingModel> _sizingModels;
+    private readonly IEnumerable<IStopLoss> _stopLosses;
     private readonly ILogger<RmeAdvisoryService> _logger;
 
     public RmeAdvisoryService(
         IEquityBaseReader equityBaseReader,
         IEnumerable<ISizingModel> sizingModels,
+        IEnumerable<IStopLoss> stopLosses,
         ILogger<RmeAdvisoryService> logger)
     {
         _equityBaseReader = equityBaseReader ?? throw new ArgumentNullException(nameof(equityBaseReader));
         _sizingModels = sizingModels ?? throw new ArgumentNullException(nameof(sizingModels));
+        _stopLosses = stopLosses ?? throw new ArgumentNullException(nameof(stopLosses));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -191,7 +200,35 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
                 AdvisoryMessage: equityResult.AdvisoryMessage);
         }
 
-        // ── Step 2: Dispatch to the configured sizing model (P6-T8) ──────────
+        // ── Step 2: Compute stop price via the configured stop model (P6-T12) ──
+        // Find the stop model by type; fall back to FixedStop if unknown or empty.
+        var stopModel = _stopLosses.FirstOrDefault(s =>
+            string.Equals(s.Name, stopLossType, StringComparison.OrdinalIgnoreCase))
+            ?? _stopLosses.OfType<FixedStopLoss>().FirstOrDefault();
+
+        if (stopModel is null)
+        {
+            _logger.LogError(
+                "RME: no stop model found for type '{StopLossType}' " +
+                "and no FixedStopLoss registered. Returning zero advisory.",
+                stopLossType);
+
+            return new SizingAdvisory(
+                RecommendedQuantity: 0m,
+                RiskAmount: 0m,
+                StopPrice: 0m,
+                SizingModelUsed: sizingModelType,
+                StopTypeUsed: stopLossType,
+                AdvisoryMessage: "Stop model unavailable — no matching stop model registered.");
+        }
+
+        var stopInput = new StopLossInput(
+            EntryPrice: entryPrice,
+            AdditionalInputs: null);
+
+        var stopResult = stopModel.Calculate(stopInput);
+
+        // ── Step 3: Dispatch to the configured sizing model (P6-T8) ──────────
         // Find the model by type; fall back to FixedPercentage if unknown or empty.
         var model = _sizingModels.FirstOrDefault(m =>
             string.Equals(m.Name, sizingModelType, StringComparison.OrdinalIgnoreCase))
@@ -207,15 +244,15 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
             return new SizingAdvisory(
                 RecommendedQuantity: 0m,
                 RiskAmount: 0m,
-                StopPrice: 0m,
+                StopPrice: stopResult.StopPrice,
                 SizingModelUsed: sizingModelType,
-                StopTypeUsed: stopLossType,
+                StopTypeUsed: stopResult.StopTypeUsed,
                 AdvisoryMessage: "Sizing model unavailable — no matching model registered.");
         }
 
         var sizingInput = new SizingInput(
             EntryPrice: entryPrice,
-            StopPrice: 0m, // Stop price wiring in P6-T12
+            StopPrice: stopResult.StopPrice,
             AccountEquity: equityResult.EquityBase,
             AvailableCapital: equityResult.EquityBase,
             AdditionalInputs: null);
@@ -224,11 +261,12 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
 
         _logger.LogInformation(
             "RME: sizing recommendation for user {UserId} symbol {Symbol} — " +
-            "model: {ModelName}, equity base: {EquityBase}, " +
-            "recommended qty: {Qty} @ price ₹{Price}. " +
+            "model: {ModelName}, stop: {StopType} @ ₹{StopPrice}, " +
+            "equity base: {EquityBase}, recommended qty: {Qty} @ price ₹{Price}. " +
             "Source: {Source}. Override active: {Override}. " +
             "Snapshot consistent: {Consistent}.",
-            userId, symbol, model.Name, equityResult.EquityBase,
+            userId, symbol, model.Name, stopResult.StopTypeUsed, stopResult.StopPrice,
+            equityResult.EquityBase,
             result.RecommendedQuantity, entryPrice,
             equityResult.Source, equityResult.IsOverrideActive,
             equityResult.IsSnapshotConsistent);
@@ -236,9 +274,9 @@ internal sealed class RmeAdvisoryService : IRmeAdvisoryService
         return new SizingAdvisory(
             RecommendedQuantity: result.RecommendedQuantity,
             RiskAmount: result.RiskAmount,
-            StopPrice: 0m, // Stop price wiring in P6-T12
+            StopPrice: stopResult.StopPrice,
             SizingModelUsed: model.Name,
-            StopTypeUsed: stopLossType,
+            StopTypeUsed: stopResult.StopTypeUsed,
             AdvisoryMessage: equityResult.AdvisoryMessage);
     }
 }
