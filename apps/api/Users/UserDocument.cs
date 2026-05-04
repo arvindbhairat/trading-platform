@@ -118,6 +118,17 @@ public sealed class UserDocument
     /// <summary>Consecutive Telegram delivery failures since last successful send (REQ-NOTIFY-019).</summary>
     [BsonElement("telegram_consecutive_failures")]
     public int TelegramConsecutiveFailures { get; set; }
+
+    // ── Admin per-user signal suspension (REQ-ADMIN-010) ──────────────────
+
+    /// <summary>
+    /// When true, all Signal Subscriptions for this user are suspended.
+    /// Open positions will be transitioned to Suspended with reason
+    /// <c>user_signal_suspended</c>. Set/reset by admin portal with step-up.
+    /// REQ-ADMIN-010.
+    /// </summary>
+    [BsonElement("signals_suspended")]
+    public bool SignalsSuspended { get; set; }
 }
 
 /// <summary>

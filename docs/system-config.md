@@ -351,6 +351,8 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `market_data.provider.active` | market_data | string | `fyers` | REQ-MKTPROV-005 |
 | `integrations.fyers.price_deviation_warning_pct` | integrations | number | 1 | REQ-ORDER-011 |
 | `risk.default.portfolio_heat_warning_threshold_pct` | risk | number | 4 | REQ-ORDER-012 |
+| `risk.kill_switch.active` | risk | boolean | false | REQ-ADMIN-007 |
+| `risk.signal_types.ma_crossover.enabled` | risk | boolean | true | REQ-ADMIN-011 |
 | `operations.system_health.lookback_days` | operations | number | 7 | REQ-ADMIN-014 |
 | `operations.phase.current` | operations | string | `A` | REQ-LEGAL-001 |
 | `operations.phase_a.tester_ceiling` | operations | number | 30 | REQ-LEGAL-003 |

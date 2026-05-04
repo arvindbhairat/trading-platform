@@ -289,6 +289,15 @@ app.MapAdminBreachEndpoints();
 // Admin home / transfer recovery summary endpoints — P2-T19 / REQ-ROLE-007a
 app.MapAdminHomeEndpoints();
 
+// Admin global RME kill switch endpoints — P6-T25 / REQ-ADMIN-007
+app.MapAdminKillSwitchEndpoints();
+
+// Admin signal type enable/disable endpoints — P6-T25 / REQ-ADMIN-011/013
+app.MapAdminSignalTypeEndpoints();
+
+// Admin position management endpoints (suspend/release/force-close) — P6-T25 / REQ-ADMIN-016, REQ-PLC-005a
+app.MapAdminPositionEndpoints();
+
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
 

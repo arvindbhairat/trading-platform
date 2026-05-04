@@ -213,6 +213,18 @@ public sealed class MongoUserRepository : IUserRepository
         }
     }
 
+    // REQ-ADMIN-010: sets or clears per-user signal suspension.
+    public async Task SetSignalsSuspendedAsync(
+        string userId, bool suspended, CancellationToken ct = default)
+    {
+        var filter = Builders<UserDocument>.Filter.Eq(u => u.UserId, userId);
+        var update = Builders<UserDocument>.Update
+            .Set(u => u.SignalsSuspended, suspended)
+            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+
+        await _users.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
     public async Task<List<LinkedIdentity>> LinkIdentityAsync(
         string userId, string provider, string providerKey, string email,
         CancellationToken ct = default)

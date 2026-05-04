@@ -114,6 +114,15 @@ public interface IUserRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// REQ-ADMIN-010: sets or clears per-user signal suspension.
+    /// When <paramref name="suspended"/> is true, all Signal Subscriptions for
+    /// this user are suspended; open positions transition to Suspended with
+    /// reason <c>user_signal_suspended</c>.
+    /// </summary>
+    Task SetSignalsSuspendedAsync(
+        string userId, bool suspended, CancellationToken ct = default);
+
+    /// <summary>
     /// REQ-RECOVERY-005: admin-assisted rebind — replaces all linked identities
     /// with a single new primary identity and clears the old provider/key.
     /// Only the OAuth identity binding changes; all other state is preserved.
