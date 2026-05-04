@@ -1,6 +1,8 @@
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MongoDB.Driver;
+using Moq;
 using SignalStack.Worker.Rme;
 using Xunit;
 
@@ -13,6 +15,7 @@ namespace SignalStack.Worker.Tests;
 public sealed class PositionChannelRegistryTests : IDisposable
 {
     private readonly Meter _meter = new($"SignalStack.Worker.Tests.{Guid.NewGuid()}");
+    private static readonly IMongoDatabase _database = Mock.Of<IMongoDatabase>();
 
     public void Dispose() => _meter.Dispose();
 
@@ -25,7 +28,7 @@ public sealed class PositionChannelRegistryTests : IDisposable
             Options.Create(options ?? new PositionChannelOptions()),
             consumer,
             repository,
-            _meter);
+            _database);
 
     // ─── REQ-RME-CONC-001 / Vertical slice ───────────────────────────────────
 
