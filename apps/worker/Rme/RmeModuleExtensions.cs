@@ -138,6 +138,14 @@ public static class RmeModuleExtensions
         // threshold (REQ-HEAT-001, REQ-HEAT-002, REQ-HEAT-003).
         services.AddSingleton<IPortfolioHeatCalculator, PortfolioHeatCalculator>();
 
+        // ── P6-T20: Drawdown tracker ────────────────────────────────────────────
+        // IDrawdownTracker reads equity_curve history to compute current drawdown
+        // from the high-water mark, evaluates the six graduated thresholds, and
+        // returns a structured assessment with category (a) platform-enforced
+        // restrictions vs category (b) user-advisory notifications (REQ-DRDN-001,
+        // REQ-DRDN-002, REQ-DRDN-003, REQ-DRDN-004).
+        services.AddSingleton<IDrawdownTracker, DrawdownTracker>();
+
         // Background service — skeleton only; real work added by P6-T24.
         services.AddHostedService<RmeBackgroundService>();
 

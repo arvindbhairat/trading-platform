@@ -107,7 +107,8 @@ public sealed class RmeModuleOptions
     /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
     /// model starts reducing the recommended position size proportionally, reaching
     /// zero at <see cref="DrawdownBlockPct"/>.
-    /// Mapped from sys_config <c>risk.drawdown.threshold_reduce_size_pct</c> (REQ-DRDN-003).
+    /// Mapped from sys_config <c>risk.drawdown_enforcement.size_reduction_pct</c> (REQ-DRDN-003,
+    /// REQ-DRDN-004 naming convention). Compiled-in fallback; runtime value from <see cref="IDrawdownTracker"/>.
     /// Default: 5.0 (5% drawdown from peak equity).
     /// </summary>
     [Range(0.0, 100.0)]
@@ -117,7 +118,8 @@ public sealed class RmeModuleOptions
     /// Drawdown threshold at which new entry recommendations are blocked entirely.
     /// When current drawdown reaches or exceeds this percentage, the drawdown-adjusted
     /// sizing model returns zero quantity with an advisory message.
-    /// Mapped from sys_config <c>risk.drawdown.threshold_block_new_entries_pct</c> (REQ-DRDN-003).
+    /// Mapped from sys_config <c>risk.drawdown_enforcement.suppress_entry_pct</c> (REQ-DRDN-003,
+    /// REQ-DRDN-004 naming convention). Compiled-in fallback; runtime value from <see cref="IDrawdownTracker"/>.
     /// Default: 20.0 (20% drawdown from peak equity).
     /// </summary>
     [Range(0.0, 100.0)]

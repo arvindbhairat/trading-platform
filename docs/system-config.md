@@ -284,15 +284,15 @@ This table is the authoritative reference for the database seeding script (REQ-C
 | `risk.default.min_cash_reserve_pct` | risk | number | 20 | REQ-HEAT-007 |
 | `risk.default.max_portfolio_heat_pct` | risk | number | 5 | REQ-HEAT-002 |
 | `risk.correlated_industry_groups` | risk | string | `[{"group_name":"Banking & Finance","industry_names":["Banking","Finance"]},{"group_name":"Metals","industry_names":["Metals","Metal Products"]},{"group_name":"Oil & Gas","industry_names":["Oil","Gas"]}]` | REQ-SIZING-014a |
-| `risk.drawdown.daily_loss_limit_pct` | risk | number | 2 | REQ-DRDN-002 |
-| `risk.drawdown.weekly_loss_limit_pct` | risk | number | 4 | REQ-DRDN-002 |
-| `risk.drawdown.monthly_loss_limit_pct` | risk | number | 6 | REQ-DRDN-002 |
-| `risk.drawdown.threshold_reduce_size_pct` | risk | number | 5 | REQ-DRDN-003 |
-| `risk.drawdown.threshold_suspend_addon_pct` | risk | number | 10 | REQ-DRDN-003 |
-| `risk.drawdown.threshold_reduce_positions_pct` | risk | number | 15 | REQ-DRDN-003 |
-| `risk.drawdown.threshold_block_new_entries_pct` | risk | number | 20 | REQ-DRDN-003 |
-| `risk.drawdown.threshold_close_weakest_pct` | risk | number | 25 | REQ-DRDN-003 |
-| `risk.drawdown.threshold_stop_all_trading_pct` | risk | number | 30 | REQ-DRDN-003 |
+| `risk.drawdown_advisory.daily_loss_limit_pct` | risk | number | 2 | REQ-DRDN-002 |
+| `risk.drawdown_advisory.weekly_loss_limit_pct` | risk | number | 4 | REQ-DRDN-002 |
+| `risk.drawdown_advisory.monthly_loss_limit_pct` | risk | number | 6 | REQ-DRDN-002 |
+| `risk.drawdown_enforcement.size_reduction_pct` | risk | number | 5 | REQ-DRDN-003 |
+| `risk.drawdown_enforcement.suppress_addon_pct` | risk | number | 10 | REQ-DRDN-003 |
+| `risk.drawdown_enforcement.advisory_reduce_positions_pct` | risk | number | 15 | REQ-DRDN-003 |
+| `risk.drawdown_enforcement.suppress_entry_pct` | risk | number | 20 | REQ-DRDN-003 |
+| `risk.drawdown_enforcement.advisory_close_weakest_pct` | risk | number | 25 | REQ-DRDN-003 |
+| `risk.drawdown_enforcement.advisory_stop_all_trading_pct` | risk | number | 30 | REQ-DRDN-003 |
 | `risk.pending_entry.expiry_sessions` | risk | number | 1 | REQ-PLC-008 |
 | `risk.time_stop.default_sessions` | risk | number | 10 | REQ-STOP-003 |
 | `risk.pyramiding.max_addon_entries` | risk | number | 3 | REQ-PYR-003 |
