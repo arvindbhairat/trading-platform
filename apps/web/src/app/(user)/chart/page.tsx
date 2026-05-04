@@ -13,13 +13,13 @@ import {
   Card,
   Btn,
   Num,
-  Label,
   Pill,
   userNavItems,
 } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live-quotes";
-import PortfolioImpactPanel from "@/components/PortfolioImpactPanel";
+import RmeAdvisoryPanel from "@/components/RmeAdvisoryPanel";
+import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
 
 // ---------------------------------------------------------------------------
@@ -353,6 +353,11 @@ export default function ChartPage() {
           </Pill>
         </div>
 
+        {/* Portfolio health strip — P6-T27 */}
+        <PortfolioHealthStrip />
+
+        <div style={{ height: "var(--s-4)" }} />
+
         {/* Chart + RME panel grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 14 }}>
           {/* Chart */}
@@ -411,91 +416,15 @@ export default function ChartPage() {
             <div ref={chartContainerRef} style={{ width: "100%", height: 400 }} />
           </Card>
 
-          {/* RME advisory panel (from design_system/ui_kits/user-portal/ChartPage.jsx) */}
-          <Card>
-            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line-1)" }}>
-              <Label>RME advisory</Label>
-              <h3 style={{ margin: "4px 0 0 0", fontSize: 15, color: "var(--fg-1)" }}>
-                {symbolName}
-              </h3>
-            </div>
-            <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>
-                  Latest price
-                </div>
-                <Num
-                  value={currentPrice ? `₹${currentPrice.toFixed(2)}` : "—"}
-                  size="lg"
-                  color={priceColor}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>Change</div>
-                  <Num
-                    value={change !== 0 ? `${change >= 0 ? "+" : ""}${change.toFixed(2)}` : "—"}
-                    size="md"
-                    color={priceColor}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>Change %</div>
-                  <Num
-                    value={changePct !== 0 ? `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%` : "—"}
-                    size="md"
-                    color={priceColor}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>Open</div>
-                  <Num value={currentPrice ? `₹${currentPrice.toFixed(2)}` : "—"} size="md" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>High</div>
-                  <Num value={currentPrice ? `₹${currentPrice.toFixed(2)}` : "—"} size="md" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>Low</div>
-                  <Num value={currentPrice ? `₹${currentPrice.toFixed(2)}` : "—"} size="md" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 4 }}>Prev close</div>
-                  <Num value={currentPrice ? `₹${currentPrice.toFixed(2)}` : "—"} size="md" />
-                </div>
-              </div>
-
-              <PortfolioImpactPanel />
-
-              <div
-                style={{
-                  padding: 8,
-                  background: "rgba(245,165,36,0.08)",
-                  border: "1px solid rgba(245,165,36,0.2)",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  color: "var(--warn-500)",
-                }}
-              >
-                You are the sole decision-maker. This is decision support based on your own configuration.
-              </div>
-
-              <Btn
-                variant="primary"
-                size="lg"
-                icon="external"
-                onClick={() =>
-                  window.open(
-                    `https://trade.fyers.in/?symbol=${encodeURIComponent(symbol)}`,
-                    "_blank"
-                  )
-                }
-              >
-                Review on FYERS
-              </Btn>
-            </div>
-          </Card>
+          {/* RME advisory panel — P6-T27 */}
+          <div>
+            <RmeAdvisoryPanel
+              symbol={symbol}
+              symbolName={symbolName}
+              currentPrice={currentPrice}
+              priceColor={priceColor}
+            />
+          </div>
         </div>
 
         {/* REQ-STOP-006c: delay indicator (FYERS is real-time, hidden by default) */}

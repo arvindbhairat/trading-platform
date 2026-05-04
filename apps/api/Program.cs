@@ -23,6 +23,7 @@ using SignalStack.Api.Push;
 using SignalStack.Api.TelegramBot;
 using SignalStack.Api.LedgerWriters;
 using SignalStack.Api.Portfolio;
+using SignalStack.Api.Risk;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -55,6 +56,9 @@ builder.Services.AddSingleton<ManualAdjustmentService>();
 
 // Portfolio and reconciliation services — P5-T10 / REQ-RECON-001..004
 builder.Services.AddPortfolioServices();
+
+// RME advisory and risk services — P6-T27 / REQ-CHART-* (advisory subset), RME-L1
+builder.Services.AddRiskServices();
 
 // OAuth / JWT Bearer / CSRF — REQ-AUTH-001/002/011, REQ-SEC-001
 builder.Services.AddSignalStackAuth(builder.Configuration);
@@ -300,6 +304,9 @@ app.MapAdminPositionEndpoints();
 
 // Admin incident dashboard endpoints — P6-T26 / REQ-RME-CONC-007
 app.MapAdminIncidentEndpoints();
+
+// RME advisory endpoints — P6-T27 / REQ-CHART-* (advisory subset), RME-L1
+app.MapRmeAdvisoryEndpoints();
 
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
