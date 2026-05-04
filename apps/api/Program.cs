@@ -93,6 +93,9 @@ builder.Services.AddPhaseConstraintServices();
 // Phase transition gating service — P8-T3 / REQ-LEGAL-001/005/005a
 builder.Services.AddSingleton<PhaseGateService>();
 
+// Penetration test scheduling + remediation tracking — P8-T10 / REQ-SEC-010
+builder.Services.AddSingleton<IPenetrationTestRepository, MongoPenetrationTestRepository>();
+
 // Data subject rights workflow — REQ-PRIVACY-004 (P2-T21)
 builder.Services.AddPrivacyRequestManagement();
 
@@ -337,6 +340,9 @@ app.MapAdminLegalPostureEndpoints();
 
 // Admin impersonation endpoints — P8-T5 / REQ-ADMIN-015, REQ-PRIVACY-012
 app.MapImpersonationEndpoints();
+
+// Admin penetration test management endpoints — P8-T10 / REQ-SEC-010
+app.MapAdminPenetrationTestEndpoints();
 
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
