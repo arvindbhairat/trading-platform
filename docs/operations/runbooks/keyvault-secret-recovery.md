@@ -1,7 +1,7 @@
 # Runbook 9 — Key Vault Access Failure and Secret Recovery
 
 **REQ coverage:** REQ-BCP-004, REQ-BCP-006, REQ-BCP-008  
-**Last reviewed:** 2026-04-29 (initial authoring — field-test before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
 
 ---
 
@@ -147,4 +147,4 @@ If the recovery or rotation makes things worse:
 
 ---
 
-**Last reviewed:** 2026-04-29 — initial draft (field-test required before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding

@@ -1,7 +1,7 @@
 # Runbook 10 — MongoDB Restore from Point-in-Time (PITR)
 
 **REQ coverage:** REQ-BCP-001, REQ-BCP-006  
-**Last reviewed:** 2026-04-29 (initial authoring — field-test before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
 
 ---
 
@@ -137,4 +137,4 @@ If the restored cluster is invalid or the cutover causes application errors:
 
 ---
 
-**Last reviewed:** 2026-04-29 — initial draft (field-test required before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding

@@ -26,6 +26,7 @@ Status per runbook reflects whether it must exist at the current phase (per `REQ
 | 16 | Phase transition (A→B or B→C) | *not yet drafted* | B | Missing |
 | 17 | User deactivation and reactivation | *not yet drafted* | B | Missing |
 | 18 | FYERS app credential rotation | *not yet drafted* | B | Missing |
+| 19 | **Drill record — annual restore drill 001** | `drill-execution-001-2026-05-05.md` | A | Executed in P8-T8 (2026-05-05) — all 4 data classes: success |
 
 **Phase A mandatory runbooks (5 total):** Runbooks 1–5 are mandatory before onboarding the first tester, per REQ-LEGAL-005 gating logic as surfaced through REQ-LEGAL-010's Legal Posture widget. Runbooks 4 and 5 were added as Phase A mandatory in the 2026-04-25 review (findings RME-L2 and A-12): the OCC-exhaustion concurrency-freeze path (REQ-RME-CONC-007) and the MongoDB replica-set failover / sustained LADS abort window (REQ-PORT-021a) are both realistic Phase A production scenarios that must have deterministic resolution procedures before the RME is in production. The remaining entries are mandatory before the Phase B transition.
 

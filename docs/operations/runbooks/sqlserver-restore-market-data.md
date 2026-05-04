@@ -1,7 +1,7 @@
 # Runbook 11 — SQL Server Restore (Market Data Database)
 
 **REQ coverage:** REQ-BCP-002, REQ-BCP-006  
-**Last reviewed:** 2026-04-29 (initial authoring — field-test before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
 
 ---
 
@@ -120,4 +120,4 @@ If the restored database is invalid:
 
 ---
 
-**Last reviewed:** 2026-04-29 — initial draft (field-test required before Phase A user onboarding)
+**Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
