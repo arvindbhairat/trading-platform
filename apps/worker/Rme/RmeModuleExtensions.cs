@@ -102,6 +102,13 @@ public static class RmeModuleExtensions
         // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
         services.AddSingleton<IStopLoss, SwingLowStopLoss>();
 
+        // P6-T17: Break-Even Stop — moves the stop to the entry price once the
+        // position reaches a configurable profit level (default 1R). Falls back to
+        // the default fixed distance percentage when the trigger condition is not yet
+        // met or R-multiple data is unavailable.
+        // (portfolio-risk-guidelines § Stop Loss Types — Required Stop Types (V1)).
+        services.AddSingleton<IStopLoss, BreakevenStopLoss>();
+
         // RmeAdvisoryService — replaced by concrete implementation in P6-T6
         // (equity-base read). Full sizing + stop wiring in P6-T8/P6-T12.
         services.AddSingleton<IRmeAdvisoryService, RmeAdvisoryService>();

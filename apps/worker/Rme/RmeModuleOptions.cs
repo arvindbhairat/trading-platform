@@ -93,6 +93,16 @@ public sealed class RmeModuleOptions
     public double DefaultSwingLowBufferPct { get; set; } = 0.0;
 
     /// <summary>
+    /// R-multiple threshold for breakeven stop activation.
+    /// When the position's current R-multiple reaches or exceeds this value,
+    /// the <see cref="BreakevenStopLoss"/> moves the stop to the entry price.
+    /// Mapped from sys_config <c>risk.stop.breakeven_trigger_r</c> (REQ-STOP-009).
+    /// Default: 1.0 (1R gain triggers breakeven).
+    /// </summary>
+    [Range(0.1, 10.0)]
+    public double DefaultBreakevenTriggerR { get; set; } = 1.0;
+
+    /// <summary>
     /// Drawdown threshold at which position-size reduction begins.
     /// When current drawdown exceeds this percentage, the drawdown-adjusted sizing
     /// model starts reducing the recommended position size proportionally, reaching
