@@ -146,6 +146,19 @@ public static class RmeModuleExtensions
         // REQ-DRDN-002, REQ-DRDN-003, REQ-DRDN-004).
         services.AddSingleton<IDrawdownTracker, DrawdownTracker>();
 
+        // ── P6-T21: Pyramiding advisory service ──────────────────────────────────
+        // IPyramidingAdvisoryService evaluates add-on and reduce levels,
+        // enforces max add-on entries (REQ-PYR-003), progressive add-on quantity
+        // reduction (REQ-PYR-004), and the never-lowers-stop floor invariant
+        // (REQ-PYR-011). Stateless; registered as singleton.
+        services.AddSingleton<IPyramidingAdvisoryService, PyramidingAdvisoryService>();
+
+        // ── P6-T21: Z-score advisory overlay service ─────────────────────────────
+        // IZScoreAdvisoryService computes z-score deviations from rolling closing
+        // prices and surfaces add-more / reduce-size advisories with mapped price
+        // levels (REQ-SIZING-006, REQ-SIZING-007, REQ-SIZING-008).
+        services.AddSingleton<IZScoreAdvisoryService, ZScoreAdvisoryService>();
+
         // Background service — skeleton only; real work added by P6-T24.
         services.AddHostedService<RmeBackgroundService>();
 

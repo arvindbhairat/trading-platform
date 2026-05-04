@@ -71,6 +71,42 @@ public sealed class PositionDocument
 
     // ── Timestamps ────────────────────────────────────────────────────────────
 
+    // ── Pyramiding / Tranche tracking (REQ-PYR-003, REQ-PYR-011) ──────────────
+
+    /// <summary>
+    /// Ordered list of pyramid tranches. The first entry is the initial position;
+    /// subsequent entries are add-on tranches. Each tranche records its own
+    /// entry price, quantity, and assigned stop loss at entry time.
+    /// REQ-PYR-003, REQ-PYR-011.
+    /// </summary>
+    [BsonElement("tranches")]
+    [BsonIgnoreIfDefault]
+    public List<TrancheRecord> Tranches { get; set; } = [];
+
+    /// <summary>
+    /// Quantity-weighted average entry price across all tranches.
+    /// Recalculated after each add or reduce (REQ-PYR-010).
+    /// </summary>
+    [BsonElement("average_entry_price")]
+    public decimal AverageEntryPrice { get; set; }
+
+    /// <summary>
+    /// Number of pyramid (add-on) entries currently active.
+    /// 0 = initial entry only, 1 = first add-on completed, etc.
+    /// REQ-PYR-003: must not exceed risk.pyramiding.max_addon_entries.
+    /// </summary>
+    [BsonElement("pyramid_entry_count")]
+    public int PyramidEntryCount { get; set; }
+
+    /// <summary>
+    /// The highest individual tranche stop loss currently in effect.
+    /// Used as the floor for the never-lowers-stop invariant (REQ-PYR-011).
+    /// When a new tranche is added and the recalculated combined stop is lower
+    /// than this value, this value is preserved as the effective stop.
+    /// </summary>
+    [BsonElement("stop_floor")]
+    public decimal StopFloor { get; set; }
+
     // ── Time Stop (REQ-STOP-003) ──────────────────────────────────────────────
 
     /// <summary>
@@ -119,7 +155,11 @@ public sealed class PositionDocument
         bool? exitAdvisoryActive = null,
         long? ledgerFenceToken = null,
         string? timeStopDate = null,
-        List<TimeStopAuditEntry>? timeStopAudit = null)
+        List<TimeStopAuditEntry>? timeStopAudit = null,
+        List<TrancheRecord>? tranches = null,
+        decimal? averageEntryPrice = null,
+        int? pyramidEntryCount = null,
+        decimal? stopFloor = null)
     {
         return new PositionDocument
         {
@@ -140,6 +180,10 @@ public sealed class PositionDocument
             LedgerFenceToken = ledgerFenceToken ?? LedgerFenceToken,
             TimeStopDate = timeStopDate ?? TimeStopDate,
             TimeStopAudit = timeStopAudit ?? TimeStopAudit,
+            Tranches = tranches ?? Tranches,
+            AverageEntryPrice = averageEntryPrice ?? AverageEntryPrice,
+            PyramidEntryCount = pyramidEntryCount ?? PyramidEntryCount,
+            StopFloor = stopFloor ?? StopFloor,
             CreatedAt = CreatedAt,
             UpdatedAt = DateTime.UtcNow,
             ClosedAt = state is PositionState.Closed or PositionState.Rejected
@@ -147,6 +191,30 @@ public sealed class PositionDocument
                 : ClosedAt,
         };
     }
+}
+
+/// <summary>
+/// A single pyramid tranche within a position. The first entry is the initial
+/// position; subsequent entries are add-on tranches. REQ-PYR-003, REQ-PYR-011.
+/// </summary>
+public sealed record TrancheRecord
+{
+    [BsonElement("entry_price")]
+    public required decimal EntryPrice { get; init; }
+
+    [BsonElement("quantity")]
+    public required decimal Quantity { get; init; }
+
+    [BsonElement("stop_loss")]
+    public required decimal StopLoss { get; init; }
+
+    [BsonElement("entered_at")]
+    public required DateTime EnteredAt { get; init; }
+
+    /// <summary>Position state at the time this tranche was active (Open or Closed).</summary>
+    [BsonElement("state")]
+    [BsonIgnoreIfNull]
+    public string? State { get; init; }
 }
 
 /// <summary>

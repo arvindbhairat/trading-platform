@@ -124,4 +124,58 @@ public sealed class RmeModuleOptions
     /// </summary>
     [Range(0.0, 100.0)]
     public double DrawdownBlockPct { get; set; } = 20.0;
+
+    // ── Pyramiding configuration (REQ-PYR-003) ─────────────────────────────────
+
+    /// <summary>
+    /// Maximum number of add-on entries (pyramid tranches) permitted per position.
+    /// Mapped from sys_config <c>risk.pyramiding.max_addon_entries</c> (REQ-PYR-003).
+    /// Default: 3.
+    /// </summary>
+    [Range(0, 20)]
+    public int MaxPyramidingAddonEntries { get; set; } = 3;
+
+    /// <summary>
+    /// Percentage move from average entry price that triggers an add-on recommendation.
+    /// An add is recommended when the current price is at or above
+    /// average_entry_price × (1 + AddTriggerMovePct / 100).
+    /// Default: 5.0 (5% above average entry).
+    /// </summary>
+    [Range(0.1, 50.0)]
+    public double AddTriggerMovePct { get; set; } = 5.0;
+
+    /// <summary>
+    /// Percentage of the average entry price that each successive add-on quantity
+    /// is reduced by relative to the prior add-on.
+    /// Default: 50 (50% reduction — second add is half the first add).
+    /// REQ-PYR-004: add-on quantity must reduce progressively.
+    /// </summary>
+    [Range(10, 100)]
+    public double AddSizeReductionPct { get; set; } = 50.0;
+
+    // ── Z-Score configuration (REQ-SIZING-007) ─────────────────────────────────
+
+    /// <summary>
+    /// Default timeframe for z-score computation.
+    /// Mapped from sys_config <c>position_sizing.zscore.default_timeframe</c>.
+    /// Supported values: "rolling_5d", "rolling_3d".
+    /// Default: "rolling_5d".
+    /// </summary>
+    public string ZScoreDefaultTimeframe { get; set; } = "rolling_5d";
+
+    /// <summary>
+    /// Z-score threshold above which an add-more advisory is generated.
+    /// Mapped from sys_config <c>position_sizing.zscore.add_threshold</c>.
+    /// Default: 3.0.
+    /// </summary>
+    [Range(0.0, 10.0)]
+    public double ZScoreAddThreshold { get; set; } = 3.0;
+
+    /// <summary>
+    /// Z-score threshold below which a reduce-size advisory is generated.
+    /// Mapped from sys_config <c>position_sizing.zscore.reduce_threshold</c>.
+    /// Default: -3.0.
+    /// </summary>
+    [Range(-10.0, 0.0)]
+    public double ZScoreReduceThreshold { get; set; } = -3.0;
 }
