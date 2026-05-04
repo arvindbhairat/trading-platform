@@ -17,6 +17,7 @@ public static class PortfolioExtensions
     {
         services.AddSingleton<IManualAdjustmentRepository, MongoManualAdjustmentRepository>();
         services.AddSingleton<HoldingsService>();
+        services.AddSingleton<PortfolioImpactService>();
         return services;
     }
 }

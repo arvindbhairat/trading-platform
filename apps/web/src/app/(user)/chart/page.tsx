@@ -19,6 +19,7 @@ import {
 } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live-quotes";
+import PortfolioImpactPanel from "@/components/PortfolioImpactPanel";
 import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
 
 // ---------------------------------------------------------------------------
@@ -465,21 +466,7 @@ export default function ChartPage() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  padding: 10,
-                  background: "var(--bg-1)",
-                  border: "1px solid var(--line-1)",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: "var(--fg-2)",
-                }}
-              >
-                <Label>Portfolio impact</Label>
-                <div style={{ marginTop: 4 }}>
-                  Open risk and sector exposure will appear once portfolio data is loaded.
-                </div>
-              </div>
+              <PortfolioImpactPanel />
 
               <div
                 style={{

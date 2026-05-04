@@ -84,6 +84,39 @@ public static class PortfolioEndpoints
             });
         });
 
+        // ── GET /api/v1/portfolio/impact ──────────────────────────────────
+        // Returns pre-trade portfolio impact (heat, sector exposure, entry status).
+        // P6-T22 / portfolio-risk-guidelines § Required Auditability.
+        portfolio.MapGet("/impact", async (
+            HttpContext context,
+            PortfolioImpactService impactService) =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            var impact = await impactService.ComputeImpactAsync(
+                userId, context.RequestAborted);
+
+            return Results.Ok(new
+            {
+                portfolio_heat_pct = impact.PortfolioHeatPct,
+                max_heat_pct = impact.MaxHeatPct,
+                total_open_risk = impact.TotalOpenRisk,
+                account_equity = impact.AccountEquity,
+                open_position_count = impact.OpenPositionCount,
+                suspended_position_count = impact.SuspendedPositionCount,
+                entry_blocked = impact.EntryBlocked,
+                entry_blocked_reason = impact.EntryBlockedReason,
+                sector_exposures = impact.SectorExposures?.Select(s => new
+                {
+                    sector = s.Sector,
+                    exposure_pct = s.ExposurePct,
+                    open_risk = s.OpenRisk,
+                }),
+            });
+        });
+
         // ── GET /api/v1/portfolio/summary ─────────────────────────────────
         // Returns portfolio-level KPIs.
         // REQ-DASH-002: total invested, market value, return.
