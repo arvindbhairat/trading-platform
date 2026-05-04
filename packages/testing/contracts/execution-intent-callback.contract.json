@@ -1,0 +1,19 @@
+{
+  "endpoint": "/api/v1/execution/intent/callback",
+  "method": "POST",
+  "auth": "required",
+  "description": "Called by the frontend after receiving the FYERS widget finished callback (P7-T7). Updates the intent_ledger record to matched or submission_failed. Never advances position lifecycle — only intent status (REQ-ORDER-015/015e/015f).",
+  "requestFields": [
+    { "path": "nonce", "type": "string", "required": true, "description": "Nonce from the signed payload" },
+    { "path": "status", "type": "string", "required": true, "description": "Callback status: matched or submission_failed" },
+    { "path": "request_token", "type": "string", "required": false, "description": "Request token from FYERS callback" }
+  ],
+  "responseFields": [
+    { "path": "nonce", "type": "string", "required": true, "description": "Nonce of the updated intent" },
+    { "path": "status", "type": "string", "required": true, "description": "Updated intent status (matched or submission_failed)" },
+    { "path": "match_source", "type": "string", "required": true, "description": "Always 'callback' when called via this endpoint" },
+    { "path": "callback_received_at", "type": "string", "required": true, "description": "ISO-8601 UTC timestamp of callback receipt" }
+  ],
+  "statusCodes": [200, 400, 401, 404],
+  "notes": "404 when nonce is not found or intent was already updated. The response contains only intent_ledger fields — no position or notification fields (REQ-ORDER-015e)."
+}

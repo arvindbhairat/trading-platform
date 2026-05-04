@@ -470,15 +470,37 @@ export default function Phase1Modal({
         </div>
 
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* ── Pending confirmation (P7-T9 / REQ-ORDER-015e) — shows during loading too ── */}
+          {pendingConf && (
+            <Card accent="brand" style={{ padding: 12 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ flexShrink: 0, marginTop: 1 }}><Icon name="clock" size={16} color="var(--brand-300)" /></span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-300)", marginBottom: 4 }}>
+                    Awaiting fill confirmation
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>
+                    This order was submitted to FYERS and is awaiting fill confirmation from the next Live Account Data Scan.
+                  </div>
+                  {pendingConf.last_lads_sync_at && (
+                    <div style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-mono)", marginTop: 6 }}>
+                      Last LADS scan: {new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* ── Loading state ─────────────────────────────────────────── */}
-          {loading && (
+          {!pendingConf && loading && (
             <div style={{ fontSize: 13, color: "var(--fg-3)", textAlign: "center", padding: 20 }}>
               Loading order context...
             </div>
           )}
 
           {/* ── Error state ───────────────────────────────────────────── */}
-          {error && (
+          {!pendingConf && error && (
             <Card accent="down" style={{ padding: 12 }}>
               <div style={{ fontSize: 12, color: "var(--down-500)" }}>{error}</div>
               <Btn variant="ghost" size="sm" onClick={onClose} style={{ marginTop: 8 }}>
@@ -487,7 +509,7 @@ export default function Phase1Modal({
             </Card>
           )}
 
-          {!loading && !error && context && (
+          {!pendingConf && !loading && !error && context && (
             <>
               {/* ── Symbol + Price row ────────────────────────────────── */}
               <div
@@ -547,28 +569,6 @@ export default function Phase1Modal({
                       <span>{check.message}</span>
                     </div>
                   ))}
-                </Card>
-              )}
-
-              {/* ── Awaiting fill confirmation (P7-T9 / REQ-ORDER-015e) ───── */}
-              {pendingConf && (
-                <Card accent="brand" style={{ padding: 12 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icon name="clock" size={16} color="var(--brand-300)" /></span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-300)", marginBottom: 4 }}>
-                        Awaiting fill confirmation
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>
-                        This order was submitted to FYERS and is awaiting fill confirmation from the next Live Account Data Scan.
-                      </div>
-                      {pendingConf.last_lads_sync_at && (
-                        <div style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-mono)", marginTop: 6 }}>
-                          Last LADS scan: {new Date(pendingConf.last_lads_sync_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </Card>
               )}
 
@@ -907,7 +907,7 @@ export default function Phase1Modal({
           </Btn>
 
           {/* Action button with guard state (REQ-ORDER-018b) */}
-          {!circuitBlocksEntry && (
+          {!pendingConf && !circuitBlocksEntry && (
             <Btn
               variant="primary"
               size="lg"
@@ -933,7 +933,7 @@ export default function Phase1Modal({
           )}
 
           {/* Circuit-blocked entry — show disabled state with label (REQ-ORDER-018a) */}
-          {circuitBlocksEntry && (
+          {!pendingConf && circuitBlocksEntry && (
             <Btn variant="danger" size="lg" disabled>
               Entry not available — lower circuit
             </Btn>

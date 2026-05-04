@@ -1,0 +1,29 @@
+{
+  "endpoint": "/api/v1/execution/intent/signed-payload",
+  "method": "POST",
+  "auth": "required",
+  "description": "Returns an HMAC-signed payload for the <fyers-button> element (P7-T5). Applies multi-intent heat gate (EC-5) and LADS health gate (RME-R2) before signing. Validates action, quantity, order type, and price.",
+  "requestFields": [
+    { "path": "symbol", "type": "string", "required": true, "description": "NSE trading symbol (e.g. NSE:HDFCBANK-EQ)" },
+    { "path": "action", "type": "string", "required": true, "description": "Action: entry, add, reduce, or exit" },
+    { "path": "quantity", "type": "number", "required": true, "description": "Number of shares (positive integer)" },
+    { "path": "order_type", "type": "string", "required": true, "description": "Order type: MARKET or LIMIT" },
+    { "path": "limit_price", "type": "number", "required": false, "description": "Limit price in INR (required for LIMIT orders, null for MARKET)" }
+  ],
+  "responseFields": [
+    { "path": "nonce", "type": "string", "required": true, "description": "Single-use 128-bit hex nonce (32 hex chars)" },
+    { "path": "data_attributes", "type": "object", "required": true, "description": "Hash of data-* attributes for the <fyers-button> element" },
+    { "path": "data_attributes.data-symbol", "type": "string", "required": true, "description": "NSE trading symbol" },
+    { "path": "data_attributes.data-product", "type": "string", "required": true, "description": "Product type (always CNC)" },
+    { "path": "data_attributes.data-quantity", "type": "string", "required": true, "description": "Quantity as string" },
+    { "path": "data_attributes.data-transaction_type", "type": "string", "required": true, "description": "BUY or SELL" },
+    { "path": "data_attributes.data-order_type", "type": "string", "required": true, "description": "MARKET or LIMIT" },
+    { "path": "data_attributes.data-price", "type": "string", "required": true, "description": "Price as string (0 for MARKET)" },
+    { "path": "data_attributes.data-nonce", "type": "string", "required": true, "description": "Nonce as attribute" },
+    { "path": "data_attributes.data-signature", "type": "string", "required": true, "description": "HMAC-SHA256 signature (64 hex chars)" },
+    { "path": "payload_hash", "type": "string", "required": true, "description": "SHA-256 hash of canonical payload (64 hex chars)" },
+    { "path": "expires_at_unix", "type": "number", "required": true, "description": "Nonce expiration as Unix timestamp" }
+  ],
+  "statusCodes": [200, 400, 401, 422],
+  "notes": "422 response body contains { error: { reason, message, last_successful_sync_at? } } when signing is refused by any gate or validation."
+}

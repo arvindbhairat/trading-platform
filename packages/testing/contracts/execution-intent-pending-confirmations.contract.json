@@ -1,0 +1,23 @@
+{
+  "endpoint": "/api/v1/execution/intent/pending-confirmations",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns matched intents awaiting fill confirmation from LADS (REQ-ORDER-015e). Optionally filtered by symbol. Includes submission timestamp and the user's last LADS sync timestamp.",
+  "requestFields": [
+    { "path": "symbol", "type": "string", "required": false, "description": "Optional symbol filter" }
+  ],
+  "responseFields": [
+    { "path": "pending_confirmations", "type": "array", "required": true, "description": "Array of pending confirmations (empty array when none)" },
+    { "path": "pending_confirmations[].symbol", "type": "string", "required": true, "description": "NSE trading symbol" },
+    { "path": "pending_confirmations[].action", "type": "string", "required": true, "description": "Action type: entry, add, reduce, or exit" },
+    { "path": "pending_confirmations[].side", "type": "string", "required": true, "description": "Side: BUY or SELL" },
+    { "path": "pending_confirmations[].quantity", "type": "number", "required": true, "description": "Number of shares" },
+    { "path": "pending_confirmations[].order_type", "type": "string", "required": true, "description": "Order type: MARKET or LIMIT" },
+    { "path": "pending_confirmations[].submission_timestamp", "type": "string", "required": true, "description": "ISO-8601 UTC timestamp of submission" },
+    { "path": "pending_confirmations[].callback_received_at", "type": "string", "required": false, "description": "ISO-8601 UTC timestamp of callback (null when LADS-matched)" },
+    { "path": "pending_confirmations[].intent_created_at", "type": "string", "required": true, "description": "ISO-8601 UTC timestamp of intent creation" },
+    { "path": "pending_confirmations[].last_lads_sync_at", "type": "string", "required": false, "description": "ISO-8601 UTC timestamp of last successful LADS sync (null when never synced)" },
+    { "path": "pending_confirmations[].nonce", "type": "string", "required": true, "description": "Intent nonce for correlation" }
+  ],
+  "statusCodes": [200, 401]
+}

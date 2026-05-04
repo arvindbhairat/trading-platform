@@ -1,0 +1,35 @@
+{
+  "endpoint": "/api/v1/execution/order-context",
+  "method": "GET",
+  "auth": "required",
+  "description": "Returns RME sizing, portfolio heat, stop levels, and market state for the Phase 1 platform modal (P7-T4). Query params: symbol (required), action (required: entry/add/reduce/exit).",
+  "requestFields": [
+    { "path": "symbol", "type": "string", "required": true, "description": "NSE trading symbol (e.g. RELIANCE)" },
+    { "path": "action", "type": "string", "required": true, "description": "Action type: entry, add, reduce, or exit" }
+  ],
+  "responseFields": [
+    { "path": "symbol", "type": "string", "required": true, "description": "NSE trading symbol" },
+    { "path": "action_type", "type": "string", "required": true, "description": "Action type: entry, add, reduce, or exit" },
+    { "path": "recommended_quantity", "type": "number", "required": false, "description": "RME-recommended quantity (null when unavailable)" },
+    { "path": "current_price", "type": "number", "required": false, "description": "Current market price (null when unavailable)" },
+    { "path": "stop_level", "type": "number", "required": false, "description": "RME stop loss level (null when unavailable)" },
+    { "path": "trailing_stop_level", "type": "number", "required": false, "description": "Trailing stop level (null when inactive)" },
+    { "path": "trailing_stop_active", "type": "boolean", "required": true, "description": "Whether a trailing stop is active" },
+    { "path": "portfolio_heat_before_pct", "type": "number", "required": true, "description": "Current portfolio heat before this order (percentage)" },
+    { "path": "portfolio_heat_after_pct", "type": "number", "required": true, "description": "Portfolio heat after this order (percentage)" },
+    { "path": "max_heat_pct", "type": "number", "required": true, "description": "Maximum portfolio heat limit (percentage)" },
+    { "path": "account_equity", "type": "number", "required": true, "description": "Current account equity" },
+    { "path": "drawdown_pct", "type": "number", "required": false, "description": "Current drawdown percentage (null when unavailable)" },
+    { "path": "entry_blocked", "type": "boolean", "required": true, "description": "Whether entry/add is blocked" },
+    { "path": "entry_blocked_reason", "type": "string", "required": false, "description": "Reason for entry block" },
+    { "path": "is_market_halted", "type": "boolean", "required": true, "description": "Whether the symbol is halted" },
+    { "path": "in_market_hours", "type": "boolean", "required": true, "description": "Whether market is currently open" },
+    { "path": "market_hours_message", "type": "string", "required": false, "description": "Market hours advisory message" },
+    { "path": "circuit_limit_direction", "type": "string", "required": false, "description": "Circuit limit direction: upper, lower, or null" },
+    { "path": "circuit_limit_active", "type": "boolean", "required": true, "description": "Whether a circuit limit is active" },
+    { "path": "circuit_limit_stale", "type": "boolean", "required": true, "description": "Whether circuit limit data is stale" },
+    { "path": "has_position", "type": "boolean", "required": true, "description": "Whether user has an existing position" },
+    { "path": "position_state", "type": "string", "required": false, "description": "Current position state (null when no position)" }
+  ],
+  "statusCodes": [200, 400, 401]
+}
