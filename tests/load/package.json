@@ -1,0 +1,10 @@
+{
+  "name": "@signalstack/load-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Phase B gate load test — simulates operations.phase_a.tester_ceiling concurrent users",
+  "type": "module",
+  "scripts": {
+    "load-test": "node load-test.mjs"
+  }
+}

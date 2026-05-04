@@ -146,13 +146,13 @@ A UI task is not complete unless: no hardcoded styles are introduced, all UI ele
 
 #### Load-test SLO targets (Phase B gate)
 
-All targets are p95 measured under 20 simultaneous active users with LMDS running. Measurements must be taken against a production-equivalent environment (Azure-hosted, real MongoDB + SQL Server, Redis active).
+All targets are p95 measured at the tester_ceiling concurrent user count with LMDS running. Measurements must be taken against a production-equivalent environment (Azure-hosted, real MongoDB + SQL Server, Redis active).
 
 | Surface | Endpoint / operation | p95 target |
 |---|---|---|
-| Dashboard page load | `GET /api/dashboard` (full portfolio snapshot) | ≤ 500 ms |
-| Positions list | `GET /api/positions` (all non-terminal positions) | ≤ 300 ms |
-| Signal advisory | `GET /api/signals/{symbol}` (chart + signal overlay data) | ≤ 200 ms |
+| Dashboard page load | `GET /api/v1/portfolio/summary` (full portfolio snapshot) | ≤ 500 ms |
+| Positions list | `GET /api/v1/portfolio/holdings` (all non-terminal positions) | ≤ 300 ms |
+| Signal advisory | `GET /api/v1/signals/subscriptions` (signal subscription list) | ≤ 200 ms |
 | RME event processing | Time from event enqueue to durable risk-state commit (Channel drain) | ≤ 2 s |
 | WebSocket push | Time from LMDS tick receipt to client WebSocket frame delivery | ≤ 1 s |
 
