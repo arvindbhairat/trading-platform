@@ -138,7 +138,8 @@ public sealed class PhaseGateService
         var keyStatus = await Task.WhenAll(
             ReadGateAsync(GateSebiRegistration, "SEBI registration granted (REQ-LEGAL-005)", ct),
             ReadGateAsync(GateLegalReviewCommercial, "Legal review updated for fee collection, billing, and public marketing (REQ-LEGAL-005)", ct),
-            ReadGateAsync(GatePenTest, "External penetration test completed, high/critical findings remediated (REQ-SEC-010)", ct)
+            ReadGateAsync(GatePenTest, "External penetration test completed, high/critical findings remediated (REQ-SEC-010)", ct),
+            ReadGateAsync(GateChaosExercises, "Chaos / failure-injection exercises completed (REQ-NFR-014)", ct)
         );
         return [.. keyStatus];
     }
@@ -159,6 +160,7 @@ public sealed class PhaseGateService
     public const string GateSebiRegistration = "legal.phase_c.sebi_registration_granted";
     public const string GateLegalReviewCommercial = "legal.phase_c.legal_review_commercial";
     public const string GatePenTest = "legal.phase_c.penetration_test_completed";
+    public const string GateChaosExercises = "legal.phase_c.chaos_exercises_completed";
 }
 
 public sealed record PhaseGate(

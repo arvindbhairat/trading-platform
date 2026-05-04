@@ -107,6 +107,12 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
             ReplaceService<ITradingCalendarRepository>(services,
                 new ServiceDescriptor(typeof(ITradingCalendarRepository),
                     typeof(InMemoryTradingCalendarRepository), ServiceLifetime.Singleton));
+
+            // Replace the MongoDB-backed chaos exercise repository with an in-memory
+            // implementation (P8-T12 / REQ-NFR-014).
+            ReplaceService<IChaosExerciseRepository>(services,
+                new ServiceDescriptor(typeof(IChaosExerciseRepository),
+                    typeof(InMemoryChaosExerciseRepository), ServiceLifetime.Singleton));
         });
     }
 

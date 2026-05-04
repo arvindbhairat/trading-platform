@@ -96,6 +96,9 @@ builder.Services.AddSingleton<PhaseGateService>();
 // Penetration test scheduling + remediation tracking — P8-T10 / REQ-SEC-010
 builder.Services.AddSingleton<IPenetrationTestRepository, MongoPenetrationTestRepository>();
 
+// Chaos / failure-injection exercise recording — P8-T12 / REQ-NFR-014
+builder.Services.AddSingleton<IChaosExerciseRepository, MongoChaosExerciseRepository>();
+
 // Data subject rights workflow — REQ-PRIVACY-004 (P2-T21)
 builder.Services.AddPrivacyRequestManagement();
 
@@ -343,6 +346,9 @@ app.MapImpersonationEndpoints();
 
 // Admin penetration test management endpoints — P8-T10 / REQ-SEC-010
 app.MapAdminPenetrationTestEndpoints();
+
+// Admin chaos / failure-injection exercise endpoints — P8-T12 / REQ-NFR-014
+app.MapAdminChaosExerciseEndpoints();
 
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();

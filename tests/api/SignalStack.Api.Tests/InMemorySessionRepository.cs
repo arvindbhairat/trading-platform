@@ -84,6 +84,7 @@ public sealed class InMemorySessionRepository : ISessionRepository
                 UserAgent = doc.UserAgent,
                 MfaVerifiedAt = doc.MfaVerifiedAt,
                 StepUpAuthenticatedAt = stepUpAuthenticatedAt,
+                StepUpEventId = stepUpEventId,
                 ImpersonatingUserId = doc.ImpersonatingUserId,
                 ImpersonationStartedAt = doc.ImpersonationStartedAt,
                 ImpersonationLastActivityAt = doc.ImpersonationLastActivityAt,

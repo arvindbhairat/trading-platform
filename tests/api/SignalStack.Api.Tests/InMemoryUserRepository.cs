@@ -78,6 +78,18 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    // REQ-ADMIN-001b: reactivates a deactivated user.
+    public Task<bool> ReactivateAsync(string userId, CancellationToken ct = default)
+    {
+        if (!_byUserId.TryGetValue(userId, out var doc))
+            return Task.FromResult(false);
+        if (doc.Status != UserApprovalState.Deactivated)
+            return Task.FromResult(false);
+        doc.Status = UserApprovalState.Approved;
+        doc.UpdatedAt = DateTime.UtcNow;
+        return Task.FromResult(true);
+    }
+
     public Task<List<UserDocument>> ListUsersAsync(
         string? statusFilter = null, CancellationToken ct = default)
     {
