@@ -318,6 +318,9 @@ app.MapExecutionEndpoints();
 // Admin audit event query endpoints — P8-T1 / helper APIs for audit_events collection
 app.MapAdminAuditEndpoints();
 
+// Admin system health dashboard endpoints — P8-T2 / REQ-ADMIN-014, A-14
+app.MapAdminSystemHealthEndpoints();
+
 // Telegram bot provisioning + management endpoints (admin) — P5-T5 / REQ-NOTIFY-015/022a
 app.MapTelegramBotEndpoints();
 
