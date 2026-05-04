@@ -13,7 +13,7 @@ public static class RmeAdvisoryEndpoints
     {
         var rme = app.MapGroup("/api/v1/rme").RequireAuthorization();
 
-        // ── GET /api/v1/rme/advisory?symbol=NSE:SBIN-EQ ──────────────────
+        // ── GET /api/v1/rme/advisory?symbol={symbol} ────────────────────
         // Returns RME advisory data for the selected symbol.
         // P6-T27 / REQ-CHART-003, REQ-CHART-004.
         rme.MapGet("/advisory", async (
