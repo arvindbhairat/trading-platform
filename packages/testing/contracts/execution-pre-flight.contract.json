@@ -1,0 +1,20 @@
+{
+  "endpoint": "/api/v1/execution/pre-flight",
+  "method": "GET",
+  "auth": "required",
+  "description": "Pre-flight checks before presenting the FYERS execution widget (P7-T3). Returns token validity, kill switch, drawdown, duplicate-in-flight, halt state, and LADS health.",
+  "requestFields": [
+    { "path": "symbol", "type": "string", "required": false, "description": "Optional symbol for duplicate-in-flight and halt state checks" }
+  ],
+  "responseFields": [
+    { "path": "can_execute", "type": "boolean", "required": true, "description": "True when all blocking checks pass" },
+    { "path": "checks", "type": "array", "required": true, "description": "Array of individual check results" },
+    { "path": "checks[].check", "type": "string", "required": true, "description": "Check identifier: token_valid, kill_switch, drawdown_enforcement, duplicate_in_flight, halt_state, lads_sustained_failure" },
+    { "path": "checks[].passed", "type": "boolean", "required": true, "description": "Whether this individual check passed" },
+    { "path": "checks[].severity", "type": "string", "required": true, "description": "Severity: blocking or warning" },
+    { "path": "checks[].message", "type": "string", "required": false, "description": "Human-readable message when check fails or has advisory" },
+    { "path": "blocking_count", "type": "number", "required": true, "description": "Count of failed blocking checks" },
+    { "path": "warning_count", "type": "number", "required": true, "description": "Count of failed warning checks" }
+  ],
+  "statusCodes": [200, 401]
+}
