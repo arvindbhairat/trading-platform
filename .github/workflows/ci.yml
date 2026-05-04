@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Opt into Node.js 24 for JavaScript actions before the June 2, 2026 default switch.
+# Removes deprecation warnings for actions/checkout@v4, actions/setup-node@v4, etc.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── .NET build + test + coverage (REQ-NFR-014: 70% line threshold) ──────────
   dotnet:
