@@ -183,7 +183,24 @@ public sealed class LiveAccountDataSyncService
             }
         }
 
-        // ── Step 6: Cycle-level abort tracking (REQ-PORT-021a) ────────────
+        // ── Step 6: Platform-wide callback-failure ratio check (P7-T10) ──
+        // Evaluates the LADS-only match ratio and fires an admin alert when
+        // the ratio exceeds orders.callback_failure_alert_ratio.
+        // Runs after all users are reconciled, regardless of errors, because
+        // partial reconciliation data still carries signal.
+        // REQ-ORDER-015d.
+        try
+        {
+            await _reconciliationService.EvaluateCallbackRatioAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "LADS: callback ratio evaluation failed. " +
+                "This does not affect the sync cycle outcome.");
+        }
+
+        // ── Step 7: Cycle-level abort tracking (REQ-PORT-021a) ────────────
         if (errorCount > 0)
         {
             await HandleCycleAbortAsync(ct);

@@ -6,6 +6,7 @@ using SignalStack.Api.Audit;
 using SignalStack.Api.Execution;
 using SignalStack.Api.Notifications;
 using SignalStack.Configuration.Ledger;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.AccountSync;
 
@@ -142,6 +143,11 @@ public sealed class IntentReconciliationService
                 "Intent reconciliation: callback-missed intent {Nonce} " +
                 "for {Symbol} — promoted to matched (lads_reconciliation).",
                 intent.Nonce, intent.Symbol);
+
+            // ── Emit LADS-only reconciliation metric (REQ-ORDER-015d) ──
+            WorkerTelemetry.OrderReconciledViaLadsOnlyTotal.Add(1,
+                new KeyValuePair<string, object?>("action_type", intent.Action),
+                new KeyValuePair<string, object?>("user_class", "production"));
         }
 
         // ── Phase 3: Timeout stale pending intents ───────────────────────────
@@ -188,6 +194,11 @@ public sealed class IntentReconciliationService
                 "Intent reconciliation: pending intent {Nonce} for {Symbol} " +
                 "timed out after {Age:F1} minutes — marked unresolved.",
                 intent.Nonce, intent.Symbol, ageMinutes);
+
+            // ── Emit unresolved intent metric (REQ-ORDER-015d) ────────
+            WorkerTelemetry.OrderUnresolvedTotal.Add(1,
+                new KeyValuePair<string, object?>("action_type", intent.Action),
+                new KeyValuePair<string, object?>("user_class", "production"));
         }
 
         // ── Phase 4: Detect orphan trades with no matching intent ────────────
@@ -276,6 +287,11 @@ public sealed class IntentReconciliationService
                     "Intent reconciliation: orphan order {OrderId} for {Symbol} " +
                     "— orphan_ack created.",
                     orderId, firstTrade.Symbol);
+
+                // ── Emit orphan trade metric (REQ-ORDER-015d) ─────────
+                WorkerTelemetry.OrderOrphanTotal.Add(1,
+                    new KeyValuePair<string, object?>("action_type", MapSideToAction(firstTrade.Side)),
+                    new KeyValuePair<string, object?>("user_class", "production"));
             }
             catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
             {
@@ -416,5 +432,100 @@ public sealed class IntentReconciliationService
         };
 
         await _notificationWriter.WriteAsync(notification, ct);
+    }
+
+    // ── Platform-wide callback reliability ratio check (P7-T10 / REQ-ORDER-015d) ──
+
+    /// <summary>Rolling window for the callback-failure ratio (7 days).</summary>
+    private static readonly TimeSpan RatioRollingWindow = TimeSpan.FromDays(7);
+
+    /// <summary>Cooldown between admin alerts for the same breach (24 hours).</summary>
+    private static readonly TimeSpan AlertCooldown = TimeSpan.FromHours(24);
+
+    /// <summary>UTC timestamp of the last callback-failure-ratio alert sent.</summary>
+    private DateTime _lastRatioAlertAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Evaluates the platform-wide callback-failure ratio and fires an admin
+    /// alert when the LADS-only match ratio exceeds the configured threshold.
+    ///
+    /// The ratio is computed as:
+    ///   lads_only / (callback_matched + lads_only)
+    ///
+    /// Called once per LADS cycle after all users have been reconciled.
+    /// REQ-ORDER-015d.
+    /// </summary>
+    public async Task EvaluateCallbackRatioAsync(CancellationToken ct = default)
+    {
+        var (callbackCount, ladsOnlyCount) = await _intentRepository
+            .GetReconciliationCountsAsync(RatioRollingWindow, ct);
+
+        var total = callbackCount + ladsOnlyCount;
+        if (total == 0)
+            return; // no intents in the window — nothing to evaluate
+
+        var ratio = (double)ladsOnlyCount / total;
+
+        // ── Read threshold from sys_config ─────────────────────────────────
+        var threshold = await ReadCallbackFailureAlertRatioAsync(ct);
+
+        if (ratio <= threshold)
+            return; // ratio within acceptable range
+
+        // ── Cooldown check: avoid alert spam ──────────────────────────────
+        var now = DateTime.UtcNow;
+        if (now - _lastRatioAlertAt < AlertCooldown)
+            return;
+
+        _lastRatioAlertAt = now;
+
+        // ── Write admin notification ──────────────────────────────────────
+        var content =
+            $"FYERS widget callback failure ratio has exceeded the configured threshold. " +
+            $"Current ratio: {ratio:P1} (threshold: {threshold:P1}). " +
+            $"Over the last 7 days: {ladsOnlyCount} intents matched via LADS-only " +
+            $"({ladsOnlyCount}/{total} = {ratio:P1}) vs. {callbackCount} via callback. " +
+            "A sustained high ratio indicates a possible FYERS SDK callback regression.";
+
+        var notification = new NotificationDocument
+        {
+            Id = ObjectId.GenerateNewId(),
+            UserId = ObjectId.Empty, // platform-wide, not user-scoped
+            NotificationType = NotificationType.AdminCallbackFailureRatioBreach,
+            Symbol = null,
+            Content = content,
+            GeneratedAt = now,
+            TelegramDeliveryStatus = "pending",
+            TelegramDeliveryAttempts = 0,
+            IsRead = false,
+            IsAdminNotification = true,
+        };
+
+        await _notificationWriter.WriteAsync(notification, ct);
+
+        _logger.LogWarning(
+            "Callback failure ratio alert: {Ratio:P1} ({LadsOnly}/{Total} LADS-only) " +
+            "exceeds threshold {Threshold:P1}. Admin notification sent.",
+            ratio, ladsOnlyCount, total, threshold);
+    }
+
+    /// <summary>
+    /// Reads <c>orders.callback_failure_alert_ratio</c> from sys_config.
+    /// Default: 0.10 (10%) if not configured.
+    /// </summary>
+    private async Task<double> ReadCallbackFailureAlertRatioAsync(CancellationToken ct)
+    {
+        var sysConfig = _database.GetCollection<BsonDocument>("sys_config");
+        var filter = Builders<BsonDocument>.Filter.Eq("key", "orders.callback_failure_alert_ratio");
+        var doc = await sysConfig.Find(filter).FirstOrDefaultAsync(ct);
+
+        if (doc is null)
+            return 0.10;
+
+        var value = doc.GetValue("value", BsonNull.Value);
+        if (value.IsBsonNull || !double.TryParse(value.AsString, out var parsed))
+            return 0.10;
+
+        return parsed;
     }
 }

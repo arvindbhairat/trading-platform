@@ -97,4 +97,18 @@ public interface IIntentLedgerRepository
     /// </summary>
     Task<List<IntentLedgerDocument>> GetAwaitingConfirmationByUserAsync(
         string userId, string? symbol = null, CancellationToken ct = default);
+
+    // ── Callback reliability metrics (P7-T10 / REQ-ORDER-015d) ────────────
+
+    /// <summary>
+    /// Returns the count of intents matched via callback vs. LADS-only
+    /// within the given rolling time window. Used to compute the callback
+    /// failure alert ratio across the platform.
+    /// </summary>
+    /// <param name="window">Rolling time window (e.g. 7 days).</param>
+    /// <returns>
+    /// A tuple of (callback_matched_count, lads_only_matched_count).
+    /// </returns>
+    Task<(long CallbackMatchedCount, long LadsOnlyMatchedCount)> GetReconciliationCountsAsync(
+        TimeSpan window, CancellationToken ct = default);
 }

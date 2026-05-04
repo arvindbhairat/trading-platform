@@ -154,6 +154,26 @@ public sealed class MongoIntentLedgerRepository : IIntentLedgerRepository
     }
 
     /// <inheritdoc />
+    public async Task<(long CallbackMatchedCount, long LadsOnlyMatchedCount)> GetReconciliationCountsAsync(
+        TimeSpan window, CancellationToken ct = default)
+    {
+        var since = DateTime.UtcNow.Subtract(window);
+
+        var callbackFilter = Builders<IntentLedgerDocument>.Filter.And(
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.MatchSource, "callback"),
+            Builders<IntentLedgerDocument>.Filter.Gte(d => d.CreatedAt, since));
+
+        var ladsOnlyFilter = Builders<IntentLedgerDocument>.Filter.And(
+            Builders<IntentLedgerDocument>.Filter.Eq(d => d.MatchSource, "lads_reconciliation"),
+            Builders<IntentLedgerDocument>.Filter.Gte(d => d.CreatedAt, since));
+
+        var callbackCount = await _intents.CountDocumentsAsync(callbackFilter, cancellationToken: ct);
+        var ladsOnlyCount = await _intents.CountDocumentsAsync(ladsOnlyFilter, cancellationToken: ct);
+
+        return (callbackCount, ladsOnlyCount);
+    }
+
+    /// <inheritdoc />
     public async Task<List<IntentLedgerDocument>> GetAwaitingConfirmationByUserAsync(
         string userId, string? symbol = null, CancellationToken ct = default)
     {

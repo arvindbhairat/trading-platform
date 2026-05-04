@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Execution;
+using SignalStack.Api.Observability;
 
 namespace Microsoft.AspNetCore.Routing;
 
@@ -166,6 +167,15 @@ public static class ExecutionEndpoints
 
             if (updated is null)
                 return Results.NotFound(new { error = "Intent not found for the given nonce or already updated." });
+
+            // ── Emit callback reliability metric (REQ-ORDER-015d) ─────────
+            // Tagged by status (matched / submission_failed) and user class.
+            // All Phase A users are production; tag infrastructure supports
+            // test vs. production when the distinction is added later.
+            ApiTelemetry.OrderCallbackReceivedTotal.Add(1,
+                new KeyValuePair<string, object?>("status", updated.Status),
+                new KeyValuePair<string, object?>("action_type", updated.Action),
+                new KeyValuePair<string, object?>("user_class", "production"));
 
             return Results.Ok(new
             {
