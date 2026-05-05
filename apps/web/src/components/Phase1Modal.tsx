@@ -598,12 +598,12 @@ export default function Phase1Modal({
                   )}
                   {context.circuit_limit_direction === "lower" && !isEntryAction && (
                     <div style={{ fontSize: 12, color: "var(--fg-2)" }}>
-                      This symbol is at lower circuit limit. Sell orders are unlikely to be filled at any price.
+                      This symbol is at lower circuit limit. Orders to close a position are unlikely to be filled at any price.
                     </div>
                   )}
                   {context.circuit_limit_direction === "upper" && isEntryAction && (
                     <div style={{ fontSize: 12, color: "var(--fg-2)" }}>
-                      This symbol is at upper circuit limit. Buy orders are unlikely to be filled at any price.
+                      This symbol is at upper circuit limit. Orders to open a position are unlikely to be filled at any price.
                     </div>
                   )}
                 </Card>

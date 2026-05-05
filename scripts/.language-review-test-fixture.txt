@@ -1,0 +1,14 @@
+# Language Review Lint — Test Fixture
+# This file contains all prohibited terms for the lint to detect.
+# If the lint passes without catching these, the test fails.
+
+Here are the prohibited terms that must be flagged:
+
+1. buy — as in "you should buy this stock"
+2. sell — as in "we advise you to sell"
+3. recommended — as in "this is a recommended pick"
+4. advised — as in "the platform advised you"
+5. top pick — as in "this is a top pick"
+6. suggested pick — as in "a suggested pick for you"
+7. signal to buy — as in "this is a signal to buy"
+8. signal to sell — as in "this is a signal to sell"

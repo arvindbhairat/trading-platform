@@ -318,7 +318,7 @@ export default function DashboardPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Symbol", "Qty", "Avg buy", "LTP", "Invested", "M.Value", "P&L", "Return", "Days", "Action"].map((h, i) => (
+                        {["Symbol", "Qty", "Avg cost", "LTP", "Invested", "M.Value", "P&L", "Return", "Days", "Action"].map((h, i) => (
                           <th
                             key={h}
                             style={{

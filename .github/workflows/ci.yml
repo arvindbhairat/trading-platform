@@ -152,6 +152,22 @@ jobs:
         working-directory: apps/web
         run: npm run test:axe
 
+  # ── Language review lint (REQ-LEGAL-006) ─────────────────────────────────
+  # Scans user-facing source files for prohibited terms (buy, sell, recommended,
+  # advised, top pick, suggested pick, signal to buy/sell).
+  # First runs on the test fixture to verify the lint itself works, then on
+  # the actual source to ensure no violations exist.
+  language-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify lint catches test fixture violations
+        run: bash scripts/language-review-lint.sh --test-fixture
+
+      - name: Scan source for prohibited terms
+        run: bash scripts/language-review-lint.sh
+
   # ── Contract-diff enforcement (REQ-NFR-016) ─────────────────────────────
   # Validates that all contract snapshots in packages/testing/contracts/ are
   # well-formed. When CONTRACT_API_BASE_URL is configured, also validates live
