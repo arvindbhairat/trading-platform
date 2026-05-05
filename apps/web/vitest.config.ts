@@ -20,10 +20,10 @@ export default defineConfig({
       exclude: ['src/**/*.d.ts', 'src/**/*.stories.{ts,tsx}'],
       reporter: ['text', 'json', 'lcov'],
       thresholds: {
-        lines: 1,
+        lines: 45,
         branches: 60,
         functions: 45,
-        statements: 1,
+        statements: 45,
       },
     },
   },

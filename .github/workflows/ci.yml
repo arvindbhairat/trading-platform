@@ -29,12 +29,14 @@ jobs:
       - name: Build
         run: dotnet build SignalStack.sln -c Release
 
-      - name: Test with coverage (per-project thresholds, target 70%)
+      - name: Test with coverage (70% line threshold — REQ-NFR-014, regression gate)
         run: |
           dotnet test SignalStack.sln -c Release --no-build \
             /p:CollectCoverage=true \
             /p:CoverletOutputFormat=cobertura \
-            /p:CoverletOutput=./coverage/
+            /p:CoverletOutput=./coverage/ \
+            /p:Threshold=70 \
+            /p:ThresholdType=line
 
       - name: Upload .NET coverage
         uses: actions/upload-artifact@v4
@@ -187,3 +189,50 @@ jobs:
 
       - name: API ↔ portal contract diff
         run: npm --workspace @signalstack/testing run contract-diff
+
+  # ── Playwright E2E smoke tests (P9-T1 / REQ-NFR-014) ─────────────────────
+  # Runs critical-journey E2E tests through a real browser. The web app is
+  # started in dev mode; the API is expected to be available (or the health
+  # check test is skipped). E2E tests supplement integration coverage for
+  # critical workflows per engineering-standards § Testing Standards.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build web
+        run: npm run web:build
+
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start web app
+        run: |
+          npm run web:dev &
+          echo "DEV_PID=$!"
+          # Wait for the dev server to be ready (up to 60s)
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null | grep -qE '^(200|302)$'; then
+              echo "Web app ready on localhost:3000"
+              break
+            fi
+            echo "Waiting for web app... ($i)"
+            sleep 2
+          done
+
+      - name: Run E2E tests
+        working-directory: tests/e2e
+        run: npx playwright test
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          E2E_API_BASE_URL: http://localhost:5000
