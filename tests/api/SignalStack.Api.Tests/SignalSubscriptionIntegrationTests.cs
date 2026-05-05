@@ -365,6 +365,7 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
         using var resp = await client.GetAsync("/api/v1/signals/subscriptions");
         var list = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
 
+        Assert.NotNull(list);
         Assert.Empty(list);
     }
 
