@@ -62,10 +62,10 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
         var request = new
         {
             name = "Test MA Crossover",
-            signal_type_id = "ma_crossover",
+            signalTypeId = "ma_crossover",
             timeframe = "daily",
             parameters = new { fast_period = 10, slow_period = 30 },
-            rme_configuration = new
+            rmeConfiguration = new
             {
                 sizing_model = "fixed_percentage",
                 risk_per_trade_pct = 0.5,
@@ -92,7 +92,7 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
     {
         var (client, _) = CreateClientAndRepo();
 
-        var request = new { signal_type_id = "ma_crossover" };
+        var request = new { signalTypeId = "ma_crossover" };
 
         using var resp = await client.PostAsJsonAsync("/api/v1/signals/subscriptions", request);
 
@@ -262,7 +262,7 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
 
         var versionRequest = new
         {
-            rme_configuration = new
+            rmeConfiguration = new
             {
                 sizing_model = "atr_percentage",
                 risk_per_trade_pct = 1.0,
@@ -291,7 +291,7 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
         // Add a second version
         await client.PostAsJsonAsync(
             $"/api/v1/signals/subscriptions/{created.id}/versions",
-            new { rme_configuration = new { sizing_model = "atr_percentage" } });
+            new { rmeConfiguration = new { sizing_model = "atr_percentage" } });
 
         using var resp = await client.GetAsync(
             $"/api/v1/signals/subscriptions/{created.id}/versions");
@@ -321,7 +321,7 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
         // Add a version and get version_id
         var addResp = await client.PostAsJsonAsync(
             $"/api/v1/signals/subscriptions/{created.id}/versions",
-            new { rme_configuration = new { sizing_model = "atr" } });
+            new { rmeConfiguration = new { sizing_model = "atr" } });
 
         var addBody = await addResp.Content.ReadFromJsonAsync<JsonElement>();
         var versionId = addBody.GetProperty("version_id").GetString();
@@ -389,9 +389,9 @@ public sealed class SignalSubscriptionIntegrationTests : IClassFixture<AuthTestA
         var request = new
         {
             name,
-            signal_type_id = signalType,
+            signalTypeId = signalType,
             timeframe = "daily",
-            rme_configuration = new
+            rmeConfiguration = new
             {
                 sizing_model = "fixed_percentage",
                 risk_per_trade_pct = 0.5,

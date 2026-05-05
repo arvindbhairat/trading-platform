@@ -4,6 +4,7 @@ using MongoDB.Driver;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Sessions;
+using SignalStack.Api.SysConfig;
 using SignalStack.Api.Users;
 
 namespace SignalStack.Api.Admin;
@@ -55,10 +56,10 @@ public static class AdminKillSwitchEndpoints
             ISessionRepository sessionRepo,
             IAuditEventRepository auditRepo,
             IUserRepository userRepo,
-            IMongoDatabase database) =>
+            ISysConfigRepository configRepo) =>
         {
             return await ToggleKillSwitchAsync(
-                context, sessionRepo, auditRepo, userRepo, database,
+                context, sessionRepo, auditRepo, userRepo, configRepo,
                 activate: true);
         }).RequireAuthorization();
 
@@ -71,10 +72,10 @@ public static class AdminKillSwitchEndpoints
             ISessionRepository sessionRepo,
             IAuditEventRepository auditRepo,
             IUserRepository userRepo,
-            IMongoDatabase database) =>
+            ISysConfigRepository configRepo) =>
         {
             return await ToggleKillSwitchAsync(
-                context, sessionRepo, auditRepo, userRepo, database,
+                context, sessionRepo, auditRepo, userRepo, configRepo,
                 activate: false);
         }).RequireAuthorization();
 
@@ -86,7 +87,7 @@ public static class AdminKillSwitchEndpoints
         ISessionRepository sessionRepo,
         IAuditEventRepository auditRepo,
         IUserRepository userRepo,
-        IMongoDatabase database,
+        ISysConfigRepository configRepo,
         bool activate)
     {
         var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
@@ -129,17 +130,12 @@ public static class AdminKillSwitchEndpoints
             },
             cancellationToken: context.RequestAborted);
 
-        // Update sys_config.
-        var sysConfig = database.GetCollection<BsonDocument>("sys_config");
-        var filter = Builders<BsonDocument>.Filter.Eq("key", "risk.kill_switch.active");
-
-        var update = Builders<BsonDocument>.Update
-            .Set("value", BsonBoolean.Create(activate))
-            .Set("updatedAt", now.ToString("o"))
-            .Set("updatedByUserId", userId)
-            .Inc("version", 1);
-
-        await sysConfig.UpdateOneAsync(filter, update, cancellationToken: context.RequestAborted);
+        // Update sys_config via repository (REQ-CONFIG-005).
+        await configRepo.UpdateAsync(
+            "risk.kill_switch.active",
+            BsonBoolean.Create(activate),
+            userId,
+            context.RequestAborted);
 
         return Results.Ok(new
         {

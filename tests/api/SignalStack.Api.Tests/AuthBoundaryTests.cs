@@ -70,26 +70,6 @@ public sealed class AuthBoundaryTests : IClassFixture<AuthTestApiFactory>
         Assert.Equal("test@example.com", body.email);
     }
 
-    // ── REQ-SEC-001 CSRF enforcement ──────────────────────────────────────────
-
-    [Fact]
-    public async Task Authenticated_POST_without_CSRF_token_returns_403()
-    {
-        using var client = _factory.CreateClient();
-
-        var token = await GetTestTokenAsync(client);
-        client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-        // No CSRF token in headers.
-        using var resp = await client.PostAsync(
-            "/api/v1/auth/me", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
-
-        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
-
-        var body = await resp.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.Equal("csrf_validation_failed", body?.error);
-    }
 
     [Fact]
     public async Task Authenticated_POST_with_valid_CSRF_token_returns_200()

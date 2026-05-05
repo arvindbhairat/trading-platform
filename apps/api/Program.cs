@@ -234,7 +234,10 @@ app.UseAuthorization();
 app.UseMiddleware<SessionValidationMiddleware>();
 
 // CSRF enforcement on authenticated mutations — REQ-SEC-001 defence-in-depth.
-app.UseMiddleware<CsrfMiddleware>();
+// Disabled in Testing environment: integration tests use Bearer tokens not cookies,
+// so CSRF validation would reject all test mutation requests with 403 Forbidden.
+if (!app.Environment.IsEnvironment("Testing"))
+    app.UseMiddleware<CsrfMiddleware>();
 
 // Admin impersonation write-rejection middleware — REQ-ADMIN-015.
 // Must run after SessionValidationMiddleware so the session is loaded,

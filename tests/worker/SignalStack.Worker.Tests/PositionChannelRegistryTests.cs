@@ -282,6 +282,7 @@ public sealed class PositionChannelRegistryTests : IDisposable
         // Arrange — a PendingEntry position processed through the registry
         var position = MakePendingEntryPosition();
         var consumerInvoked = false;
+        var consumerGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var consumer = new DelegatingRmeEventConsumer((evt, pos, _) =>
         {
@@ -297,6 +298,7 @@ public sealed class PositionChannelRegistryTests : IDisposable
                     PositionState.PendingEntry, PositionState.Open,
                     "Entry fill confirmed", PositionEventSource.LADS, TransitionReason.EntryFillConfirmed),
             };
+            consumerGate.TrySetResult();
             return (updated, new[] { output });
         });
 
@@ -318,8 +320,8 @@ public sealed class PositionChannelRegistryTests : IDisposable
 
         await registry.EnqueueAsync(fillEvent);
 
-        // Small yield for consumer to process
-        await Task.Delay(200);
+        // Wait for consumer to be invoked (with timeout)
+        await consumerGate.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Assert — consumer was invoked with the event
         Assert.True(consumerInvoked, "Consumer should be invoked for FillConfirmedEvent.");

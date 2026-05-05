@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MongoDB.Driver;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Api.Fyers;
@@ -113,7 +114,24 @@ public sealed class AuthTestApiFactory : WebApplicationFactory<Program>
             ReplaceService<IChaosExerciseRepository>(services,
                 new ServiceDescriptor(typeof(IChaosExerciseRepository),
                     typeof(InMemoryChaosExerciseRepository), ServiceLifetime.Singleton));
+
+            // Replace IMongoClient and IMongoDatabase with stubs. The connection
+            // string set via ConfigureAppConfiguration may not propagate to the
+            // WebApplicationBuilder at Program.cs build time, so the original
+            // factory lambda (captured from the config) would throw. These stubs
+            // prevent resolution failures for any service that transitively
+            // depends on IMongoDatabase (e.g. AdminKillSwitchTests).
+            var mongoClientDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IMongoClient));
+            if (mongoClientDescriptor is not null) services.Remove(mongoClientDescriptor);
+            services.AddSingleton<IMongoClient>(_ =>
+                new MongoDB.Driver.MongoClient("mongodb://test-stub:27017/signalstack-test"));
+
+            var mongoDbDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IMongoDatabase));
+            if (mongoDbDescriptor is not null) services.Remove(mongoDbDescriptor);
+            services.AddSingleton<IMongoDatabase>(sp =>
+                sp.GetRequiredService<IMongoClient>().GetDatabase("signalstack-test"));
         });
+
     }
 
     private static void ReplaceService<T>(IServiceCollection services, ServiceDescriptor replacement)

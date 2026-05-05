@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using MongoDB.Bson;
 
 namespace SignalStack.Api.Signals;
@@ -69,18 +70,19 @@ public static class SignalSubscriptionEndpoints
             {
                 VersionId = versionId,
                 VersionNumber = 1,
-                RmeConfiguration = request.RmeConfiguration ?? [],
+                RmeConfiguration = request.RmeConfiguration.ToBsonDocument(),
                 EffectiveFrom = now,
                 CreatedAt = now
             };
 
             var doc = new SignalSubscriptionDocument
             {
+                Id = ObjectId.GenerateNewId(),
                 UserId = userId,
                 Name = request.Name.Trim(),
                 SignalTypeId = request.SignalTypeId,
                 Timeframe = request.Timeframe ?? "daily",
-                Parameters = request.Parameters ?? [],
+                Parameters = request.Parameters.ToBsonDocument(),
                 Status = SubscriptionStatus.Active,
                 Versions = [initialVersion],
                 CurrentVersionIndex = 0,
@@ -119,8 +121,9 @@ public static class SignalSubscriptionEndpoints
                 sub.Name = request.Name.Trim();
             if (!string.IsNullOrWhiteSpace(request.Timeframe))
                 sub.Timeframe = request.Timeframe;
-            if (request.Parameters is not null && request.Parameters.ElementCount > 0)
-                sub.Parameters = request.Parameters;
+            var paramsDoc = request.Parameters.ToBsonDocument();
+            if (paramsDoc.ElementCount > 0)
+                sub.Parameters = paramsDoc;
 
             sub.UpdatedAt = DateTime.UtcNow;
             await repo.ReplaceAsync(sub, context.RequestAborted);
@@ -215,7 +218,8 @@ public static class SignalSubscriptionEndpoints
             if (sub is null)
                 return Results.NotFound();
 
-            if (request.RmeConfiguration is null || request.RmeConfiguration.ElementCount == 0)
+            var rmeConfig = request.RmeConfiguration.ToBsonDocument();
+            if (rmeConfig.ElementCount == 0)
                 return Results.BadRequest(new { error = "RME configuration is required." });
 
             // Determine the next version number.
@@ -228,7 +232,7 @@ public static class SignalSubscriptionEndpoints
             {
                 VersionId = ObjectId.GenerateNewId(),
                 VersionNumber = nextVersionNumber,
-                RmeConfiguration = request.RmeConfiguration,
+                RmeConfiguration = rmeConfig,
                 // effective_from: defaults to now (immediate). When EODSR is available
                 // (P5-T1), this will be set to the next scheduled EODSR run time.
                 EffectiveFrom = request.EffectiveFrom ?? now,
@@ -367,7 +371,7 @@ public static class SignalSubscriptionEndpoints
             name = sub.Name,
             signal_type_id = sub.SignalTypeId,
             timeframe = sub.Timeframe,
-            parameters = sub.Parameters,
+            parameters = BsonNormalizer.NormalizeBsonDocument(sub.Parameters),
             status = sub.Status,
             is_paused = sub.Status == SubscriptionStatus.Paused,
             current_version = liveVersion is not null ? new
@@ -391,19 +395,72 @@ public sealed record CreateSubscriptionRequest
     public string Name { get; init; } = "";
     public string SignalTypeId { get; init; } = "";
     public string? Timeframe { get; init; }
-    public BsonDocument? Parameters { get; init; }
-    public BsonDocument? RmeConfiguration { get; init; }
+    public JsonElement? Parameters { get; init; }
+    public JsonElement? RmeConfiguration { get; init; }
 }
 
 public sealed record UpdateSubscriptionRequest
 {
     public string? Name { get; init; }
     public string? Timeframe { get; init; }
-    public BsonDocument? Parameters { get; init; }
+    public JsonElement? Parameters { get; init; }
 }
 
 public sealed record CreateVersionRequest
 {
-    public BsonDocument? RmeConfiguration { get; init; }
+    public JsonElement? RmeConfiguration { get; init; }
     public DateTime? EffectiveFrom { get; init; }
+}
+
+// ── JsonElement → BsonDocument conversion helper ──────────────────────────
+
+file static class JsonElementExtensions
+{
+    /// <summary>
+    /// Converts a <see cref="JsonElement"/> to a <see cref="BsonDocument"/>.
+    /// Returns an empty BsonDocument when the element is null.
+    /// </summary>
+    public static BsonDocument ToBsonDocument(this JsonElement? element)
+    {
+        if (element is not { ValueKind: JsonValueKind.Object } je)
+            return [];
+        return BsonDocument.Parse(je.GetRawText());
+    }
+}
+
+// ── BsonDocument → CLR type normalizer for System.Text.Json serialization ──
+
+file static class BsonNormalizer
+{
+    /// <summary>
+    /// Converts a <see cref="BsonDocument"/> to a dictionary of CLR types so that
+    /// System.Text.Json can serialize it without BSON-specific cast errors.
+    /// Returns null for an empty document.
+    /// </summary>
+    public static Dictionary<string, object?>? NormalizeBsonDocument(BsonDocument doc)
+    {
+        if (doc is null || doc.ElementCount == 0)
+            return null;
+
+        var result = new Dictionary<string, object?>(doc.ElementCount);
+        foreach (var el in doc)
+            result[el.Name] = NormalizeBsonValue(el.Value);
+        return result;
+    }
+
+    private static object? NormalizeBsonValue(BsonValue value)
+    {
+        if (value is null or BsonNull) return null;
+        if (value is BsonString s) return s.Value;
+        if (value is BsonInt32 i) return i.Value;
+        if (value is BsonInt64 l) return l.Value;
+        if (value is BsonDouble d) return d.Value;
+        if (value is BsonDecimal128 dec) return (double)dec.Value;
+        if (value is BsonBoolean b) return b.Value;
+        if (value is BsonDateTime dt) return dt.ToUniversalTime();
+        if (value is BsonDocument doc) return NormalizeBsonDocument(doc);
+        if (value is BsonArray arr) return arr.Select(NormalizeBsonValue).ToList();
+        if (value is BsonObjectId oid) return oid.Value.ToString();
+        return value.ToString();
+    }
 }
