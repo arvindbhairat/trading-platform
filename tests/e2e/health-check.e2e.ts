@@ -11,18 +11,19 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Portal baseline', () => {
   test('home page loads and shows baseline text', async ({ page }) => {
-    await page.goto('/');
+    // Capture the navigation response so we can verify middleware headers.
+    // Using page.goto instead of page.request.get ensures we read headers
+    // that have passed through the Next.js middleware pipeline.
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.request().resourceType() === 'document'),
+      page.goto('/'),
+    ]);
 
     // The portal root page renders the SignalStack baseline message.
     await expect(page.locator('body')).toContainText(/Signal ?Stack|Portal baseline|sign in|login/i);
 
     // Page has a Content-Security-Policy header (REQ-SEC-002).
-    const csp = await page.evaluate(() =>
-      document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')
-    );
-    // CSP is set via middleware header, not meta tag — verify header directly.
-    const resp = await page.request.get('/');
-    const cspHeader = resp.headers()['content-security-policy'];
+    const cspHeader = response.headers()['content-security-policy'];
     expect(cspHeader).toBeTruthy();
   });
 
