@@ -24,6 +24,7 @@ using SignalStack.Worker.Jobs.AdminRebuild;
 using SignalStack.Worker.Jobs.SingleSymbolBackfill;
 using SignalStack.Worker.Jobs.LiveMarketScan;
 using SignalStack.Worker.Jobs.AdminFyersTokenCheck;
+using SignalStack.Worker.Jobs.SloBreachMonitor;
 using SignalStack.Worker.Push;
 using SignalStack.Api.Notifications;
 using SignalStack.Worker.Rme;
@@ -137,6 +138,11 @@ builder.Services.AddNotificationServices();
 // Sole Telegram dispatcher for all notification types. Handles Retry-After,
 // dirty-link auto-disable, and global-disable break-glass.
 builder.Services.AddNotificationDelivery(builder.Configuration);
+
+// SLO Breach Alert Routing — P8-T16 / REQ-SLO-008
+// Routes SLO breach events to admin notifications with per-SLO cooldown
+// suppression and metric emission (slo.breach_notification_fired).
+builder.Services.AddSloBreachMonitor(builder.Configuration);
 
 // Live Account Data Sync (LADS) — P5-T7 / REQ-PORT-019/021a
 // Intraday per-user account sync during NSE market hours. Tracks

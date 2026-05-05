@@ -1,7 +1,7 @@
 {
   "current_phase": "P8",
   "current_version": "v0.9",
-  "current_task_id": "P8-T16",
+  "current_task_id": "P8-T14",
   "completed_tasks": [
     "P0-T1",
     "P0-T2",
@@ -140,10 +140,10 @@
     "P8-T11",
     "P8-T12",
     "P8-T13",
-    "P8-T15"
+    "P8-T15",
+    "P8-T16"
   ],
   "pending_tasks": [
-    "P8-T16",
     "P8-T14",
     "P9-T1",
     "P9-T2",
@@ -537,9 +537,10 @@
       "engineering-standards § Load-test SLO targets",
       "REQ-PLC-010",
       "REQ-PORT-016",
-      "REQ-ADMIN-016c"
+      "REQ-ADMIN-016c",
+      "REQ-SLO-008"
     ],
     "P9": []
   },
-  "last_updated": "2026-05-05T14:20:00Z"
+  "last_updated": "2026-05-05T14:45:00Z"
 }

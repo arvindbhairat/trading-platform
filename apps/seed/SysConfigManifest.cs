@@ -67,6 +67,9 @@ public static class SysConfigManifest
         new("risk.kill_switch.active",                 "risk",           "boolean","false", "Global RME kill switch. When active, all non-terminal positions are suspended with reason kill_switch_activated.", "REQ-ADMIN-007"),
         new("risk.signal_types.ma_crossover.enabled",  "risk",           "boolean","true",  "MA Crossover Signal type enabled/disabled platform-wide.",                                                         "REQ-ADMIN-011"),
 
+        // ── slos ──
+        new("slos.breach_notification_cooldown_minutes","slos",         "number",  "60",   "Cooldown in minutes between SLO breach notifications for the same SLO.",                                          "REQ-SLO-008"),
+
         // ── rme ───────────────────────────────────────────────────────────
         new("rme.channel.backlog_warn_depth",          "rme",            "number",  "20",   "Per-position channel backlog depth warning threshold.",                                                             "REQ-RME-CONC-004"),
         new("rme.equity_read.snapshot_retry_max_attempts","rme",         "number",  "3",    "Maximum retry attempts for equity snapshot read.",                                                                  "REQ-RME-006d"),

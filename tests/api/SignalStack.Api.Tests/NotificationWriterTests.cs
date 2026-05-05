@@ -383,30 +383,55 @@ public sealed class NotificationWriterTests
         Assert.Equal(NotificationType.AdminDataSyncJobFailure, adminNotifs[0].NotificationType);
     }
 
-    // ── All User-Facing Types Accepted by Schema (REQ-NOTIFY-006) ──────────
+    // ── All Admin-Only Types Accepted by Schema (REQ-NOTIFY-006a) ─────────
 
     [Fact]
-    public async Task All_user_facing_notification_types_are_accepted_by_schema()
+    public async Task All_admin_notification_types_are_accepted_by_schema()
     {
         var userId = ObjectId.GenerateNewId();
 
-        foreach (var type in NotificationType.UserFacing)
+        foreach (var type in NotificationType.AdminOnly)
         {
             var notification = new NotificationDocument
             {
                 Id = ObjectId.GenerateNewId(),
                 UserId = userId,
                 NotificationType = type,
-                Content = $"Test notification for {type}. This is not investment advice.",
+                Content = $"Test admin notification for {type}.",
                 GeneratedAt = DateTime.UtcNow,
+                IsAdminNotification = true,
             };
             await _writer.WriteAsync(notification);
         }
 
         var all = _repository.GetAll();
-        Assert.Equal(NotificationType.UserFacing.Count, all.Count);
+        Assert.Equal(NotificationType.AdminOnly.Count, all.Count);
 
         var writtenTypes = all.Select(n => n.NotificationType).ToHashSet();
-        Assert.True(NotificationType.UserFacing.SetEquals(writtenTypes));
+        Assert.True(NotificationType.AdminOnly.SetEquals(writtenTypes));
+    }
+
+    // ── Admin SLO Breach Notification (REQ-SLO-008) ──────────────────────
+
+    [Fact]
+    public async Task Slo_breach_admin_notification_is_accepted()
+    {
+        var adminUserId = ObjectId.GenerateNewId();
+
+        var notification = new NotificationDocument
+        {
+            Id = ObjectId.GenerateNewId(),
+            UserId = adminUserId,
+            NotificationType = NotificationType.AdminSloBreach,
+            Content = "Test SLO breach notification.",
+            GeneratedAt = DateTime.UtcNow,
+            IsAdminNotification = true,
+        };
+
+        await _writer.WriteAsync(notification);
+
+        var adminNotifs = await _repository.GetAdminNotificationsAsync();
+        var match = Assert.Single(adminNotifs);
+        Assert.Equal(NotificationType.AdminSloBreach, match.NotificationType);
     }
 }

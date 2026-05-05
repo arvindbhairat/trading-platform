@@ -73,4 +73,26 @@ $@"<b>⚠️ Exit Advisory — {data.Symbol} — {data.ExchangeCode}</b>
 
 {Disclaimer}";
     }
+
+    // ── SLO breach template (REQ-SLO-008) ─────────────────────────────────
+
+    /// <summary>
+    /// Builds the content string for an SLO breach admin notification.
+    /// Names the breached SLO, observed p95, target, and detection time.
+    /// </summary>
+    public static string BuildSloBreachContent(string sloName, double observedP95, double target, DateTime detectionTime)
+    {
+        ArgumentNullException.ThrowIfNull(sloName);
+
+        var inr = CultureInfo.InvariantCulture;
+
+        return
+$@"<b>⚠️ SLO Breach — {sloName}</b>
+
+<b>Observed p95:</b> {observedP95.ToString("F1", inr)}ms
+<b>Target:</b> {target.ToString("F0", inr)}ms
+<b>Detected at:</b> {detectionTime:yyyy-MM-dd HH:mm:ss} UTC
+
+{Disclaimer}";
+    }
 }
