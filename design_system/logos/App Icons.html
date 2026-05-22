@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Signal Stack — App Icons</title>
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="icons/master/icon-favicon.svg">
+<link rel="apple-touch-icon" href="icons/png/apple-touch/icon-180.png">
+<link rel="manifest" href="icons/manifest.webmanifest">
+<meta name="theme-color" content="#1f63f5">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --bg-0:#07090d; --bg-1:#0c1118; --bg-2:#121925; --bg-3:#1a2230; --bg-4:#222c3d;
+    --line-1:#1c2433; --line-2:#2a3447; --line-3:rgba(31,99,245,0.55);
+    --ink-1:#eef2f8; --ink-2:#aab4c5; --ink-3:#6b7689; --ink-4:#4a5366;
+    --brand:#1f63f5; --brand-tint:rgba(31,99,245,0.14);
+    --up:#1fb85a; --down:#ef3b3b; --warn:#e4a030;
+    --r-md:8px; --r-lg:12px; --r-pill:999px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg-0);color:var(--ink-1);font:14px/1.5 'Inter',system-ui,sans-serif;font-feature-settings:"cv11","ss01"}
+  body{-webkit-font-smoothing:antialiased}
+  a{color:var(--brand);text-decoration:none}
+  .mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+  .label{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+
+  /* Layout */
+  .shell{max-width:1280px;margin:0 auto;padding:48px 32px 80px}
+  header.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:32px;padding-bottom:32px;border-bottom:1px solid var(--line-1);margin-bottom:48px}
+  .hero h1{font-family:'Space Grotesk',Inter,sans-serif;font-weight:700;font-size:40px;line-height:1.05;letter-spacing:-0.02em;margin:8px 0 12px}
+  .hero p{color:var(--ink-2);max-width:54ch;margin:0}
+  .hero .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--brand-tint);color:#7ba4ff;border:1px solid var(--line-3);border-radius:var(--r-pill);font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase}
+  .hero-icon{flex-shrink:0;width:120px;height:120px;border-radius:24px;overflow:hidden;display:block}
+
+  section{margin-bottom:64px}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--line-1)}
+  .section-head h2{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:20px;letter-spacing:-0.01em;margin:0}
+  .section-head .meta{color:var(--ink-3);font-size:12px}
+
+  /* Card grid */
+  .grid{display:grid;gap:16px}
+  .grid.sizes{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .grid.variants{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  .grid.usage{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+
+  .card{background:var(--bg-2);border:1px solid var(--line-1);border-radius:var(--r-lg);padding:20px;display:flex;flex-direction:column;gap:14px;transition:background 200ms cubic-bezier(0.22,1,0.36,1)}
+  .card:hover{background:var(--bg-3)}
+  .card .surface{display:flex;align-items:center;justify-content:center;border-radius:var(--r-md);min-height:160px;position:relative;overflow:hidden}
+  .surface.s-light{background:#eef2f8}
+  .surface.s-dark{background:#0c1118}
+  .surface.s-checker{background:
+    linear-gradient(45deg,#1a2230 25%,transparent 25%),
+    linear-gradient(-45deg,#1a2230 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#1a2230 75%),
+    linear-gradient(-45deg,transparent 75%,#1a2230 75%);
+    background-size:16px 16px;
+    background-position:0 0,0 8px,8px -8px,-8px 0;
+    background-color:#121925}
+
+  .card .meta-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .card .name{font-weight:600;color:var(--ink-1)}
+  .card .dim{font-family:'JetBrains Mono',monospace;color:var(--ink-3);font-size:12px}
+  .card .desc{color:var(--ink-2);font-size:12px;line-height:1.5}
+  .card .path{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-3);background:var(--bg-1);border:1px solid var(--line-1);border-radius:6px;padding:6px 8px;word-break:break-all}
+
+  /* Size grid (the all-sizes-at-once strip) */
+  .ladder{display:flex;align-items:flex-end;gap:24px;padding:32px;background:var(--bg-2);border:1px solid var(--line-1);border-radius:var(--r-lg);overflow-x:auto}
+  .ladder .rung{display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto}
+  .ladder .rung img{display:block;image-rendering:auto;border-radius:max(2px,calc(var(--s) * 0.16))}
+  .ladder .rung .label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-3)}
+
+  /* Usage mockups */
+  .mock{padding:0;overflow:hidden}
+  .mock .frame{position:relative;width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  .mock .caption{padding:14px 18px;border-top:1px solid var(--line-1);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+
+  /* Browser tab mock */
+  .browser{background:#1a2230;width:100%;height:100%;display:flex;flex-direction:column}
+  .browser .chrome{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0c1118;border-bottom:1px solid var(--line-1)}
+  .browser .dots{display:flex;gap:6px}
+  .browser .dot{width:10px;height:10px;border-radius:50%;background:#3a4456}
+  .browser .tab{display:flex;align-items:center;gap:8px;background:var(--bg-2);padding:6px 12px 6px 8px;border-radius:6px 6px 0 0;font-size:12px;color:var(--ink-2);max-width:180px;border:1px solid var(--line-1);border-bottom:none;position:relative;top:1px}
+  .browser .tab img{width:14px;height:14px;display:block}
+  .browser .tab .x{margin-left:6px;color:var(--ink-3);font-size:14px;line-height:1}
+  .browser .urlbar{flex:1;background:var(--bg-2);border:1px solid var(--line-1);border-radius:6px;padding:5px 10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-2)}
+  .browser .body{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink-4);font-size:11px}
+
+  /* iOS home screen mock */
+  .ios{width:100%;height:100%;background:linear-gradient(160deg,#2c3a52,#0a1020);display:flex;flex-direction:column;padding:24px 18px;color:#fff;font-family:-apple-system,'Inter',sans-serif}
+  .ios .status{display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:18px;font-family:-apple-system,sans-serif}
+  .ios .grid-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 12px;justify-items:center}
+  .ios .app{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .ios .app .ic{width:48px;height:48px;border-radius:11px;background:linear-gradient(135deg,#52617a,#2a3447);box-shadow:0 2px 4px rgba(0,0,0,0.3)}
+  .ios .app .ic.ours{background:transparent;padding:0;overflow:hidden}
+  .ios .app .ic.ours img{width:100%;height:100%;display:block;border-radius:inherit}
+  .ios .app .nm{font-size:9px;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.5)}
+
+  /* Android maskable preview — circle, squircle, rounded square */
+  .android{width:100%;height:100%;background:linear-gradient(160deg,#1a4d3e,#0a1020);display:flex;align-items:center;justify-content:center;gap:20px}
+  .android .shape{width:64px;height:64px;overflow:hidden;background:#1f63f5;display:flex;align-items:center;justify-content:center}
+  .android .shape img{width:100%;height:100%;display:block}
+  .android .circle{border-radius:50%}
+  .android .squircle{border-radius:18px}
+  .android .rounded{border-radius:8px}
+  .android .label-row{position:absolute;bottom:14px;left:0;right:0;display:flex;justify-content:center;gap:38px;font-size:10px;color:rgba(255,255,255,0.7)}
+
+  /* Favicon row in tab strip */
+  .tabstrip{width:100%;height:100%;background:var(--bg-1);display:flex;flex-direction:column}
+  .tabstrip .row{display:flex;background:#0c1118;padding:6px 8px 0;gap:2px;border-bottom:1px solid var(--line-1);overflow:hidden}
+  .tabstrip .t{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-2);border-radius:6px 6px 0 0;font-size:11px;color:var(--ink-2);max-width:160px;flex-shrink:0}
+  .tabstrip .t.active{background:var(--bg-3);color:var(--ink-1)}
+  .tabstrip .t img{width:14px;height:14px}
+  .tabstrip .t .ttl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tabstrip .body{flex:1}
+
+  /* Pinch zoom inspect */
+  .inspect{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;align-items:stretch}
+  .inspect>div{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;border-right:1px solid var(--line-1)}
+  .inspect>div:last-child{border-right:none}
+  .inspect img{display:block;image-rendering:pixelated}
+  .inspect .lbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);margin-top:10px}
+
+  /* Spec table */
+  table.spec{width:100%;border-collapse:collapse;font-size:13px}
+  table.spec th, table.spec td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line-1)}
+  table.spec th{color:var(--ink-3);font-weight:500;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;background:var(--bg-1)}
+  table.spec td{color:var(--ink-1)}
+  table.spec td.mono{color:var(--ink-2);font-family:'JetBrains Mono',monospace;font-size:12px}
+  table.spec tr:hover td{background:var(--bg-2)}
+  table.spec td.purpose{color:var(--ink-2)}
+
+  /* Code block */
+  pre.code{background:var(--bg-1);border:1px solid var(--line-1);border-radius:var(--r-md);padding:16px 18px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--ink-2);margin:0}
+  pre.code .k{color:#ff8a73}
+  pre.code .a{color:#7ba4ff}
+  pre.code .s{color:#9ad9a4}
+  pre.code .c{color:var(--ink-4)}
+
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line-1);color:var(--ink-3);font-size:12px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="shell">
+
+  <header class="hero">
+    <div>
+      <span class="badge">App icon set</span>
+      <h1>Signal Stack icons</h1>
+      <p>Full app-icon set derived from the Signal Stack mark — ascending bars with a signal indicator. Includes master SVGs, PNG renders at every standard size, a multi-resolution <span class="mono">favicon.ico</span>, a maskable variant for Android adaptive icons, and a Web App Manifest.</p>
+    </div>
+    <img class="hero-icon" src="icons/png/tile/icon-512.png" alt="Signal Stack app icon">
+  </header>
+
+  <!-- 1. Variants -->
+  <section>
+    <div class="section-head">
+      <h2>Variants</h2>
+      <span class="meta">Master SVGs · scale infinitely · use these as the source of truth</span>
+    </div>
+    <div class="grid variants">
+
+      <div class="card">
+        <div class="surface s-dark"><img src="icons/master/icon-tile.svg" width="128" height="128" alt=""></div>
+        <div class="meta-row"><span class="name">Brand tile</span><span class="dim">primary</span></div>
+        <div class="desc">Brand blue rounded square with light mark. The default for app stores, PWA install, and any context that wants a self-contained, branded square.</div>
+        <div class="path">icons/master/icon-tile.svg</div>
+      </div>
+
+      <div class="card">
+        <div class="surface s-light"><img src="icons/master/icon-tile-dark.svg" width="128" height="128" alt=""></div>
+        <div class="meta-row"><span class="name">Dark tile</span><span class="dim">alternate</span></div>
+        <div class="desc">Near-black canvas with brand-blue mark. Pairs better against bright system surfaces (iOS light mode home screen, light Slack workspaces).</div>
+        <div class="path">icons/master/icon-tile-dark.svg</div>
+      </div>
+
+      <div class="card">
+        <div class="surface s-checker">
+          <div style="color:#7ba4ff;width:128px;height:128px;display:flex;align-items:center;justify-content:center"><img src="icons/master/icon.svg" width="128" height="128" alt=""></div>
+        </div>
+        <div class="meta-row"><span class="name">Mark</span><span class="dim">currentColor</span></div>
+        <div class="desc">Transparent background, <span class="mono">currentColor</span> fill. Drop into UI inline — sidebar, header, login screen — and inherit text color. No tile, no chrome.</div>
+        <div class="path">icons/master/icon.svg</div>
+      </div>
+
+      <div class="card">
+        <div class="surface s-dark"><img src="icons/master/icon-favicon.svg" width="128" height="128" alt=""></div>
+        <div class="meta-row"><span class="name">Favicon mark</span><span class="dim">3-bar simplified</span></div>
+        <div class="desc">A simplified 3-bar version optimized for legibility at 16–32px. The full 4-bar mark turns to mush below 24px; this stays sharp.</div>
+        <div class="path">icons/master/icon-favicon.svg</div>
+      </div>
+
+      <div class="card">
+        <div class="surface s-light"><img src="icons/master/icon-maskable.svg" width="128" height="128" alt=""></div>
+        <div class="meta-row"><span class="name">Maskable</span><span class="dim">PWA · Android</span></div>
+        <div class="desc">Full-bleed brand fill with the mark in the inner 80% safe zone — meets the <a href="https://www.w3.org/TR/appmanifest/#dfn-safe-zone">W3C maskable spec</a> so Android can crop to circle, squircle, or any device shape without clipping.</div>
+        <div class="path">icons/master/icon-maskable.svg</div>
+      </div>
+
+      <div class="card">
+        <div class="surface s-light"><img src="icons/master/icon-mono.svg" width="128" height="128" alt="" style="filter:none"></div>
+        <div class="meta-row"><span class="name">Monochrome</span><span class="dim">single-color contexts</span></div>
+        <div class="desc">Solid black silhouette — for Safari pinned tabs (<span class="mono">mask-icon</span>), Windows tile masks, and the manifest's <span class="mono">monochrome</span> purpose.</div>
+        <div class="path">icons/master/icon-mono.svg</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 2. Sizes ladder -->
+  <section>
+    <div class="section-head">
+      <h2>Size ladder</h2>
+      <span class="meta">Every standard PNG render, true pixel size</span>
+    </div>
+    <div class="ladder" id="sizeLadder"></div>
+  </section>
+
+  <!-- 3. The full inventory -->
+  <section>
+    <div class="section-head">
+      <h2>Inventory</h2>
+      <span class="meta">22 files · drop-in ready</span>
+    </div>
+    <table class="spec">
+      <thead>
+        <tr><th>File</th><th>Size</th><th>Format</th><th>Purpose</th></tr>
+      </thead>
+      <tbody id="inventory"></tbody>
+    </table>
+  </section>
+
+  <!-- 4. Usage in context -->
+  <section>
+    <div class="section-head">
+      <h2>In context</h2>
+      <span class="meta">How the icon reads in real surfaces</span>
+    </div>
+    <div class="grid usage">
+
+      <div class="card mock">
+        <div class="frame"><div class="tabstrip">
+          <div class="row">
+            <div class="t active"><img src="icons/png/favicon/icon-16.png" alt=""><span class="ttl">Signal Stack — Dashboard</span><span style="color:var(--ink-3)">×</span></div>
+            <div class="t"><div style="width:14px;height:14px;background:#3a4456;border-radius:3px"></div><span class="ttl">FYERS Web</span><span style="color:var(--ink-3)">×</span></div>
+            <div class="t"><div style="width:14px;height:14px;background:#3a4456;border-radius:3px"></div><span class="ttl">NSE — Live</span><span style="color:var(--ink-3)">×</span></div>
+          </div>
+          <div class="body">browser tab favicon · 16×16</div>
+        </div></div>
+        <div class="caption"><span class="name">Browser tab</span><span class="dim mono">icons/png/favicon/icon-16.png</span></div>
+      </div>
+
+      <div class="card mock">
+        <div class="frame"><div class="ios">
+          <div class="status"><span>9:41</span><span>●●●●● ◢ 87%</span></div>
+          <div class="grid-apps">
+            <div class="app"><div class="ic"></div><div class="nm">Mail</div></div>
+            <div class="app"><div class="ic" style="background:linear-gradient(135deg,#65d978,#1fb85a)"></div><div class="nm">Health</div></div>
+            <div class="app"><div class="ic" style="background:linear-gradient(135deg,#ffb85c,#e4a030)"></div><div class="nm">Photos</div></div>
+            <div class="app"><div class="ic ours"><img src="icons/png/apple-touch/icon-180.png" alt=""></div><div class="nm">Signal Stack</div></div>
+            <div class="app"><div class="ic"></div><div class="nm">Calendar</div></div>
+            <div class="app"><div class="ic" style="background:linear-gradient(135deg,#7ba4ff,#1f63f5)"></div><div class="nm">FYERS</div></div>
+            <div class="app"><div class="ic"></div><div class="nm">Files</div></div>
+            <div class="app"><div class="ic" style="background:linear-gradient(135deg,#ef3b3b,#a02020)"></div><div class="nm">YouTube</div></div>
+          </div>
+        </div></div>
+        <div class="caption"><span class="name">iOS home screen</span><span class="dim mono">apple-touch-icon · 180×180</span></div>
+      </div>
+
+      <div class="card mock">
+        <div class="frame" style="position:relative">
+          <div class="android">
+            <div class="shape circle"><img src="icons/png/maskable/icon-192.png" alt=""></div>
+            <div class="shape squircle"><img src="icons/png/maskable/icon-192.png" alt=""></div>
+            <div class="shape rounded"><img src="icons/png/maskable/icon-192.png" alt=""></div>
+          </div>
+          <div class="label-row"><span>circle</span><span>squircle</span><span>rounded</span></div>
+        </div>
+        <div class="caption"><span class="name">Android adaptive</span><span class="dim mono">maskable · safe zone holds</span></div>
+      </div>
+
+      <div class="card mock">
+        <div class="frame"><div class="browser">
+          <div class="chrome">
+            <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <div class="tab"><img src="icons/png/favicon/icon-16.png" alt=""><span>Signal Stack</span><span class="x">×</span></div>
+            <div class="urlbar">app.signalstack.in/dashboard</div>
+          </div>
+          <div class="body">page content</div>
+        </div></div>
+        <div class="caption"><span class="name">macOS · Chrome</span><span class="dim mono">favicon.ico</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 5. Pixel-zoom inspector -->
+  <section>
+    <div class="section-head">
+      <h2>Pixel-perfect at every step</h2>
+      <span class="meta">Zoomed 8× · favicon stays sharp because rendering is on grid</span>
+    </div>
+    <div class="card inspect" style="padding:0">
+      <div>
+        <img src="icons/png/favicon/icon-16.png" width="128" height="128" style="image-rendering:pixelated">
+        <div class="lbl">16 × 8</div>
+      </div>
+      <div>
+        <img src="icons/png/favicon/icon-32.png" width="256" height="256" style="image-rendering:pixelated">
+        <div class="lbl">32 × 8</div>
+      </div>
+      <div>
+        <img src="icons/png/favicon/icon-48.png" width="384" height="384" style="image-rendering:pixelated">
+        <div class="lbl">48 × 8</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Drop-in head snippet -->
+  <section>
+    <div class="section-head">
+      <h2>Drop-in HTML</h2>
+      <span class="meta">Paste into <span class="mono">&lt;head&gt;</span></span>
+    </div>
+    <pre class="code"><span class="c">&lt;!-- Favicon (multi-res ICO + modern SVG fallback) --&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"icon"</span> <span class="a">href</span>=<span class="s">"icons/favicon.ico"</span> <span class="a">sizes</span>=<span class="s">"any"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"icon"</span> <span class="a">type</span>=<span class="s">"image/svg+xml"</span> <span class="a">href</span>=<span class="s">"icons/master/icon-favicon.svg"</span><span class="k">&gt;</span>
+
+<span class="c">&lt;!-- iOS home screen --&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"apple-touch-icon"</span> <span class="a">sizes</span>=<span class="s">"180x180"</span> <span class="a">href</span>=<span class="s">"icons/png/apple-touch/icon-180.png"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"apple-touch-icon"</span> <span class="a">sizes</span>=<span class="s">"167x167"</span> <span class="a">href</span>=<span class="s">"icons/png/apple-touch/icon-167.png"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"apple-touch-icon"</span> <span class="a">sizes</span>=<span class="s">"152x152"</span> <span class="a">href</span>=<span class="s">"icons/png/apple-touch/icon-152.png"</span><span class="k">&gt;</span>
+
+<span class="c">&lt;!-- Safari pinned tab --&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"mask-icon"</span> <span class="a">href</span>=<span class="s">"icons/master/icon-mono.svg"</span> <span class="a">color</span>=<span class="s">"#1f63f5"</span><span class="k">&gt;</span>
+
+<span class="c">&lt;!-- PWA / Android --&gt;</span>
+<span class="k">&lt;link</span> <span class="a">rel</span>=<span class="s">"manifest"</span> <span class="a">href</span>=<span class="s">"icons/manifest.webmanifest"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> <span class="a">name</span>=<span class="s">"theme-color"</span> <span class="a">content</span>=<span class="s">"#1f63f5"</span><span class="k">&gt;</span>
+
+<span class="c">&lt;!-- Windows tile --&gt;</span>
+<span class="k">&lt;meta</span> <span class="a">name</span>=<span class="s">"msapplication-TileColor"</span> <span class="a">content</span>=<span class="s">"#1f63f5"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> <span class="a">name</span>=<span class="s">"msapplication-TileImage"</span> <span class="a">content</span>=<span class="s">"icons/png/tile/icon-192.png"</span><span class="k">&gt;</span></pre>
+  </section>
+
+  <footer>
+    <div>Signal Stack · app icon set · brand <span class="mono">#1f63f5</span></div>
+    <div>Master SVGs scale infinitely · regenerate PNGs from <span class="mono">icons/master/</span> if you change the mark.</div>
+  </footer>
+
+</div>
+
+<script>
+// Build size ladder
+const ladderSpec = [
+  {sz:16,src:'icons/png/favicon/icon-16.png',  group:'favicon'},
+  {sz:32,src:'icons/png/favicon/icon-32.png',  group:'favicon'},
+  {sz:48,src:'icons/png/favicon/icon-48.png',  group:'favicon'},
+  {sz:64,src:'icons/png/tile/icon-64.png',     group:'tile'},
+  {sz:128,src:'icons/png/tile/icon-128.png',   group:'tile'},
+  {sz:180,src:'icons/png/apple-touch/icon-180.png', group:'apple'},
+  {sz:192,src:'icons/png/tile/icon-192.png',   group:'tile'},
+  {sz:256,src:'icons/png/tile/icon-256.png',   group:'tile'},
+  {sz:512,src:'icons/png/tile/icon-512.png',   group:'tile'},
+];
+const ladder = document.getElementById('sizeLadder');
+for (const r of ladderSpec) {
+  const el = document.createElement('div');
+  el.className = 'rung';
+  el.style.setProperty('--s', r.sz + 'px');
+  el.innerHTML = `<img src="${r.src}" width="${r.sz}" height="${r.sz}" style="border-radius:${Math.max(2,r.sz*0.16)}px"><span class="label">${r.sz} × ${r.sz}</span>`;
+  ladder.appendChild(el);
+}
+
+// Build inventory
+const inventory = [
+  ['icons/master/icon.svg',           'any',     'SVG', 'Master mark · currentColor · drop into any UI'],
+  ['icons/master/icon-tile.svg',      'any',     'SVG', 'Brand-blue tile · primary app icon'],
+  ['icons/master/icon-tile-dark.svg', 'any',     'SVG', 'Dark canvas tile · alternate'],
+  ['icons/master/icon-favicon.svg',   'any',     'SVG', 'Modern favicon · simplified for small sizes'],
+  ['icons/master/icon-maskable.svg',  'any',     'SVG', 'Maskable for Android adaptive icons'],
+  ['icons/master/icon-mono.svg',      'any',     'SVG', 'Monochrome silhouette · Safari pinned tab'],
+  ['icons/favicon.ico',               '16/32/48','ICO', 'Multi-resolution favicon'],
+  ['icons/png/favicon/icon-16.png',   '16×16',   'PNG', 'Browser tab'],
+  ['icons/png/favicon/icon-32.png',   '32×32',   'PNG', 'Browser tab · Hi-DPI'],
+  ['icons/png/favicon/icon-48.png',   '48×48',   'PNG', 'Windows shortcut'],
+  ['icons/png/apple-touch/icon-120.png','120×120','PNG','iPhone @2× (older)'],
+  ['icons/png/apple-touch/icon-152.png','152×152','PNG','iPad @2×'],
+  ['icons/png/apple-touch/icon-167.png','167×167','PNG','iPad Pro'],
+  ['icons/png/apple-touch/icon-180.png','180×180','PNG','iPhone @3× (modern default)'],
+  ['icons/png/tile/icon-64.png',      '64×64',   'PNG', 'Windows shortcut · macOS small'],
+  ['icons/png/tile/icon-128.png',     '128×128', 'PNG', 'macOS dock · Chrome Web Store'],
+  ['icons/png/tile/icon-192.png',     '192×192', 'PNG', 'Android · PWA standard'],
+  ['icons/png/tile/icon-256.png',     '256×256', 'PNG', 'Windows tile'],
+  ['icons/png/tile/icon-384.png',     '384×384', 'PNG', 'PWA splash'],
+  ['icons/png/tile/icon-512.png',     '512×512', 'PNG', 'PWA · Play Store · social share'],
+  ['icons/png/tile/icon-1024.png',    '1024×1024','PNG','App Store · Play Store hero'],
+  ['icons/png/maskable/icon-192.png', '192×192', 'PNG', 'Android adaptive · maskable purpose'],
+  ['icons/png/maskable/icon-512.png', '512×512', 'PNG', 'Android adaptive · maskable purpose'],
+  ['icons/png/tile-dark/icon-192.png','192×192', 'PNG', 'Dark tile variant'],
+  ['icons/png/tile-dark/icon-512.png','512×512', 'PNG', 'Dark tile variant'],
+  ['icons/manifest.webmanifest',      '—',       'JSON','Web App Manifest'],
+  ['icons/head-snippet.html',         '—',       'HTML','Drop-in head tags'],
+];
+const tbody = document.getElementById('inventory');
+for (const [file,size,fmt,purpose] of inventory) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="mono">${file}</td><td class="mono">${size}</td><td>${fmt}</td><td class="purpose">${purpose}</td>`;
+  tbody.appendChild(tr);
+}
+</script>
+
+</body>
+</html>

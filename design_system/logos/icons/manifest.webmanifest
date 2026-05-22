@@ -1,0 +1,16 @@
+{
+  "name": "Signal Stack",
+  "short_name": "Signal Stack",
+  "description": "Decision-support platform for NSE Nifty 500 equities.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#1f63f5",
+  "icons": [
+    { "src": "icons/png/tile/icon-192.png",      "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/png/tile/icon-512.png",      "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/png/maskable/icon-192.png",  "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/png/maskable/icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/master/icon-mono.svg",       "sizes": "any",     "type": "image/svg+xml", "purpose": "monochrome" }
+  ]
+}
