@@ -1,7 +1,3 @@
-extensions:
-  file_storage:
-    directory: /var/lib/otelcol/file-storage
-
 receivers:
   otlp:
     protocols:
@@ -22,8 +18,6 @@ exporters:
     verbosity: basic
 
 service:
-  extensions:
-    - file_storage
   pipelines:
     logs:
       receivers:

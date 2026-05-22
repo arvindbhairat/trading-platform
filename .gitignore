@@ -444,3 +444,6 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /desktop.ini
+
+# Additional user filtered files
+*.lscache
