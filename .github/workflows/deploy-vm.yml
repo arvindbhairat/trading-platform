@@ -1,0 +1,86 @@
+# VM deployment workflow — Phase 1 (Oracle Free Tier)
+#
+# Phase 1 constraint: the Worker runs as a single Docker container on the
+# Oracle VM.  Scale-out (multiple Worker instances) must remain blocked
+# until the Phase C partitioning extension (ADR-0003) is complete.
+#
+# Deployment ordering:
+#   1. Pull latest code on the VM
+#   2. Build API + Worker Docker images
+#   3. Restart containers (env vars from .env file on VM)
+#   4. Verify API health endpoint
+#
+# Migration jobs (SqlMigrations, Mongo.Migrations, Seed) are NOT included
+# in this workflow — they must be run manually as a one-time step during
+# initial VM setup (see the runbook's "First launch checklist").  This
+# avoids depending on the .NET SDK on the VM and keeps the deployment
+# workflow simple for Phase 1 solo testing.
+#
+# When migration/seed projects are ready for CI/CD integration, add a
+# docker compose run --rm step using the SDK image:
+#   docker run --rm \
+#     --network signalstack-prod_default \
+#     -e ... \
+#     -v $(pwd)/repo:/src \
+#     mcr.microsoft.com/dotnet/sdk:10.0 \
+#     dotnet run --project packages/migrations/...
+
+name: deploy-vm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: "Deploy to Oracle VM"
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ubuntu
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "--- Pulling latest code ---"
+            cd ~/signalstack/repo
+            git pull origin main
+
+            echo "--- Building API and Worker images ---"
+            cd ~/signalstack
+            docker compose build api worker
+
+            echo "--- Restarting API ---"
+            docker compose up -d api
+
+            echo "--- Restarting Worker ---"
+            docker compose up -d worker
+
+            echo "--- Cleaning up dangling images ---"
+            docker image prune -f
+
+      - name: Verify API health
+        run: |
+          echo "Waiting for API to be ready..."
+          sleep 15
+          for i in {1..6}; do
+            STATUS=$(curl -sS -o /dev/null -w "%{http_code}" "https://${{ vars.API_HOSTNAME || 'api.yourdomain.com' }}/api/v1/healthz" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check: PASS (HTTP 200)"
+              exit 0
+            fi
+            echo "Attempt $i: got HTTP $STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check: FAILED after 6 retries"
+          exit 1
