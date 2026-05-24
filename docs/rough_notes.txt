@@ -23,7 +23,7 @@ redis-cli -u redis://default:HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW@petunia-leather-co
 
 Railway
 Token - 0845df3b-5e6c-4d01-98a4-d380daae3630
-
+Token NEW - 78b5de0e-fdec-473d-909c-1cfb1959f16e
 
 ssh -i "ssh-key-2026-05-23.key" ubuntu@80.225.232.198
 
