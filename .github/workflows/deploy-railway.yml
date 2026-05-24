@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy API to Railway
-        run: npx @railway/cli@latest up --service api --project ${{ vars.RAILWAY_PROJECT_ID }}
+        run: npx @railway/cli@latest up --service api --project ${{ vars.RAILWAY_PROJECT_ID }} --environment production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy Worker to Railway
-        run: npx @railway/cli@latest up --service worker --project ${{ vars.RAILWAY_PROJECT_ID }}
+        run: npx @railway/cli@latest up --service worker --project ${{ vars.RAILWAY_PROJECT_ID }} --environment production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
