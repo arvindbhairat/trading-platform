@@ -4,16 +4,25 @@ url: https://otlp.eu01.nr-data.net
 ports: 443, 4317, 4318
 key: eu01xcd83ae386b02bfbb70153de0eed186fNRAL
 
+https://log-api.eu.newrelic.com/log/v1
+eu01x0cc4b3b79264b28246a657f8b24cce5NRAL
+
+
 Supabase:
 JQ5bSRnfdwmICX5k
-
-Redis:
-Free redis database
+postgresql://postgres:JQ5bSRnfdwmICX5k@db.oxkopvwrtbmbbdtscotx.supabase.co:5432/postgres
 
 MongoDB:
 Free Atlas M0 cluster
+mongodb+srv://nmdi1a9Bzg:ikkw3ovoltRSOJdM@prod-cluster.amhmico.mongodb.net/live/?retryWrites=true&w=majority
+
+Redis:
+Free redis database
+redis-cli -u redis://default:HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW@petunia-leather-cool-75695.db.redis.io:14772
 
 
+Railway
+Token - 0845df3b-5e6c-4d01-98a4-d380daae3630
 
 
 ssh -i "ssh-key-2026-05-23.key" ubuntu@80.225.232.198

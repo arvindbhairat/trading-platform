@@ -319,7 +319,7 @@ Single Oracle Cloud VM (Ampere A1, 4 OCPU, 24 GB RAM)
 - No managed database backups (set up your own cron-based DB dumps)
 - Single point of failure (one VM goes down, everything goes down)
 - REQ-LEGAL-009 data residency concern if using the India region — **acceptable for Phase 1 solo testing** where you are the only user and any real data belongs to you
-- Requires a public IP and setting up a reverse proxy (Nginx/Caddy) for HTTPS with Let's Encrypt
+- Requires a public IP and setting up a reverse proxy (Nginx) for HTTPS with Let's Encrypt
 
 ### 5.3 Phase 1 Cost Tiers Summary
 

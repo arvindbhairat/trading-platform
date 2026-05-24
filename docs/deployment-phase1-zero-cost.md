@@ -1,8 +1,8 @@
-# Phase 1 Deployment — $0/Month Architecture (Supabase + Atlas + Vercel)
+# Phase 1 Deployment — $0/Month Architecture (Supabase + Atlas + Railway)
 
-> **Update (May 2026):** Replaced Oracle Cloud VM with managed free-tier services after Oracle's convoluted setup became a blocker. Databases are now fully managed (Supabase, MongoDB Atlas). API/Worker compute hosting is TBD and will be added when unparked.
+> **Update (May 2026):** Replaced Oracle Cloud VM with managed free-tier services. API + Worker hosted on Railway (auto-HTTPS, no Caddy/domain needed). Databases fully managed (Supabase, MongoDB Atlas, Redis Cloud). OTel Collector removed — .NET SDK exports directly to New Relic.
 
-## Architecture (Current — Databases + Observability Only)
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -13,12 +13,19 @@
 │             │ HTTPS calls                                │
 │             ▼                                            │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  API (ASP.NET Core) — hosting TBD                │   │
-│  │  (will be added when unparked)                   │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-
+│  │  Railway Project — signalstack                    │   │
+│  │                                                   │   │
+│  │  ┌──────────────────┐  ┌──────────────────┐      │   │
+│  │  │ API Service       │  │ Worker Service    │      │   │
+│  │  │ (.NET)            │  │ (.NET background) │      │   │
+│  │  │ *.railway.app    │  │ (no public port)   │      │   │
+│  │  │ auto HTTPS        │  │ always-on         │      │   │
+│  │  └───────┬──────────┘  └────────┬─────────┘      │   │
+│  │          │                      │                  │   │
+│  └──────────┼──────────────────────┼──────────────────┘   │
+└─────────────┼──────────────────────┼──────────────────────┘
+              │                      │
+              ▼                      ▼
 ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
 │  MongoDB Atlas M0    │  │  Supabase Free        │  │  Redis Cloud Free    │
 │  (Free Tier)         │  │  (PostgreSQL)         │  │  (redis.com)         │
@@ -29,45 +36,33 @@
 ┌─────────────────────────────────────────────────────────┐
 │  New Relic Free (100 GB/mo logs, 100 GB/mo traces,      │
 │   10k metrics/month)                                     │
-│  Direct OTLP/HTTP export — no collector sidecar needed   │
+│  Direct OTLP export from .NET SDK — no collector         │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
 │  GitHub Actions — CI/CD (2000-3000 min/month free)      │
+│  Auto-deploy to Railway and Vercel on push to main      │
 └─────────────────────────────────────────────────────────┘
 ```
-
-> **Note on OTLP Export:** The .NET apps now export OTLP/HTTP directly to the New Relic endpoint, passing the license key in the `api-key` header. No intermediate collector sidecar is needed.
 
 ## Cost Breakdown
 
 | Component | Service | Monthly Cost | Notes |
 |-----------|---------|-------------|-------|
 | **Web** (Next.js) | Vercel Hobby | **$0** | 100 GB bandwidth, 6000 build min/mo |
-| **API** (.NET 10) | TBD | **TBD** | Parked — options below |
-| **Worker** (.NET 10) | TBD | **TBD** | Parked — options below |
+| **API** (.NET) | Railway | **$5-10** | Docker service, always-on, auto-HTTPS |
+| **Worker** (.NET) | Railway | **included** | Second service in same Railway project |
 | **MongoDB** | MongoDB Atlas M0 | **$0** | 512 MB shared storage, free forever |
 | **PostgreSQL** | Supabase Free | **$0** | 500 MB database, 2 GB bandwidth |
-| **Redis** | Redis Cloud Free | **$0** | 50 MB, redis.com — user's existing account |
-| **Observability** | New Relic Free | **$0** | 100 GB/mo logs, 100 GB/mo traces, 10k metrics |
+| **Redis** | Redis Cloud Free | **$0** | 50 MB, redis.com |
+| **Observability** | New Relic Free | **$0** | Direct OTLP — URL + license key only |
 | **CI/CD** | GitHub Actions | **$0** | 2000-3000 min/month free |
-| **Domain** | `.in` or `.dev` | **~$0.80** | ~₹65/month (~$10/year) |
-| **Total (current)** | | **~$0.80/month** | Databases + observability only |
-| **Total (with compute)** | | **~$5-10/month** | Adding Hetzner VM or equivalent |
+| **Domain** | Not needed | **$0** | Railway provides `*.railway.app`, Vercel provides `*.vercel.app` |
+| **Total** | | **~$5-10/month** | |
 
 ---
 
-## Step 1: Supabase (PostgreSQL — replaces SQL Server)
-
-### What Changed
-
-The original architecture called for SQL Server. Supabase provides fully managed PostgreSQL on a free tier — zero setup, zero maintenance, just a connection string.
-
-Supabase free tier limits:
-- **500 MB database** — ample for Nifty 500 OHLCV (daily data for 500 stocks × 10 years ≈ 40-50 MB)
-- **2 GB bandwidth**
-- **50,000 monthly active users**
-- **Automatic backups** and point-in-time recovery
+## Step 1: Supabase (PostgreSQL)
 
 ### 1.1 Create a Supabase Project
 
@@ -87,19 +82,16 @@ Supabase free tier limits:
 ### 1.2 Get Your Connection String
 
 1. In your Supabase project dashboard, go to **Project Settings → Database**
-2. Under **Connection string**, find the **URI** entry. It looks like:
+2. Under **Connection string**, find the **URI** entry:
 
    ```
    postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres
    ```
 
-3. Replace `<password>` with the database password you set during creation
-4. Replace the default database name `postgres` with `signalstack` (or create a new database)
-5. **Important:** Supabase enforces SSL/TLS for external connections. EF Core / Npgsql handles this automatically when you set `SSL Mode=Require` in the connection string.
+3. Replace `<password>` with the database password
+4. **Important:** Supabase enforces SSL/TLS. EF Core / Npgsql handles this automatically with `SSL Mode=Require` in the connection string.
 
 ### 1.3 Connection String for .NET Configuration
-
-For the app's `appsettings.Production.json` or environment variable:
 
 ```
 Host=db.<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;
@@ -107,31 +99,27 @@ Host=db.<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Passw
 
 ### 1.4 Schema Management
 
-Since Supabase is PostgreSQL (not SQL Server), the EF Core provider changes:
+Supabase is PostgreSQL (not SQL Server). The EF Core provider must be changed:
 
 | Before | After |
 |--------|-------|
 | `Microsoft.EntityFrameworkCore.SqlServer` | `Npgsql.EntityFrameworkCore.PostgreSQL` |
 | SQL Server connection string | PostgreSQL connection string (above) |
 
-**Code change needed** in the API and Worker projects:
+**Code change needed in API and Worker projects:**
 
 ```csharp
-// Before (SQL Server):
-builder.AddNpgsqlDbContext<SignalStackDbContext>("SqlServer");
-
-// After (PostgreSQL):
+// Replace SQL Server with PostgreSQL:
 builder.AddNpgsqlDbContext<SignalStackDbContext>("Postgres");
 ```
 
 ### 1.5 Supabase Studio (Built-in Admin UI)
 
-Supabase comes with a web-based SQL editor, table browser, and API explorer — no need for SQL Server Management Studio or Azure Data Studio.
+Supabase comes with a web-based SQL editor, table browser, and API explorer.
 
 - **Table Editor** — browse and edit data visually
 - **SQL Editor** — run ad-hoc queries
 - **API Docs** — auto-generated REST and GraphQL APIs
-- **Database Migrations** — apply raw SQL migrations if needed
 
 ---
 
@@ -163,36 +151,26 @@ Supabase comes with a web-based SQL editor, table browser, and API explorer — 
    | **Authentication Method** | Password |
    | **Username** | `signalstack` |
    | **Password** | Generate a strong password (save this) |
-   | **Database User Privileges** | **Read and write to any database** (or restrict to `signalstack` DB) |
+   | **Database User Privileges** | **Read and write to any database** |
 
 ### 2.3 Configure Network Access
 
 1. Go to **Security → Network Access**
 2. Click **Add IP Address**
-3. For Phase 1 (when API/Worker hosting is decided), you have two options:
-
-   - **Option A:** `0.0.0.0/0` (allow all — simpler but less secure; appropriate for POC with a strong password)
-   - **Option B:** Add the specific IP of wherever API/Worker will be hosted
-
+3. Add `0.0.0.0/0` (allow all — Railway uses dynamic IPs). For a POC with a strong password, this is acceptable.
 4. Click **Confirm**
 
 ### 2.4 Get Your Connection String
 
 1. Go to **Database → Connect** → **Drivers**
-2. Select **C# / .NET** as the driver
+2. Select **C# / .NET**
 3. Copy the connection string:
 
    ```
-   mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/signalstack?retryWrites=true&w=majority
    ```
 
-### 2.5 Connection String for .NET Configuration
-
-```
-mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/signalstack?retryWrites=true&w=majority
-```
-
-### 2.6 Atlas UI (Built-in Admin)
+### 2.5 Atlas UI (Built-in Admin)
 
 - **Data Explorer** — browse collections and documents
 - **Performance Advisor** — index recommendations
@@ -200,15 +178,16 @@ mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/signalstack?retr
 
 ---
 
-## Step 3: New Relic (Free Observability)
+## Step 3: New Relic (Free Observability — Direct OTLP Export)
+
+No collector sidecar needed. The .NET OTel SDK is configured to export directly to New Relic with the license key in the HTTP header.
 
 ### 3.1 Sign Up
 
 1. Go to [https://newrelic.com/signup](https://newrelic.com/signup) — select **Free forever** tier
-2. Complete signup (no credit card required for free tier)
-3. After logging in, go to **Add Data** → **OpenTelemetry**
-4. Find your **OTLP endpoint** and **license key**:
-   - **OTLP endpoint:** `otlp.eu01.nr-data.net:443` (or `otlp.nr-data.net:443` for US region)
+2. After logging in, go to **Add Data** → **OpenTelemetry**
+3. Note your **OTLP endpoint** and **license key**:
+   - **OTLP endpoint:** `https://otlp.eu01.nr-data.net:443` (or `https://otlp.nr-data.net:443` for US)
    - **License key:** Looks like `eu01xx...`
 
 ### 3.2 Free Tier Limits
@@ -220,40 +199,54 @@ mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/signalstack?retr
 | Metrics | 10,000 metrics/month |
 | Data retention | 8 days |
 
-These limits are more than sufficient for a solo POC.
-
 ### 3.3 .NET Configuration
 
-The .NET apps export OTLP/HTTP directly to the New Relic endpoint. No collector sidecar is needed. When API/Worker compute hosting is set up, configure the following environment variables:
+In the API and Worker code, the OTel setup needs two values as environment variables:
 
 | Variable | Value |
 |----------|-------|
-| `Telemetry__Otlp__Endpoint` | `https://otlp.eu01.nr-data.net:443` (or `https://otlp.nr-data.net:443` for US region) |
-| `Telemetry__Otlp__ApiKey` | Your New Relic license key (e.g. `eu01xx...`) |
+| `NewRelic__Endpoint` | `https://otlp.eu01.nr-data.net:443` |
+| `NewRelic__LicenseKey` | `eu01xx...` |
 
-When `Endpoint` is left empty (local dev default), OTLP export is disabled — logs still go to console via Serilog.
+The .NET code configures the exporter once at startup:
 
-Save your New Relic license key somewhere safe — you'll need it when the API and Worker are deployed.
+```csharp
+// Program.cs — simplified, no collector needed
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter(options =>
+        {
+            options.Endpoint = new Uri(
+                Environment.GetEnvironmentVariable("NewRelic__Endpoint")
+                ?? "https://otlp.eu01.nr-data.net:443");
+            options.Headers = "api-key=" +
+                Environment.GetEnvironmentVariable("NewRelic__LicenseKey");
+            options.Protocol = OtlpExportProtocol.HttpProtobuf;
+        }))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter(options =>
+        {
+            options.Endpoint = new Uri(
+                Environment.GetEnvironmentVariable("NewRelic__Endpoint")
+                ?? "https://otlp.eu01.nr-data.net:443");
+            options.Headers = "api-key=" +
+                Environment.GetEnvironmentVariable("NewRelic__LicenseKey");
+            options.Protocol = OtlpExportProtocol.HttpProtobuf;
+        }));
+```
+
+> **Why HTTP Protobuf over gRPC:** New Relic's OTLP endpoint accepts both, but HTTP makes it easy to pass the `api-key` header. No local collector needed.
 
 ---
 
 ## Step 4: CI/CD — GitHub Actions
 
-The project already has GitHub Actions workflows in `.github/workflows/`. For the current phase (databases only), the CI pipeline validates:
+### 4.1 Workflow
 
-1. **Code builds** — verify both API and Worker compile
-2. **Tests pass** — run unit tests on PR
-3. **Linting** — static analysis
-
-### 4.1 Required GitHub Secrets
-
-| Secret | Value | Status |
-|--------|-------|--------|
-| `MONGODB_ATLAS_URI` | MongoDB Atlas connection string | Create when CI needs connectivity |
-| `SUPABASE_CONNECTION_STRING` | Supabase PostgreSQL connection string | Create when CI needs connectivity |
-| `NEW_RELIC_LICENSE_KEY` | Your New Relic license key | Create when apps deploy |
-
-### 4.2 CI Workflow (Updated)
+The project already has workflows in `.github/workflows/`. The CI pipeline validates builds and tests on every PR and push:
 
 ```yaml
 # .github/workflows/ci.yml
@@ -277,28 +270,59 @@ jobs:
       - run: dotnet test --no-build -c Release
 ```
 
-### 4.3 Deploy Workflow (When Compute Is Ready)
+### 4.2 Deploy to Railway (Auto-deploy from GitHub)
 
-The deploy workflow will be updated when the API/Worker hosting provider is chosen. Current options:
+Railway's GitHub integration handles deployment:
 
-- **Hetzner VM** — SSH + Docker Compose (similar to original Oracle approach)
-- **Railway / Fly.io** — Dockerfile push with `flyctl` or `railway` CLI
-- **Azure Container Apps** — `az` CLI deploy
+1. Connect your GitHub repo to Railway
+2. Railway auto-deploys each service on every push to the linked branch
+3. No separate deploy workflow needed in GitHub Actions
 
-The workflow will be adjusted based on whichever provider is chosen.
+**Alternative:** If you want the deploy step visible in Actions, add this deploy workflow:
+
+```yaml
+# .github/workflows/deploy-railway.yml
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: railway/railway-action@v3
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+```
+
+The `RAILWAY_TOKEN` is generated from Railway dashboard → Account → Tokens.
+
+### 4.3 Deploy to Vercel
+
+Vercel auto-deploys from GitHub — just connect your repo in the Vercel dashboard. No workflow needed.
+
+### 4.4 Required GitHub Secrets
+
+| Secret | Value | Used By |
+|--------|-------|---------|
+| `RAILWAY_TOKEN` | Railway deploy token (optional — Railway auto-deploy works without it) | Deploy workflow |
+| `CONNECTIONSTRINGS__MONGODB` | MongoDB Atlas connection string | API/Worker |
+| `CONNECTIONSTRINGS__POSTGRES` | Supabase connection string | API/Worker |
+| `CONNECTIONSTRINGS__REDIS` | Redis Cloud connection string | API/Worker |
+| `NewRelic__Endpoint` | New Relic OTLP endpoint URL | API/Worker |
+| `NewRelic__LicenseKey` | New Relic license key | API/Worker |
 
 ---
 
 ## Step 5: Vercel (Web — Next.js)
 
-Unchanged from the original plan. Vercel is the native hosting platform for Next.js and requires no VM.
-
 ### 5.1 Deploy
 
-1. Go to [https://vercel.com](https://vercel.com)
-2. Sign up with your GitHub account
-3. Click **Import Project** → Select your `signalstack` repo
-4. Configure:
+1. Go to [https://vercel.com](https://vercel.com) — sign up with your GitHub account
+2. Click **Import Project** → Select your `signalstack` repo
+3. Configure:
 
    | Setting | Value |
    |---------|-------|
@@ -307,84 +331,103 @@ Unchanged from the original plan. Vercel is the native hosting platform for Next
    | Build Command | `npm run build` (default) |
    | Output Directory | `.next` (default) |
 
-5. Add Environment Variables:
+4. Add Environment Variables:
 
    | Name | Value |
    |------|-------|
-   | `NEXT_PUBLIC_API_BASE_URL` | `https://api.yourdomain.com` (TBD until API is hosted) |
+   | `NEXT_PUBLIC_API_BASE_URL` | The Railway API service URL (e.g., `https://api-production-xxxx.up.railway.app`) |
 
-6. Click **Deploy**
+5. Click **Deploy**
 
-### 5.2 Custom Domain
+### 5.2 Custom Domain (Optional)
 
-1. In Vercel dashboard → your project → **Settings** → **Domains**
-2. Add `www.yourdomain.com` (optional — can defer until API is ready)
+Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
 
 ---
 
-## Step 6: API & Worker Hosting (TBD — Options When Ready)
+## Step 6: Railway Setup (API + Worker)
 
-These are parked for now. When you're ready to deploy them, here are the recommended options ranked by ease of setup:
+### 6.1 Sign Up and Create a Project
 
-### Option A: Hetzner CX22 (~€3.99/month) — Recommended for Ease of Setup
+1. Go to [https://railway.app](https://railway.app) — sign up with your GitHub account
+2. Click **New Project** → **Deploy from GitHub repo**
+3. Select your `signalstack` repository
+4. Railway will scan the repo and detect services. For manual setup, continue below.
 
-One VM running Docker Compose with all services. Same architecture as the original Oracle plan, but on a platform that actually works well.
+### 6.2 Add API Service
 
-| Spec | Value |
-|------|-------|
-| vCPU | 2 |
-| RAM | 4 GB |
-| Storage | 40 GB (NVMe SSD) |
-| Cost | **€3.99/month** (~$5) |
-| Setup | SSH in, `docker compose up` |
+1. In your Railway project, click **New** → **Service**
+2. Select **Add a service** → **GitHub repo** → select `signalstack`
+3. Configure the service:
 
-**What runs on it:**
-- API container
-- Worker container
-- Caddy (HTTPS reverse proxy)
-- (Databases are managed — Supabase + Atlas + Redis Cloud)
+   | Setting | Value |
+   |---------|-------|
+   | **Service name** | `api` |
+   | **Root directory** | `apps/api` |
+   | **Build type** | Dockerfile (Railway auto-detects it) |
+   | **Start command** | (leave empty — Dockerfile has ENTRYPOINT) |
 
-**Pros:** Single dashboard, single SSH, everything in one Docker compose, 4 GB RAM is plenty since databases are managed off-box.
+4. Add Environment Variables (click on the service → **Variables**):
 
-**Setup:** Same as the original Oracle doc's Steps 2-3, minus the database containers (they're managed now).
+   | Variable | Value |
+   |----------|-------|
+   | `ASPNETCORE_ENVIRONMENT` | `Production` |
+   | `ConnectionStrings__MongoDb` | Your MongoDB Atlas connection string |
+   | `ConnectionStrings__Postgres` | Your Supabase connection string |
+   | `ConnectionStrings__Redis` | Your Redis Cloud connection string |
+   | `NewRelic__Endpoint` | `https://otlp.eu01.nr-data.net:443` |
+   | `NewRelic__LicenseKey` | Your New Relic license key |
 
-### Option B: Hetzner CX32 (~€7.99/month) — Headroom
+5. Railway assigns a public URL like `https://api-production-xxxx.up.railway.app` — auto-HTTPS, no setup needed.
 
-Double the capacity if you want breathing room.
+### 6.3 Add Worker Service
 
-| Spec | Value |
-|------|-------|
-| vCPU | 4 |
-| RAM | 8 GB |
-| Storage | 80 GB |
-| Cost | **€7.99/month** (~$9) |
+1. Click **New** → **Service** → select the same repo
+2. Configure:
 
-### Option C: Railway / Fly.io / Render
+   | Setting | Value |
+   |---------|-------|
+   | **Service name** | `worker` |
+   | **Root directory** | `apps/worker` |
+   | **Build type** | Dockerfile |
+   | **Start command** | (leave empty — Dockerfile has ENTRYPOINT) |
 
-Dockerfile-based PaaS — less to manage, but each service is separate (API one service, Worker another). Good if you prefer managed compute, but more dashboards to juggle.
+3. Add the same environment variables as the API service (Railway supports sharing variables across services if set at the project level, or you can add per-service)
 
-| Service | Free Tier | Notes |
-|---------|-----------|-------|
-| **Railway** | $5 credit/month | ~$0.20/hr for .NET — might need $5-10/mo |
-| **Fly.io** | 3 shared VMs, 256 MB RAM each | Just enough for API + Worker |
-| **Render** | Free (spins down after inactivity) | Not suitable for always-on Worker |
+4. **Important:** The Worker doesn't need a public port. Railway doesn't expose worker services to the internet by default.
 
-### Option D: Azure Container Apps (When Ready to Migrate to Cloud)
+### 6.4 Auto-deploy
 
-The eventual production target. ~$15-30/month for a minimal setup with managed Postgres/MongoDB/Redis.
+By default, Railway deploys every push to the linked branch. To configure:
+
+1. Go to your service → **Settings** → **Deploy**
+2. **Auto Deploy** should be **On** (default)
+3. **Deploy Branch** — set to `main` (or your default branch)
+
+### 6.5 Service URLs
+
+| Service | URL |
+|---------|-----|
+| **API** | `https://api-production-xxxx.up.railway.app` (auto-HTTPS) |
+| **Worker** | No public URL (internal only) |
+
+### 6.6 Railway Dashboard
+
+- **Metrics** — CPU, memory, network per service
+- **Logs** — real-time and historical logs per service
+- **Deployments** — deployment history with rollback
+- **Domains** — auto-assigned `*.railway.app` URL, custom domains optional
 
 ---
 
 ## Complete Connection String Reference
 
-When configuring the API and Worker, these are the connection strings:
-
-| Service | Format |
-|---------|--------|
+| Service | Connection String |
+|---------|------------------|
 | **MongoDB (Atlas)** | `mongodb+srv://<user>:<password>@<cluster>.mongodb.net/signalstack?retryWrites=true&w=majority` |
 | **PostgreSQL (Supabase)** | `Host=<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;` |
-| **Redis (Redis Cloud)** | `redis://:<password>@<host>:<port>` (get from Redis Cloud dashboard) |
-| **OTLP Endpoint** | `Telemetry__Otlp__Endpoint` environment variable (direct to New Relic, no collector) |
+| **Redis (Redis Cloud)** | `redis://:<password>@<host>:<port>` |
+| **New Relic Endpoint** | `https://otlp.eu01.nr-data.net:443` (set in code + env var) |
 
 ---
 
@@ -395,38 +438,37 @@ When configuring the API and Worker, these are the connection strings:
 - [x] **Supabase project** created — PostgreSQL connection string saved
 - [x] **MongoDB Atlas cluster** created — connection string saved
 - [x] **Redis Cloud account** configured — 50 MB free tier, connection string saved
-- [ ] New Relic free account set up — license key saved
 
-### When compute hosting is ready:
+### Deployment steps:
 
-- [ ] VM or PaaS provisioned for API + Worker
-- [ ] Docker installed (if using VM)
-- [ ] Domain DNS pointing to compute host
-- [ ] Caddy or equivalent reverse proxy configured with HTTPS
-- [ ] Google OAuth created with correct redirect URI
-- [ ] FYERS app updated with correct redirect URI
-- [ ] `.env` populated on the host with all secrets
-- [ ] OTLP endpoint and API key configured for New Relic
-- [ ] API responds to health check
-- [ ] Worker acquires lease and starts processing
-- [ ] Vercel project connected to repo and builds successfully
-- [ ] Telemetry flowing to New Relic
+- [ ] Railway account connected to GitHub
+- [ ] Railway project created with API service (`apps/api/Dockerfile`)
+- [ ] Railway project created with Worker service (`apps/worker/Dockerfile`)
+- [ ] Environment variables set on both Railway services
+- [ ] MongoDB Atlas network access allows `0.0.0.0/0` (Railway dynamic IPs)
+- [ ] API responds to health check at `https://api-xxxx.up.railway.app/health`
+- [ ] Worker starts and shows "acquired lease" in Railway logs
+- [ ] Vercel project created and builds successfully
+- [ ] Vercel env var `NEXT_PUBLIC_API_BASE_URL` set to Railway API URL
+- [ ] Google OAuth redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/google/callback`
+- [ ] FYERS app redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/fyers/callback`
+- [ ] New Relic OTLP endpoint configured — telemetry flowing
+- [ ] GitHub Actions CI passes on push to main
 
 ---
 
-## Summary: Before vs After
+## Migration Path to Production
 
-| Area | Old (Oracle VM) | New (Managed Services) |
-|------|----------------|----------------------|
-| **Compute** | Oracle VM (4 ARM, 24 GB) | **TBD** (Hetzner, Railway, or equivalent) |
-| **PostgreSQL** | Docker on Oracle VM | **Supabase Free** — managed, auto-backups |
-| **MongoDB** | Docker on Oracle VM | **Atlas M0 Free** — managed, auto-backups |
-| **Redis** | Docker on Oracle VM | **Redis Cloud Free** — managed, 50 MB |
-| **Web hosting** | Vercel Free | **Vercel Free** (unchanged) |
-| **Observability** | New Relic Free | **New Relic Free** (unchanged) |
-| **CI/CD** | GitHub Actions | **GitHub Actions** (unchanged) |
-| **Setup pain** | **High** (Oracle console, networking, account blocks) | **Low** (Supabase + Atlas = 5 minutes each) |
-| **Total cost** | ~$0.80/month | **~$0.80/month** (current) or **~$5-10/month** (+ compute) |
-| **Backups** | DIY cron scripts | **Built-in** (managed databases) |
+When you're ready to move beyond evaluation:
 
-**Bottom line:** For ~$5-6/month total (adding a Hetzner VM when compute is needed), you get a fully managed database layer that requires zero maintenance, and a single Docker box for the app layer that takes minutes to set up. No Oracle Cloud headaches.
+| Component | Production Target | Migration Effort |
+|-----------|-----------------|-----------------|
+| **API** | Azure Container Apps | Minimal (same Dockerfile) |
+| **Worker** | Azure Container Apps | Minimal (same Dockerfile) |
+| **Web** | Vercel / Azure Static Web Apps | Zero (already on Vercel) |
+| **PostgreSQL** | Azure Database for PostgreSQL | Dump & restore from Supabase |
+| **MongoDB** | Azure Cosmos DB for MongoDB | Connection string change |
+| **Redis** | Azure Cache for Redis | Connection string change |
+| **Observability** | Azure Application Insights | SDK swap (similar API) |
+
+The architecture is cloud-agnostic by design. Railway → Azure is a config change, not a rewrite.
