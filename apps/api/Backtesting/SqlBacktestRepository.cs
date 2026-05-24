@@ -1,11 +1,11 @@
 using System.Data;
 using System.Text.Json;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace SignalStack.Api.Backtesting;
 
 /// <summary>
-/// SQL Server persistence for backtest results using BT_-prefixed tables.
+/// PostgreSQL persistence for backtest results using BT_-prefixed tables.
 /// REQ-BTSTORE-001: persisted to SQL Server backtest database.
 /// REQ-BTSTORE-002: BT_ prefix distinguishes from market data tables.
 /// </summary>
@@ -74,9 +74,9 @@ public sealed class SqlBacktestRepository : IBacktestRepository
             equity_curve = result.EquityCurve.Select(e => new { date = e.Date.ToString("yyyy-MM-dd"), equity = e.Equity })
         });
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@RunId", result.RunId);
         cmd.Parameters.AddWithValue("@SignalType", result.SignalType);
         cmd.Parameters.AddWithValue("@SignalParams", result.SignalSubscriptionVersionId ?? "");
@@ -123,12 +123,12 @@ public sealed class SqlBacktestRepository : IBacktestRepository
                 @StopAtEntry, @ExitReason, @RMultiple, @GrossPnl, @NetPnl
             )";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         foreach (var trade in trades)
         {
-            await using var cmd = new SqlCommand(sql, conn);
+            await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@RunId", runId);
             cmd.Parameters.AddWithValue("@Symbol", trade.Symbol);
             cmd.Parameters.AddWithValue("@EntryDate", trade.EntryDate.ToDateTime(TimeOnly.MinValue));
@@ -155,12 +155,12 @@ public sealed class SqlBacktestRepository : IBacktestRepository
                 @RunId, @Symbol, @EventType, @EventDate, @RmeState, @PeakR
             )";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         foreach (var evt in events)
         {
-            await using var cmd = new SqlCommand(sql, conn);
+            await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@RunId", runId);
             cmd.Parameters.AddWithValue("@Symbol", evt.Symbol);
             cmd.Parameters.AddWithValue("@EventType", evt.EventType);
@@ -190,12 +190,12 @@ public sealed class SqlBacktestRepository : IBacktestRepository
             equity = e.Equity
         }));
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@RunId", result.RunId);
         cmd.Parameters.AddWithValue("@EquityCurve", equityCurveJson);
-        cmd.Parameters.AddWithValue("@Xirr", (object?)DBNull.Value); // Not computed for basic backtest
+        cmd.Parameters.AddWithValue("@Xirr", DBNull.Value); // Not computed for basic backtest
         cmd.Parameters.AddWithValue("@SharpeRatio", result.SharpeRatio);
         cmd.Parameters.AddWithValue("@MaxDrawdown", result.MaxDrawdownPct);
         cmd.Parameters.AddWithValue("@WinRate", result.WinRatePct);
@@ -231,11 +231,11 @@ public sealed class SqlBacktestRepository : IBacktestRepository
             WHERE run_id = @RunId
             ORDER BY entry_date";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         // Read run header
-        await using var headerCmd = new SqlCommand(headerSql, conn);
+        await using var headerCmd = new NpgsqlCommand(headerSql, conn);
         headerCmd.Parameters.AddWithValue("@RunId", runId);
         await using var headerReader = await headerCmd.ExecuteReaderAsync(ct);
 
@@ -249,7 +249,7 @@ public sealed class SqlBacktestRepository : IBacktestRepository
         await headerReader.CloseAsync();
 
         // Read trades
-        await using var tradesCmd = new SqlCommand(tradesSql, conn);
+        await using var tradesCmd = new NpgsqlCommand(tradesSql, conn);
         tradesCmd.Parameters.AddWithValue("@RunId", runId);
         await using var tradesReader = await tradesCmd.ExecuteReaderAsync(ct);
 
@@ -262,7 +262,7 @@ public sealed class SqlBacktestRepository : IBacktestRepository
         return result with { Trades = trades };
     }
 
-    private static BacktestRunResult ReadRunHeader(SqlDataReader reader)
+    private static BacktestRunResult ReadRunHeader(NpgsqlDataReader reader)
     {
         var runId = reader.GetGuid(reader.GetOrdinal("run_id"));
         var signalType = reader.GetString(reader.GetOrdinal("signal_type"));
@@ -339,7 +339,7 @@ public sealed class SqlBacktestRepository : IBacktestRepository
         };
     }
 
-    private static BacktestTrade ReadTrade(SqlDataReader reader)
+    private static BacktestTrade ReadTrade(NpgsqlDataReader reader)
     {
         return new BacktestTrade
         {
@@ -364,7 +364,7 @@ public sealed class SqlBacktestRepository : IBacktestRepository
         int limit = 20, int offset = 0, CancellationToken ct = default)
     {
         const string sql = @"
-            SELECT TOP (@Limit) rh.run_id, rh.signal_type, rh.timeframe,
+            SELECT rh.run_id, rh.signal_type, rh.timeframe,
                    rh.date_range_start, rh.date_range_end,
                    rh.run_timestamp,
                    pp.starting_equity, pp.ending_equity,
@@ -372,17 +372,12 @@ public sealed class SqlBacktestRepository : IBacktestRepository
                    (SELECT COUNT(*) FROM BT_Trades t WHERE t.run_id = rh.run_id) AS total_trades
             FROM BT_RunHeaders rh
             LEFT JOIN BT_PortfolioPerformance pp ON pp.run_id = rh.run_id
-            WHERE rh.run_id NOT IN (
-                SELECT run_id FROM (
-                    SELECT run_id, ROW_NUMBER() OVER (ORDER BY run_timestamp DESC) AS rn
-                    FROM BT_RunHeaders
-                ) sub WHERE rn <= @Offset
-            )
-            ORDER BY rh.run_timestamp DESC";
+            ORDER BY rh.run_timestamp DESC
+            LIMIT @Limit OFFSET @Offset";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@Limit", limit);
         cmd.Parameters.AddWithValue("@Offset", offset);
         await using var reader = await cmd.ExecuteReaderAsync(ct);

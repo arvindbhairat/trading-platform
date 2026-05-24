@@ -45,8 +45,7 @@ public sealed class InitialBacktest_002 : Migration
             .WithColumn("created_at").AsDateTime2().NotNullable().WithDefault(SystemMethods.CurrentDateTime);
 
         Create.Index("ix_bt_trades_run_id").OnTable("BT_Trades")
-            .OnColumn("run_id").Ascending()
-            .WithOptions().NonClustered();
+            .OnColumn("run_id").Ascending();
 
         // ── Position lifecycle ────────────────────────────────────────
         Create.Table("BT_PositionLifecycle")
@@ -60,8 +59,7 @@ public sealed class InitialBacktest_002 : Migration
             .WithColumn("created_at").AsDateTime2().NotNullable().WithDefault(SystemMethods.CurrentDateTime);
 
         Create.Index("ix_bt_position_lifecycle_run_id").OnTable("BT_PositionLifecycle")
-            .OnColumn("run_id").Ascending()
-            .WithOptions().NonClustered();
+            .OnColumn("run_id").Ascending();
 
         // ── Portfolio performance ─────────────────────────────────────
         Create.Table("BT_PortfolioPerformance")
@@ -79,8 +77,7 @@ public sealed class InitialBacktest_002 : Migration
             .WithColumn("created_at").AsDateTime2().NotNullable().WithDefault(SystemMethods.CurrentDateTime);
 
         Create.Index("ix_bt_portfolio_performance_run_id").OnTable("BT_PortfolioPerformance")
-            .OnColumn("run_id").Ascending()
-            .WithOptions().NonClustered();
+            .OnColumn("run_id").Ascending();
     }
 
     public override void Down()

@@ -1,6 +1,6 @@
 using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Universe;
 using SignalStack.Migrations;
@@ -84,7 +84,7 @@ public abstract class BatchedSchemaMigrationJob
     /// The DDL should be idempotent (use IF NOT EXISTS / safe-add patterns).
     /// </summary>
     /// <param name="tableName">The per-symbol table name (e.g. "D_RELIANCE").</param>
-    /// <param name="schema">The table schema (typically "dbo").</param>
+    /// <param name="schema">The table schema (typically "public").</param>
     /// <returns>The DDL string, or <c>null</c> to skip this table.</returns>
     protected abstract Task<string?> GetDdlAsync(
         string tableName,
@@ -183,7 +183,7 @@ public abstract class BatchedSchemaMigrationJob
             MigrationId, symbols.Count);
 
         // ── Connect ───────────────────────────────────────────────────────
-        await using var conn = new SqlConnection(_sqlConnectionString);
+        await using var conn = new NpgsqlConnection(_sqlConnectionString);
         await conn.OpenAsync(ct);
 
         var tablePrefixes = GetTablePrefixes();
@@ -213,7 +213,7 @@ public abstract class BatchedSchemaMigrationJob
             foreach (var prefix in tablePrefixes)
             {
                 var tableName = $"{prefix}{suffix}";
-                const string schema = "dbo";
+                const string schema = "public";
 
                 try
                 {
@@ -228,15 +228,14 @@ public abstract class BatchedSchemaMigrationJob
                         continue;
                     }
 
-                    await using var cmd = new SqlCommand(ddl, conn);
-                    cmd.CommandTimeout = 120; // Allow long-running DDL.
+                    await using var cmd = new NpgsqlCommand(ddl, conn);                    cmd.CommandTimeout = 120; // Allow long-running DDL.
                     await cmd.ExecuteNonQueryAsync(ct);
 
                     // ── Post-DDL statement ────────────────────────────────
                     var postDdl = await GetDdlPostStatementAsync(tableName, schema, ct);
                     if (!string.IsNullOrWhiteSpace(postDdl))
                     {
-                        await using var postCmd = new SqlCommand(postDdl, conn);
+                        await using var postCmd = new NpgsqlCommand(postDdl, conn);
                         postCmd.CommandTimeout = 120;
                         await postCmd.ExecuteNonQueryAsync(ct);
                     }

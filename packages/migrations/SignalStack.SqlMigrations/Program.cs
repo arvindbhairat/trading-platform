@@ -1,16 +1,15 @@
 using FluentMigrator.Runner;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace SignalStack.SqlMigrations;
 
 /// <summary>
-/// FluentMigrator runner for SQL Server migrations (REQ-MIGRATION-001/006/007).
+/// FluentMigrator runner for PostgreSQL migrations (REQ-MIGRATION-001/006/007).
 ///
 /// Usage:
-///   dotnet run -- --connection "Server=...;Database=marketdata;..." --database marketdata
-///   dotnet run -- --connection "Server=...;Database=backtest;..." --database backtest
+///   dotnet run -- --connection "Host=...;Database=marketdata;..." --database marketdata
+///   dotnet run -- --connection "Host=...;Database=backtest;..." --database backtest
 /// </summary>
 public static class Program
 {
@@ -49,30 +48,15 @@ public static class Program
 
     private static async Task RunMigrationsAsync(string connectionString, string databaseName)
     {
-        // Ensure the database exists.
-        var builder = new SqlConnectionStringBuilder(connectionString);
-        var masterConnection = builder.ConnectionString;
-        builder.InitialCatalog = databaseName;
-
-        await using (var conn = new SqlConnection(masterConnection))
-        {
-            await conn.OpenAsync();
-            var cmd = conn.CreateCommand();
-            cmd.CommandText = $@"
-                IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = @db)
-                BEGIN
-                    CREATE DATABASE [{databaseName}];
-                    PRINT 'Created database: {databaseName}';
-                END";
-            cmd.Parameters.AddWithValue("@db", databaseName);
-            await cmd.ExecuteNonQueryAsync();
-        }
+        // Databases are pre-provisioned (via docker init script or Azure).
+        // PostgreSQL does not support CREATE DATABASE inside a transaction block,
+        // so we connect directly to the target database.
 
         var services = new ServiceCollection()
             .AddFluentMigratorCore()
             .ConfigureRunner(runner => runner
-                .AddSqlServer()
-                .WithGlobalConnectionString(builder.ConnectionString)
+                .AddPostgres()
+                .WithGlobalConnectionString(connectionString)
                 .ScanIn(typeof(Program).Assembly).For.Migrations())
             .AddLogging(logging => logging.AddConsole().SetMinimumLevel(LogLevel.Information));
 

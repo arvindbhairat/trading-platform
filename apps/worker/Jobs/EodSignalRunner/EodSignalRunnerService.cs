@@ -609,7 +609,6 @@ public sealed class EodSignalRunnerService
 
     private static bool IsTransient(Exception ex)
         => ex is System.Data.Common.DbException
-            || ex is Microsoft.Data.SqlClient.SqlException { Class: <= 20 }
             || ex is TimeoutException;
 
     /// <summary>

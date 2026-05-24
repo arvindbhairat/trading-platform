@@ -1,10 +1,9 @@
-using System.Data;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace SignalStack.Api.Historical;
 
 /// <summary>
-/// SQL Server implementation of <see cref="IOhlcvRepository"/>.
+/// PostgreSQL implementation of <see cref="IOhlcvRepository"/>.
 ///
 /// REQ-HIST-001/002: queries per-symbol D_, W_, M_ tables with Date/Open/High/Low/Close/Volume.
 /// REQ-HIST-004: tables are referenced using <c>sql_table_name_suffix</c> via <see cref="ISymbolTableMapping"/>.
@@ -70,16 +69,16 @@ public sealed class SqlOhlcvRepository : IOhlcvRepository
         // and the closing bar is the most recent trading session.
         // REQ-HIST-010a: sessions determined by the NSE trading calendar.
         var sql = $@"
-SELECT TOP (@WindowSize)
-    [Date], [Open], [High], [Low], [Close], [Volume]
-FROM [{tableName}]
-WHERE [Date] <= @ToDate
-ORDER BY [Date] DESC";
+SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM ""{tableName}""
+WHERE ""Date"" <= @ToDate
+ORDER BY ""Date"" DESC
+LIMIT @WindowSize";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@WindowSize", windowSize);
         cmd.Parameters.AddWithValue("@ToDate", to.ToDateTime(TimeOnly.MinValue));
 
@@ -124,25 +123,25 @@ ORDER BY [Date] DESC";
 
         var tableName = $"D_{suffix}";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         // First check if the table exists.
         var tableExistsQuery = @"
 SELECT CASE WHEN EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @TableName
+    WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = @TableName
 ) THEN 1 ELSE 0 END";
 
-        await using var existsCmd = new SqlCommand(tableExistsQuery, conn);
+        await using var existsCmd = new NpgsqlCommand(tableExistsQuery, conn);
         existsCmd.Parameters.AddWithValue("@TableName", tableName);
         var exists = (int)(await existsCmd.ExecuteScalarAsync(ct))! == 1;
 
         if (!exists) return null;
 
         // Query most recent Date.
-        var dateQuery = $"SELECT MAX([Date]) FROM [{tableName}]";
-        await using var dateCmd = new SqlCommand(dateQuery, conn);
+        var dateQuery = $"SELECT MAX(\"Date\") FROM \"{tableName}\"";
+        await using var dateCmd = new NpgsqlCommand(dateQuery, conn);
         var result = await dateCmd.ExecuteScalarAsync(ct);
 
         if (result is null || result == DBNull.Value) return null;
@@ -153,15 +152,15 @@ SELECT CASE WHEN EXISTS (
         string tableName, DateOnly from, DateOnly to, CancellationToken ct)
     {
         var sql = $@"
-SELECT [Date], [Open], [High], [Low], [Close], [Volume]
-FROM [{tableName}]
-WHERE [Date] >= @FromDate AND [Date] <= @ToDate
-ORDER BY [Date] ASC";
+SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM ""{tableName}""
+WHERE ""Date"" >= @FromDate AND ""Date"" <= @ToDate
+ORDER BY ""Date"" ASC";
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@FromDate", from.ToDateTime(TimeOnly.MinValue));
         cmd.Parameters.AddWithValue("@ToDate", to.ToDateTime(TimeOnly.MinValue));
 
@@ -175,7 +174,7 @@ ORDER BY [Date] ASC";
         return results;
     }
 
-    private static OhlcvRecord ReadOhlcv(SqlDataReader reader)
+    private static OhlcvRecord ReadOhlcv(NpgsqlDataReader reader)
     {
         return new OhlcvRecord(
             Date: DateOnly.FromDateTime(reader.GetDateTime(reader.GetOrdinal("Date"))),

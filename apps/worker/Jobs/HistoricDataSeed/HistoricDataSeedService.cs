@@ -1,6 +1,6 @@
-using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using Npgsql;
+using NpgsqlTypes;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Universe;
 using SignalStack.MarketData;
@@ -72,19 +72,19 @@ public sealed class HistoricDataSeedService
             symbol, suffix);
 
         // ── Step 2: Create tables atomically (IF NOT EXISTS) ───────────────
-        await using var conn = new SqlConnection(_sqlConnectionString);
+        await using var conn = new NpgsqlConnection(_sqlConnectionString);
         await conn.OpenAsync(ct);
 
-        SqlTransaction? transaction = null;
+        NpgsqlTransaction? transaction = null;
         try
         {
-            transaction = conn.BeginTransaction();
+            transaction = await conn.BeginTransactionAsync(ct);
 
             // SharedTableDdlTemplate creates D_, W_, M_ tables using IF NOT EXISTS.
             await SharedTableDdlTemplate.CreatePerSymbolTablesAsync(
                 conn, suffix, transaction, ct);
 
-            transaction.Commit();
+            await transaction.CommitAsync(ct);
             _logger.LogDebug(
                 "Tables D_{Suffix}, W_{Suffix}, M_{Suffix} ensured for {Symbol}.",
                 suffix, suffix, suffix, symbol);
@@ -101,7 +101,7 @@ public sealed class HistoricDataSeedService
         }
         finally
         {
-            transaction?.Dispose();
+            await (transaction?.DisposeAsync() ?? ValueTask.CompletedTask);
         }
 
         // ── Step 3: Determine resumption point ─────────────────────────────
@@ -177,7 +177,7 @@ public sealed class HistoricDataSeedService
         var weeklyTableName = $"W_{suffix}";
         var weeklyComputed = await ComputeAndInsertAggregatesAsync(
             conn, dailyTableName, weeklyTableName,
-            "weekly", "DATEADD(week, DATEDIFF(week, 0, [Date]), 0)",
+            "weekly", "date_trunc('week', \"Date\")",
             providerRecords[0].Date, providerRecords[^1].Date, ct);
 
         _logger.LogInformation(
@@ -188,7 +188,7 @@ public sealed class HistoricDataSeedService
         var monthlyTableName = $"M_{suffix}";
         var monthlyComputed = await ComputeAndInsertAggregatesAsync(
             conn, dailyTableName, monthlyTableName,
-            "monthly", "DATEFROMPARTS(YEAR([Date]), MONTH([Date]), 1)",
+            "monthly", "date_trunc('month', \"Date\")",
             providerRecords[0].Date, providerRecords[^1].Date, ct);
 
         _logger.LogInformation(
@@ -202,106 +202,94 @@ public sealed class HistoricDataSeedService
     /// <summary>
     /// Bulk-inserts daily OHLCV records into the specified D_ table.
     /// Skips rows where the Date already exists (idempotent insert).
+    /// Uses NpgsqlBinaryImporter (binary COPY) for high-performance bulk load.
     /// </summary>
     private async Task<int> BulkInsertDailyAsync(
-        SqlConnection conn,
+        NpgsqlConnection conn,
         string tableName,
         IReadOnlyList<SignalStack.MarketData.OhlcvRecord> records,
         CancellationToken ct)
     {
         // Use a staging approach: insert rows that don't already exist.
-        // Create a temp table, bulk insert into it, then MERGE into the target.
-        var tempTableName = $"#tmp_{tableName}";
+        // Create a temp table, bulk insert into it via binary COPY, then
+        // INSERT...ON CONFLICT DO NOTHING into the target.
+        var tempTableName = $"\"tmp_{tableName}\"";
 
         var createTempSql = $@"
-CREATE TABLE {tempTableName} (
-    [Date]   DATE   NOT NULL,
-    [Open]   FLOAT  NOT NULL,
-    [High]   FLOAT  NOT NULL,
-    [Low]    FLOAT  NOT NULL,
-    [Close]  FLOAT  NOT NULL,
-    [Volume] BIGINT NOT NULL,
-    PRIMARY KEY ([Date])
+CREATE TEMPORARY TABLE {tempTableName} (
+    ""Date""   DATE              NOT NULL,
+    ""Open""   DOUBLE PRECISION  NOT NULL,
+    ""High""   DOUBLE PRECISION  NOT NULL,
+    ""Low""    DOUBLE PRECISION  NOT NULL,
+    ""Close""  DOUBLE PRECISION  NOT NULL,
+    ""Volume"" BIGINT            NOT NULL,
+    PRIMARY KEY (""Date"")
 );";
 
-        await using (var createCmd = new SqlCommand(createTempSql, conn))
+        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
         {
             await createCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Bulk insert into temp table.
-        using (var bulkCopy = new SqlBulkCopy(conn))
+        // Binary COPY into temp table — high-performance bulk load.
+        await using (var writer = conn.BeginBinaryImport(
+            $"COPY {tempTableName} (\"Date\", \"Open\", \"High\", \"Low\", \"Close\", \"Volume\") FROM STDIN (FORMAT BINARY)"))
         {
-            bulkCopy.DestinationTableName = tempTableName;
-            bulkCopy.BatchSize = 1000;
-
-            var dt = new System.Data.DataTable();
-            dt.Columns.Add("Date", typeof(DateTime));
-            dt.Columns.Add("Open", typeof(double));
-            dt.Columns.Add("High", typeof(double));
-            dt.Columns.Add("Low", typeof(double));
-            dt.Columns.Add("Close", typeof(double));
-            dt.Columns.Add("Volume", typeof(long));
-
             foreach (var record in records)
             {
-                var row = dt.NewRow();
-                row["Date"] = record.Date.ToDateTime(TimeOnly.MinValue);
-                row["Open"] = (double)record.Open;
-                row["High"] = (double)record.High;
-                row["Low"] = (double)record.Low;
-                row["Close"] = (double)record.Close;
-                row["Volume"] = record.Volume;
-                dt.Rows.Add(row);
+                await writer.StartRowAsync(ct);
+                await writer.WriteAsync(record.Date.ToDateTime(TimeOnly.MinValue), NpgsqlDbType.Date, ct);
+                await writer.WriteAsync((double)record.Open, NpgsqlDbType.Double, ct);
+                await writer.WriteAsync((double)record.High, NpgsqlDbType.Double, ct);
+                await writer.WriteAsync((double)record.Low, NpgsqlDbType.Double, ct);
+                await writer.WriteAsync((double)record.Close, NpgsqlDbType.Double, ct);
+                await writer.WriteAsync(record.Volume, NpgsqlDbType.Bigint, ct);
             }
 
-            await bulkCopy.WriteToServerAsync(dt);
+            await writer.CompleteAsync(ct);
         }
 
-        // MERGE from temp table into target — only insert rows that don't exist.
-        var mergeSql = $@"
-MERGE INTO [{tableName}] AS target
-USING {tempTableName} AS source
-ON target.[Date] = source.[Date]
-WHEN NOT MATCHED THEN
-    INSERT ([Date], [Open], [High], [Low], [Close], [Volume])
-    VALUES (source.[Date], source.[Open], source.[High],
-            source.[Low], source.[Close], source.[Volume]);";
+        // INSERT from temp table into target — only rows that don't exist (idempotent).
+        var insertSql = $@"
+INSERT INTO ""{tableName}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
+SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM {tempTableName}
+ON CONFLICT (""Date"") DO NOTHING;";
 
-        await using (var mergeCmd = new SqlCommand(mergeSql, conn))
+        await using (var insertCmd = new NpgsqlCommand(insertSql, conn))
         {
-            await mergeCmd.ExecuteNonQueryAsync(ct);
+            await insertCmd.ExecuteNonQueryAsync(ct);
         }
 
         // Count inserted rows.
         var countSql = $"SELECT COUNT(*) FROM {tempTableName};";
-        await using (var countCmd = new SqlCommand(countSql, conn))
+        await using (var countCmd = new NpgsqlCommand(countSql, conn))
         {
-            var count = (int)(await countCmd.ExecuteScalarAsync(ct))!;
-            return count;
+            var count = (long)(await countCmd.ExecuteScalarAsync(ct))!;
+            return (int)count;
         }
     }
 
     /// <summary>
     /// Computes weekly or monthly aggregated candles from the D_ table and
-    /// inserts them into the target W_ or M_ table. Uses a MERGE to handle
-    /// idempotent upserts.
+    /// inserts them into the target W_ or M_ table. Uses INSERT...ON CONFLICT
+    /// for idempotent upserts.
     /// </summary>
-    /// <param name="conn">Open SQL connection.</param>
+    /// <param name="conn">Open Npgsql connection.</param>
     /// <param name="sourceTable">The D_ table name.</param>
     /// <param name="targetTable">The W_ or M_ table name.</param>
     /// <param name="label">"weekly" or "monthly" — used for logging.</param>
     /// <param name="groupByExpression">
-    /// SQL expression to compute the period start date from [Date].
-    /// For weekly: DATEADD(week, DATEDIFF(week, 0, [Date]), 0) (locale-independent Monday)
-    /// For monthly: DATEFROMPARTS(YEAR([Date]), MONTH([Date]), 1)
+    /// SQL expression to compute the period start date from "Date".
+    /// For weekly: date_trunc('week', "Date")
+    /// For monthly: date_trunc('month', "Date")
     /// </param>
     /// <param name="fromDate">Start of the data range (inclusive).</param>
     /// <param name="toDate">End of the data range (inclusive).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Number of rows inserted or updated.</returns>
     private async Task<int> ComputeAndInsertAggregatesAsync(
-        SqlConnection conn,
+        NpgsqlConnection conn,
         string sourceTable,
         string targetTable,
         string label,
@@ -311,20 +299,20 @@ WHEN NOT MATCHED THEN
         CancellationToken ct)
     {
         // Temp table for computed aggregates.
-        var tempTable = $"#tmp_{targetTable}";
+        var tempTable = $"\"tmp_{targetTable}\"";
 
         var createTempSql = $@"
-CREATE TABLE {tempTable} (
-    [PeriodStart] DATE   NOT NULL,
-    [Open]        FLOAT  NOT NULL,
-    [High]        FLOAT  NOT NULL,
-    [Low]         FLOAT  NOT NULL,
-    [Close]       FLOAT  NOT NULL,
-    [Volume]      BIGINT NOT NULL,
-    PRIMARY KEY ([PeriodStart])
+CREATE TEMPORARY TABLE {tempTable} (
+    ""PeriodStart"" DATE              NOT NULL,
+    ""Open""        DOUBLE PRECISION  NOT NULL,
+    ""High""        DOUBLE PRECISION  NOT NULL,
+    ""Low""         DOUBLE PRECISION  NOT NULL,
+    ""Close""       DOUBLE PRECISION  NOT NULL,
+    ""Volume""      BIGINT            NOT NULL,
+    PRIMARY KEY (""PeriodStart"")
 );";
 
-        await using (var createCmd = new SqlCommand(createTempSql, conn))
+        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
         {
             await createCmd.ExecuteNonQueryAsync(ct);
         }
@@ -333,59 +321,54 @@ CREATE TABLE {tempTable} (
         // The Open is the first trading day's open of the period, Close is the
         // last trading day's close, High/Low are the period's extremes.
         var computeSql = $@"
-INSERT INTO {tempTable} ([PeriodStart], [Open], [High], [Low], [Close], [Volume])
+INSERT INTO {tempTable} (""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 SELECT
-    {groupByExpression} AS [PeriodStart],
-    MAX(CASE WHEN rn_asc = 1 THEN [Open] END)  AS [Open],
-    MAX([High])                                  AS [High],
-    MIN([Low])                                   AS [Low],
-    MAX(CASE WHEN rn_desc = 1 THEN [Close] END) AS [Close],
-    SUM([Volume])                                AS [Volume]
+    {groupByExpression} AS ""PeriodStart"",
+    MAX(CASE WHEN rn_asc = 1 THEN ""Open"" END)  AS ""Open"",
+    MAX(""High"")                                  AS ""High"",
+    MIN(""Low"")                                   AS ""Low"",
+    MAX(CASE WHEN rn_desc = 1 THEN ""Close"" END) AS ""Close"",
+    SUM(""Volume"")                                AS ""Volume""
 FROM (
     SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY [Date] ASC)  AS rn_asc,
-        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY [Date] DESC) AS rn_desc
-    FROM [{sourceTable}]
-    WHERE [Date] >= @FromDate AND [Date] <= @ToDate
+        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY ""Date"" ASC)  AS rn_asc,
+        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY ""Date"" DESC) AS rn_desc
+    FROM ""{sourceTable}""
+    WHERE ""Date"" >= @FromDate AND ""Date"" <= @ToDate
 ) AS subq
 GROUP BY {groupByExpression}
-ORDER BY [PeriodStart];";
+ORDER BY ""PeriodStart"";";
 
-        await using (var computeCmd = new SqlCommand(computeSql, conn))
+        await using (var computeCmd = new NpgsqlCommand(computeSql, conn))
         {
             computeCmd.Parameters.AddWithValue("@FromDate", fromDate.ToDateTime(TimeOnly.MinValue));
             computeCmd.Parameters.AddWithValue("@ToDate", toDate.ToDateTime(TimeOnly.MinValue));
             await computeCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // MERGE into target table — insert new rows, update existing ones.
+        // INSERT into target table — ON CONFLICT DO UPDATE for idempotent upsert.
         var mergeSql = $@"
-MERGE INTO [{targetTable}] AS target
-USING {tempTable} AS source
-ON target.[Date] = source.[PeriodStart]
-WHEN MATCHED THEN
-    UPDATE SET
-        target.[Open]   = source.[Open],
-        target.[High]   = source.[High],
-        target.[Low]    = source.[Low],
-        target.[Close]  = source.[Close],
-        target.[Volume] = source.[Volume]
-WHEN NOT MATCHED THEN
-    INSERT ([Date], [Open], [High], [Low], [Close], [Volume])
-    VALUES (source.[PeriodStart], source.[Open], source.[High],
-            source.[Low], source.[Close], source.[Volume]);";
+INSERT INTO ""{targetTable}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
+SELECT ""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM {tempTable}
+ON CONFLICT (""Date"") DO UPDATE SET
+    ""Open""   = EXCLUDED.""Open"",
+    ""High""   = EXCLUDED.""High"",
+    ""Low""    = EXCLUDED.""Low"",
+    ""Close""  = EXCLUDED.""Close"",
+    ""Volume"" = EXCLUDED.""Volume"";";
 
-        await using (var mergeCmd = new SqlCommand(mergeSql, conn))
+        await using (var mergeCmd = new NpgsqlCommand(mergeSql, conn))
         {
             await mergeCmd.ExecuteNonQueryAsync(ct);
         }
 
         // Count rows affected.
         var countSql = $"SELECT COUNT(*) FROM {tempTable};";
-        await using (var countCmd = new SqlCommand(countSql, conn))
+        await using (var countCmd = new NpgsqlCommand(countSql, conn))
         {
-            var count = (int)(await countCmd.ExecuteScalarAsync(ct))!;
-            return count;
+            var count = (long)(await countCmd.ExecuteScalarAsync(ct))!;
+            return (int)count;
         }
     }
 }
@@ -423,6 +406,6 @@ public enum SeedOutcome
     /// <summary>Failed to fetch data from the market data provider.</summary>
     FailedProviderFetch,
 
-    /// <summary>Failed to insert daily data into SQL Server.</summary>
+    /// <summary>Failed to insert daily data into PostgreSQL.</summary>
     FailedDailyInsert
 }

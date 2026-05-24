@@ -1,6 +1,5 @@
-using System.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Universe;
@@ -13,10 +12,10 @@ namespace SignalStack.Worker.Jobs.DataSync;
 /// Core service for the DataSync (DS) job.
 ///
 /// Processes trading sessions within a configurable recovery window, syncing
-/// daily OHLCV data from the configured market data provider into the SQL Server
+/// daily OHLCV data from the configured market data provider into the PostgreSQL
 /// per-symbol D_, W_, and M_ tables.
 ///
-/// REQ-MARKET-003:  post-market DataSync refreshes SQL Server historical data.
+/// REQ-MARKET-003:  post-market DataSync refreshes PostgreSQL historical data.
 /// REQ-MARKET-005:  fails on provider unavailability or auth failure with
 ///                  structured Error log + dual-channel notification.
 /// REQ-MARKET-005a: re-checks admin token at every session boundary during
@@ -350,14 +349,14 @@ public sealed class DataSyncService
         // ── Step 5: Insert into D_ table ────────────────────────────────────
         try
         {
-            await using var conn = new SqlConnection(_sqlConnectionString);
+            await using var conn = new NpgsqlConnection(_sqlConnectionString);
             await conn.OpenAsync(ct);
 
             var insertSql = $@"
-INSERT INTO [{dailyTableName}] ([Date], [Open], [High], [Low], [Close], [Volume])
+INSERT INTO ""{dailyTableName}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
 
-            await using var cmd = new SqlCommand(insertSql, conn);
+            await using var cmd = new NpgsqlCommand(insertSql, conn);
             cmd.Parameters.AddWithValue("@Date", sessionDate.ToDateTime(TimeOnly.MinValue));
             cmd.Parameters.AddWithValue("@Open", (double)candle.Open);
             cmd.Parameters.AddWithValue("@High", (double)candle.High);
@@ -386,7 +385,7 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
     /// <summary>
     /// Recomputes weekly (W_) and monthly (M_) aggregate candles from the D_
     /// table for the date range affected by the given session.
-    /// Uses the same MERGE-based approach as HistoricDataSeedService.
+    /// Uses the same INSERT...ON CONFLICT approach as HistoricDataSeedService.
     /// </summary>
     private async Task RecomputeAggregatesForSessionAsync(
         DateOnly sessionDate,
@@ -401,11 +400,7 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
         var weekEnd = weekStart.AddDays(6);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 
-        // Get all symbols to recompute for — but that would be expensive.
-        // Instead, we recompute by updating W_ and M_ tables directly from D_
-        // for the affected date ranges using SQL aggregate queries.
-
-        await using var conn = new SqlConnection(_sqlConnectionString);
+        await using var conn = new NpgsqlConnection(_sqlConnectionString);
         await conn.OpenAsync(ct);
 
         // Get all distinct suffixes that have data in the affected range.
@@ -427,13 +422,13 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
             // Recompute weekly aggregate for the week containing this session.
             await UpsertAggregateAsync(
                 conn, dailyTableName, weeklyTableName,
-                "DATEADD(week, DATEDIFF(week, 0, [Date]), 0)",
+                "date_trunc('week', \"Date\")",
                 weekStart, weekEnd, ct);
 
             // Recompute monthly aggregate for the month containing this session.
             await UpsertAggregateAsync(
                 conn, dailyTableName, monthlyTableName,
-                "DATEFROMPARTS(YEAR([Date]), MONTH([Date]), 1)",
+                "date_trunc('month', \"Date\")",
                 monthStart, monthEnd, ct);
         }
 
@@ -445,10 +440,10 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
 
     /// <summary>
     /// Computes and upserts aggregate candles from D_ into the target (W_ or M_) table
-    /// for a given date range, using a temp-table + MERGE approach.
+    /// for a given date range, using a temp-table + INSERT...ON CONFLICT approach.
     /// </summary>
     private static async Task UpsertAggregateAsync(
-        SqlConnection conn,
+        NpgsqlConnection conn,
         string sourceTable,
         string targetTable,
         string groupByExpression,
@@ -456,69 +451,64 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
         DateOnly rangeEnd,
         CancellationToken ct)
     {
-        var tempTable = $"#tmp_ds_{targetTable}";
+        var tempTable = $"\"tmp_ds_{targetTable}\"";
 
         var createTempSql = $@"
-CREATE TABLE {tempTable} (
-    [PeriodStart] DATE   NOT NULL,
-    [Open]        FLOAT  NOT NULL,
-    [High]        FLOAT  NOT NULL,
-    [Low]         FLOAT  NOT NULL,
-    [Close]       FLOAT  NOT NULL,
-    [Volume]      BIGINT NOT NULL,
-    PRIMARY KEY ([PeriodStart])
+CREATE TEMPORARY TABLE {tempTable} (
+    ""PeriodStart"" DATE   NOT NULL,
+    ""Open""        DOUBLE PRECISION  NOT NULL,
+    ""High""        DOUBLE PRECISION  NOT NULL,
+    ""Low""         DOUBLE PRECISION  NOT NULL,
+    ""Close""       DOUBLE PRECISION  NOT NULL,
+    ""Volume""      BIGINT NOT NULL,
+    PRIMARY KEY (""PeriodStart"")
 );";
 
-        await using (var createCmd = new SqlCommand(createTempSql, conn))
+        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
         {
             await createCmd.ExecuteNonQueryAsync(ct);
         }
 
         // Compute aggregates from D_ for the specified date range.
         var computeSql = $@"
-INSERT INTO {tempTable} ([PeriodStart], [Open], [High], [Low], [Close], [Volume])
+INSERT INTO {tempTable} (""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 SELECT
-    {groupByExpression} AS [PeriodStart],
-    MAX(CASE WHEN rn_asc = 1 THEN [Open] END)  AS [Open],
-    MAX([High])                                  AS [High],
-    MIN([Low])                                   AS [Low],
-    MAX(CASE WHEN rn_desc = 1 THEN [Close] END) AS [Close],
-    SUM([Volume])                                AS [Volume]
+    {groupByExpression} AS ""PeriodStart"",
+    MAX(CASE WHEN rn_asc = 1 THEN ""Open"" END)  AS ""Open"",
+    MAX(""High"")                                  AS ""High"",
+    MIN(""Low"")                                   AS ""Low"",
+    MAX(CASE WHEN rn_desc = 1 THEN ""Close"" END) AS ""Close"",
+    SUM(""Volume"")                                AS ""Volume""
 FROM (
     SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY [Date] ASC)  AS rn_asc,
-        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY [Date] DESC) AS rn_desc
-    FROM [{sourceTable}]
-    WHERE [Date] >= @RangeStart AND [Date] <= @RangeEnd
+        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY ""Date"" ASC)  AS rn_asc,
+        ROW_NUMBER() OVER (PARTITION BY {groupByExpression} ORDER BY ""Date"" DESC) AS rn_desc
+    FROM ""{sourceTable}""
+    WHERE ""Date"" >= @RangeStart AND ""Date"" <= @RangeEnd
 ) AS subq
 GROUP BY {groupByExpression}
-ORDER BY [PeriodStart];";
+ORDER BY ""PeriodStart"";";
 
-        await using (var computeCmd = new SqlCommand(computeSql, conn))
+        await using (var computeCmd = new NpgsqlCommand(computeSql, conn))
         {
             computeCmd.Parameters.AddWithValue("@RangeStart", rangeStart.ToDateTime(TimeOnly.MinValue));
             computeCmd.Parameters.AddWithValue("@RangeEnd", rangeEnd.ToDateTime(TimeOnly.MinValue));
             await computeCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // MERGE into target table — insert or update.
+        // INSERT from temp table into target — ON CONFLICT DO UPDATE for idempotent upsert.
         var mergeSql = $@"
-MERGE INTO [{targetTable}] AS target
-USING {tempTable} AS source
-ON target.[Date] = source.[PeriodStart]
-WHEN MATCHED THEN
-    UPDATE SET
-        target.[Open]   = source.[Open],
-        target.[High]   = source.[High],
-        target.[Low]    = source.[Low],
-        target.[Close]  = source.[Close],
-        target.[Volume] = source.[Volume]
-WHEN NOT MATCHED THEN
-    INSERT ([Date], [Open], [High], [Low], [Close], [Volume])
-    VALUES (source.[PeriodStart], source.[Open], source.[High],
-            source.[Low], source.[Close], source.[Volume]);";
+INSERT INTO ""{targetTable}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
+SELECT ""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM {tempTable}
+ON CONFLICT (""Date"") DO UPDATE SET
+    ""Open""   = EXCLUDED.""Open"",
+    ""High""   = EXCLUDED.""High"",
+    ""Low""    = EXCLUDED.""Low"",
+    ""Close""  = EXCLUDED.""Close"",
+    ""Volume"" = EXCLUDED.""Volume"";";
 
-        await using (var mergeCmd = new SqlCommand(mergeSql, conn))
+        await using (var mergeCmd = new NpgsqlCommand(mergeSql, conn))
         {
             await mergeCmd.ExecuteNonQueryAsync(ct);
         }
@@ -575,13 +565,13 @@ WHEN NOT MATCHED THEN
     {
         try
         {
-            await using var conn = new SqlConnection(_sqlConnectionString);
+            await using var conn = new NpgsqlConnection(_sqlConnectionString);
             await conn.OpenAsync(ct);
 
-            var checkSql = $"SELECT COUNT(1) FROM [{tableName}] WHERE [Date] = @Date;";
-            await using var cmd = new SqlCommand(checkSql, conn);
+            var checkSql = $"SELECT COUNT(1) FROM \"{tableName}\" WHERE \"Date\" = @Date;";
+            await using var cmd = new NpgsqlCommand(checkSql, conn);
             cmd.Parameters.AddWithValue("@Date", date.ToDateTime(TimeOnly.MinValue));
-            var count = (int)(await cmd.ExecuteScalarAsync(ct))!;
+            var count = (long)(await cmd.ExecuteScalarAsync(ct))!;
             return count > 0;
         }
         catch (Exception ex)

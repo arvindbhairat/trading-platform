@@ -1,9 +1,9 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace SignalStack.Api.Universe;
 
 /// <summary>
-/// SQL Server implementation of <see cref="ISyncHealthRepository"/>.
+/// PostgreSQL implementation of <see cref="ISyncHealthRepository"/>.
 /// Queries per-symbol D_{suffix} tables for the most recent candle date.
 /// REQ-UNIV-015a: data sync health check.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class SqlSyncHealthRepository : ISyncHealthRepository
         var results = new List<SymbolSyncHealth>(suffixes.Count);
 
         // Check each suffix's D_ table for the most recent date.
-        // We query in batches to avoid overwhelming SQL Server.
+        // We query in batches to avoid overwhelming the database.
         const int batchSize = 50;
         for (var i = 0; i < suffixes.Count; i += batchSize)
         {
@@ -45,7 +45,7 @@ public sealed class SqlSyncHealthRepository : ISyncHealthRepository
     {
         var results = new List<SymbolSyncHealth>(suffixes.Count);
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         foreach (var suffix in suffixes)
@@ -57,10 +57,10 @@ public sealed class SqlSyncHealthRepository : ISyncHealthRepository
                 var tableExistsQuery = @"
                     SELECT CASE WHEN EXISTS (
                         SELECT 1 FROM INFORMATION_SCHEMA.TABLES
-                        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @TableName
+                        WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = @TableName
                     ) THEN 1 ELSE 0 END";
 
-                await using var existsCmd = new SqlCommand(tableExistsQuery, conn);
+                await using var existsCmd = new NpgsqlCommand(tableExistsQuery, conn);
                 existsCmd.Parameters.AddWithValue("@TableName", tableName);
                 var exists = (int)(await existsCmd.ExecuteScalarAsync(ct))! == 1;
 
@@ -75,8 +75,8 @@ public sealed class SqlSyncHealthRepository : ISyncHealthRepository
                 }
 
                 // Query the most recent Date.
-                var dateQuery = $"SELECT MAX([Date]) FROM [{tableName}]";
-                await using var dateCmd = new SqlCommand(dateQuery, conn);
+                var dateQuery = $"SELECT MAX(\"Date\") FROM \"{tableName}\"";
+                await using var dateCmd = new NpgsqlCommand(dateQuery, conn);
                 var result = await dateCmd.ExecuteScalarAsync(ct);
                 DateTime? lastDate = null;
                 if (result is not null && result != DBNull.Value)

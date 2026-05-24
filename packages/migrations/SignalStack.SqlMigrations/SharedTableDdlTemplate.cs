@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace SignalStack.SqlMigrations;
 
@@ -27,35 +27,31 @@ public static class SharedTableDdlTemplate
     public static string CreateTableIfNotExists(string tableName)
     {
         return $@"
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = '{tableName}')
-BEGIN
-    CREATE TABLE [dbo].[{tableName}] (
-        [Date]   DATE      NOT NULL,
-        [Open]   FLOAT     NOT NULL,
-        [High]   FLOAT     NOT NULL,
-        [Low]    FLOAT     NOT NULL,
-        [Close]  FLOAT     NOT NULL,
-        [Volume] BIGINT    NOT NULL,
+CREATE TABLE IF NOT EXISTS ""public"".""{tableName}"" (
+    ""Date""   DATE              NOT NULL,
+    ""Open""   DOUBLE PRECISION  NOT NULL,
+    ""High""   DOUBLE PRECISION  NOT NULL,
+    ""Low""    DOUBLE PRECISION  NOT NULL,
+    ""Close""  DOUBLE PRECISION  NOT NULL,
+    ""Volume"" BIGINT            NOT NULL,
+    PRIMARY KEY (""Date"")
+);
 
-        CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ([Date])
-    );
-
-    CREATE INDEX [IX_{tableName}_Date] ON [dbo].[{tableName}] ([Date]);
-END";
+CREATE INDEX IF NOT EXISTS ""IX_{tableName}_Date"" ON ""public"".""{tableName}"" (""Date"");";
     }
 
     /// <summary>
     /// Creates the three per-symbol tables (D_, W_, M_) for the given suffix
     /// inside a single database transaction per REQ-HIST-009a(b).
     /// </summary>
-    /// <param name="connection">An open SqlConnection.</param>
+    /// <param name="connection">An open NpgsqlConnection.</param>
     /// <param name="sqlTableNameSuffix">The symbol's sql_table_name_suffix.</param>
     /// <param name="transaction">The database transaction for atomicity.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public static async Task CreatePerSymbolTablesAsync(
-        SqlConnection connection,
+        NpgsqlConnection connection,
         string sqlTableNameSuffix,
-        SqlTransaction transaction,
+        NpgsqlTransaction transaction,
         CancellationToken cancellationToken = default)
     {
         var dTable = $"D_{sqlTableNameSuffix}";
@@ -65,7 +61,7 @@ END";
         foreach (var tableName in new[] { dTable, wTable, mTable })
         {
             var ddl = CreateTableIfNotExists(tableName);
-            await using var cmd = new SqlCommand(ddl, connection, transaction);
+            await using var cmd = new NpgsqlCommand(ddl, connection, transaction);
             await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
     }

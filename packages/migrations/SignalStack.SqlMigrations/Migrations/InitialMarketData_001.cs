@@ -33,8 +33,7 @@ public sealed class InitialMarketData_001 : Migration
         Create.Index("ix_symbol_master_active")
             .OnTable("symbol_master")
             .OnColumn("is_active")
-            .Ascending()
-            .WithOptions().NonClustered();
+            .Ascending();
     }
 
     public override void Down()
