@@ -297,7 +297,7 @@ UpgradeLog*.htm
 ServiceFabricBackup/
 *.rptproj.bak
 
-# SQL Server files
+# Database files (SQL Server, legacy)
 *.mdf
 *.ldf
 *.ndf

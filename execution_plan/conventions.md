@@ -122,7 +122,7 @@ These are the non-negotiable guardrails from `AGENTS.md` / `CLAUDE.md`. The agen
 - Never use a regular user's FYERS token for shared market-data ingestion.
 - All market-data ingestion code routes through the MDP abstraction; no direct provider binding outside adapters.
 - Backend services access market and account data exclusively via REST; the FYERS Data WebSocket is browser-tier only.
-- Never store user-specific operational state in SQL Server.
+- Never store user-specific operational state in PostgreSQL.
 - Never blur entry-signal generation and user-initiated execution assistance.
 - Server-side validation for auth, Signal, portfolio, and admin-sensitive flows.
 - Timeframe logic must not diverge across charting, backtesting, and EOD Signal Runner.

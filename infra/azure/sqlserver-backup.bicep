@@ -1,3 +1,7 @@
+// NOTE: The platform has migrated from SQL Server to PostgreSQL. This Bicep file
+// is retained for reference but is superseded by Azure Database for PostgreSQL
+// backup configuration.
+//
 // SQL Server backup configuration for market-data and backtest databases.
 // REQ-BCP-002: Market data — RPO 24h, RTO 4h. Daily full + transaction log every 6h on trading days.
 // REQ-BCP-003: Backtest — RPO 7 days, RTO 8h. Weekly full backup sufficient.

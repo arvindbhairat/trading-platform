@@ -1,4 +1,6 @@
-# Runbook 11 — SQL Server Restore (Market Data Database)
+# Runbook 11 — PostgreSQL Restore (Market Data Database)
+
+> **Note:** This runbook was originally written for Azure SQL Server and has been updated for the PostgreSQL migration. The codebase now uses PostgreSQL. Azure Database for PostgreSQL Flexible Server is the target platform.
 
 **REQ coverage:** REQ-BCP-002, REQ-BCP-006  
 **Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
@@ -8,8 +10,8 @@
 ## When to use
 
 Open this runbook when:
-- The `marketdata` SQL Server database is corrupted, missing, or has lost data that cannot be recovered via DataSync replay.
-- An Azure SQL Database failover has left the primary database in an inconsistent state.
+- The `marketdata` PostgreSQL database is corrupted, missing, or has lost data that cannot be recovered via DataSync replay.
+- An Azure Database for PostgreSQL failover has left the primary database in an inconsistent state.
 - A restore drill exercise is being conducted per REQ-BCP-007.
 
 **Note:** Per REQ-BCP-002, if the database is completely lost, DataSync and HistoricDataSeed can rebuild daily candles from the configured market data provider. Weekly and monthly candles are re-derivable from daily data. Evaluate whether a full restore is necessary before committing to the restore timeline.
@@ -18,10 +20,10 @@ Open this runbook when:
 
 ## Preconditions
 
-- You have contributor or owner access to the Azure SQL Server resource group.
+- You have contributor or owner access to the Azure Database for PostgreSQL Flexible Server resource group.
 - The API and Worker services are shut down (see Step 1).
-- You have identified the target point-in-time (UTC) to restore to, within the 2-day PITR retention window.
-- DataSync has been confirmed as a rebuild path if the restore window is older than 2 days.
+- You have identified the target point-in-time (UTC) to restore to, within the PITR retention window.
+- DataSync has been confirmed as a rebuild path if the restore window is older than the retention period.
 
 ---
 
@@ -36,15 +38,15 @@ Open this runbook when:
 
 ### 2 — Identify the restore target
 
-**Option A — PITR restore (within 2-day window)**
+**Option A — PITR restore (within retention window)**
 
-1. Azure portal → SQL Server → `marketdata` database → Restore.
+1. Azure portal → Azure Database for PostgreSQL Flexible Server → `marketdata` database → Restore.
 2. Choose "Point-in-time" restore.
-3. Enter the target UTC timestamp (must be within the 2-day retention window).
+3. Enter the target UTC timestamp (must be within the retention window, typically 7–35 days depending on configured backup retention).
 
 **Option B — Long-term retention restore (weekly/monthly backup)**
 
-1. Azure portal → SQL Server → `marketdata` database → Manage Backups.
+1. Azure portal → Azure Database for PostgreSQL Flexible Server → `marketdata` server → Backups.
 2. Select the appropriate weekly or monthly backup.
 3. Restore from backup.
 
@@ -60,21 +62,21 @@ Open this runbook when:
 
 **PITR or LTR path:**
 
-1. In the Azure portal, click "Restore."
-2. Select "New database" for the restore target name: `marketdata-restore-<YYYYMMDD>`.
+1. In the Azure portal, navigate to the PostgreSQL Flexible Server, click "Restore."
+2. Enter server name for the restore target: `psql-marketdata-restore-<YYYYMMDD>`.
 3. Confirm restore region is Central India (primary) per REQ-LEGAL-009.
 4. Initiate restore and wait for completion (typically 15–45 minutes).
 
 ### 4 — Validate the restored database
 
-1. **Row count check:** Query `SELECT COUNT(*) FROM D_RELIANCE` (or a known high-volume symbol table) and compare against expected row count from the last known good backup.
-2. **Date boundary check:** Confirm the latest candle date in each timeframe table (`D_`, `W_`, `M_`) matches the restore target date.
-3. **Schema check:** Run `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES` and confirm all expected symbol tables are present.
-4. **Index integrity:** Run `DBCC CHECKDB ('marketdata-restore-<YYYYMMDD>')` and confirm no errors.
+1. **Row count check:** Query `SELECT COUNT(*) FROM d_reliance` (or a known high-volume symbol table) and compare against expected row count from the last known good backup.
+2. **Date boundary check:** Confirm the latest candle date in each timeframe table (`d_`, `w_`, `m_`) matches the restore target date.
+3. **Schema check:** Run `\dt` in psql or `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'` and confirm all expected symbol tables are present.
+4. **Index integrity:** Run `SELECT schemaname, tablename, indexname, indexdef FROM pg_indexes WHERE tablename LIKE 'd_%' LIMIT 5;` to verify indexes exist.
 
 ### 5 — Update the connection string
 
-1. In Key Vault, update the `SqlMarketDataConnectionString` secret to point to the restored database.
+1. In Key Vault, update the `SqlMarketDataConnectionString` secret to point to the restored server.
 2. Confirm the new secret version is active.
 
 ### 6 — Restart API and Worker
@@ -91,7 +93,7 @@ Open this runbook when:
 
 - Chart data loads for at least 5 symbols across all three timeframes (daily, weekly, monthly).
 - DataSync completes a full run without error (check `job_runs` in MongoDB).
-- No SQL connection errors in OTLP traces for 10 minutes post-restart.
+- No PostgreSQL connection errors in OTLP traces for 10 minutes post-restart.
 
 ---
 

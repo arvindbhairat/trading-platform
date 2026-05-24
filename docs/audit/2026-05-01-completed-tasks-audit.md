@@ -128,7 +128,7 @@ Audit of all 63 completed tasks across phases P0–P3 against execution plan def
 | P3-T8 MDP interface + REST-only constraint | ✅ | ✅ | `IMarketDataProvider.cs`, `MdpAbstractionLintTests.cs` ✅ | ✅ |
 | P3-T9 FYERS adapter + throttle layer | ✅ | ✅ | `MarketDataThrottle.cs`, throttle layer files ✅ | ✅ |
 | P3-T10 Cross-provider swap test scaffolding | ✅ | ✅ | `TrueDataMarketDataProvider.cs`, `CrossProviderSwapTests.cs` ✅ | ✅ |
-| P3-T11 SQL Server historical schema + chart endpoints | ✅ | ✅ | `SharedTableDdlTemplate.cs`, `SymbolTableMappingService.cs`, `ChartEndpoints.cs`, `WeeklyCandleBoundary.cs` ✅ | ✅ |
+| P3-T11 PostgreSQL historical schema + chart endpoints | ✅ | ✅ | `SharedTableDdlTemplate.cs`, `SymbolTableMappingService.cs`, `ChartEndpoints.cs`, `WeeklyCandleBoundary.cs` ✅ | ✅ |
 | P3-T12 HistoricDataSeed per-symbol table materialisation | ✅ | ✅ | `HistoricDataSeedService.cs`, `HistoricDataSeedWorker.cs` ✅ | ✅ |
 | P3-T13 DataSync 10-session recovery + success marker | ✅ | ✅ | `DataSyncService.cs`, `DataSyncWorker.cs` ✅ | ✅ |
 | P3-T14 Live quote browser WebSocket + PLD + fallback | ✅ | ✅ | `live-quotes.ts`, `chart/page.tsx` ✅ | ✅ |

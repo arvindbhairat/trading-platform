@@ -41,7 +41,7 @@ Inside `apps/api`, prefer:
 - `app/services`
   - orchestration and application services
 - `app/repositories`
-  - MongoDB and SQL Server access layers
+  - MongoDB and PostgreSQL access layers
 - `app/integrations`
   - Fyers, Telegram, OAuth, and other provider adapters
 - `app/config`
@@ -84,7 +84,7 @@ Inside `apps/worker`, prefer:
 ## Folder Rules
 
 - keep admin flows in distinct modules even when they share portal infrastructure with user flows
-- keep SQL Server historical access code separate from MongoDB operational repositories
+- keep PostgreSQL historical access code separate from MongoDB operational repositories
 - keep provider adapters out of domain models
 - keep CSV parsing and Nifty 500 sync logic isolated and testable
 - keep raw symbols separate from sanitized SQL table names in the symbol-master model

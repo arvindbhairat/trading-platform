@@ -70,7 +70,7 @@ LMDS polls every open and pending-entry position symbol during market hours, usi
 
 ### 2. DataSync (DS)
 
-Runs once post-market. For each active Nifty 500 symbol it fetches the current session's daily candle. Weekly and monthly candles are derived from daily data in SQL Server — no additional API calls. REQ-MARKET-009 requires a 10-session recovery window, but in the steady-state case only the current day's candle is fetched per symbol because earlier sessions are already present.
+Runs once post-market. For each active Nifty 500 symbol it fetches the current session's daily candle. Weekly and monthly candles are derived from daily data in PostgreSQL — no additional API calls. REQ-MARKET-009 requires a 10-session recovery window, but in the steady-state case only the current day's candle is fetched per symbol because earlier sessions are already present.
 
 - Symbols polled: ~500 (Nifty 500 plus archived symbols still receiving data per REQ-UNIV-008)
 - Calls per symbol: 1 (a single historical range request)
@@ -86,7 +86,7 @@ Operator-triggered, not a scheduled job. Does not contribute to the daily baseli
 
 ### 4. EOD Signal Runner (EODSR)
 
-EODSR reads directly from SQL Server; it does not call the FYERS market data API.
+EODSR reads directly from PostgreSQL; it does not call the FYERS market data API.
 
 - **EODSR daily budget:** 0 calls.
 

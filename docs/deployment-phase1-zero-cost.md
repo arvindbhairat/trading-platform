@@ -37,10 +37,10 @@
 │  │  └────────────────────────────────────────────┘  │   │
 │  └──────────────────────────────────────────────────┘   │
 │                                                         │
-│  ┌────────┐  ┌────────┐  ┌────────┐  ┌──────────────┐  │
-│  │ SQL    │  │ MongoDB│  │ Redis  │  │ Caddy (443)  │  │
-│  │ Express│  │ 7      │  │ 7      │  │ Let's Encrypt│  │
-│  └────────┘  └────────┘  └────────┘  └──────────────┘  │
+│  ┌──────────┐  ┌────────┐  ┌────────┐  ┌──────────────┐  │
+│  │ PostgreSQL  │  │ MongoDB│  │ Redis  │  │ Caddy (443)  │  │
+│  │ 16        │  │ 7      │  │ 7      │  │ Let's Encrypt│  │
+│  └──────────┘  └────────┘  └────────┘  └──────────────┘  │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 
@@ -58,7 +58,7 @@
 | **API** (.NET 10) | Oracle VM (Docker) | **$0** | 4 ARM cores, 24 GB RAM |
 | **Worker** (.NET 10) | Oracle VM (Docker) | **$0** | Always-on for market hours |
 | **MongoDB** | Oracle VM (Docker) | **$0** | Tuned for Nifty 500 data volume |
-| **SQL Server** | Oracle VM — Docker Express | **$0** | 10 GB limit — ample for Phase 1 |
+| **PostgreSQL** | Oracle VM — Docker 16 | **$0** | Ample for Phase 1 |
 | **Redis** | Oracle VM (Docker) | **$0** | 7-alpine, append-only |
 | **HTTPS** | Caddy + Let's Encrypt | **$0** | Auto-renewing |
 | **Observability** | New Relic Free | **$0** | 100 GB/mo logs, 100 GB/mo traces, 10k metrics |
@@ -193,19 +193,20 @@ services:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
 
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: signalstack-mssql
+  postgres:
+    image: postgres:16
+    container_name: signalstack-postgres
     restart: unless-stopped
     ports:
-      - "127.0.0.1:1433:1433"
+      - "127.0.0.1:5432:5432"
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      POSTGRES_DB: signalstack
+      POSTGRES_USER: signalstack
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - mssql_data:/var/opt/mssql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" -C || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U signalstack -d signalstack || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -227,7 +228,7 @@ services:
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
       # ── Connection strings ──
       - ConnectionStrings__MongoDb=mongodb://signalstack-mongo:27017/signalstack
-      - ConnectionStrings__SqlServer=Server=mssql,1433;Database=signalstack;User=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
+      - ConnectionStrings__SqlServer=Host=postgres;Database=signalstack;Username=signalstack;Password=${POSTGRES_PASSWORD};SSL Mode=Disable;
       - ConnectionStrings__Redis=redis:6379
       # ── OTLP — point at local collector, NOT directly at cloud ──
       # Env vars (__ notation) take highest priority in .NET config,
@@ -244,7 +245,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      mssql:
+      postgres:
         condition: service_healthy
       mongo:
         condition: service_started
@@ -265,7 +266,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       # ── Connection strings ──
       - ConnectionStrings__MongoDb=mongodb://signalstack-mongo:27017/signalstack
-      - ConnectionStrings__SqlServer=Server=mssql,1433;Database=signalstack;User=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
+      - ConnectionStrings__SqlServer=Host=postgres;Database=signalstack;Username=signalstack;Password=${POSTGRES_PASSWORD};SSL Mode=Disable;
       - ConnectionStrings__Redis=redis:6379
       # ── OTLP — point at local collector ──
       - Telemetry__Otlp__PrimaryEndpoint=http://otel-collector:4317
@@ -278,7 +279,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      mssql:
+      postgres:
         condition: service_healthy
       mongo:
         condition: service_started
@@ -289,7 +290,7 @@ volumes:
   otel_data:
   mongo_data:
   redis_data:
-  mssql_data:
+  postgres_data:
 ```
 
 Create `~/signalstack/otel-config.yaml`:
@@ -337,8 +338,8 @@ service:
 Create `~/signalstack/.env`:
 
 ```bash
-# SQL Server (must have upper, lower, number, symbol, >= 8 chars)
-MSSQL_SA_PASSWORD=YourStrong!Pass123
+# PostgreSQL
+POSTGRES_PASSWORD=YourStrong!Pass123
 
 # Admin email (your Google account — will be auto-promoted to admin)
 SEED_ADMIN_EMAIL=your-email@gmail.com
@@ -382,8 +383,8 @@ docker compose build api worker
 docker compose up -d otel-collector
 
 # Start databases
-docker compose up -d mongo redis mssql
-docker compose logs mssql --tail 20   # Verify SQL Server started
+docker compose up -d mongo redis postgres
+docker compose logs postgres --tail 20   # Verify PostgreSQL started
 
 # Start apps
 docker compose up -d api worker
@@ -547,7 +548,7 @@ DATE=$(date +%Y%m%d)
 RETENTION_DAYS=14
 
 mkdir -p "$BACKUP_DIR/mongo"
-mkdir -p "$BACKUP_DIR/mssql"
+mkdir -p "$BACKUP_DIR/postgres"
 
 # MongoDB dump
 docker exec signalstack-mongo mongodump --out "/tmp/mongodump-$DATE" --quiet
@@ -555,16 +556,15 @@ docker cp "signalstack-mongo:/tmp/mongodump-$DATE" "$BACKUP_DIR/mongo/"
 docker exec signalstack-mongo rm -rf "/tmp/mongodump-$DATE"
 gzip -f "$BACKUP_DIR/mongo/mongodump-$DATE/signalstack/*.bson"
 
-# SQL Server dump
-docker exec signalstack-mssql /opt/mssql-tools18/bin/sqlcmd \
-    -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
-    -Q "BACKUP DATABASE [signalstack] TO DISK='/tmp/mssql-$DATE.bak'" -C
-docker cp "signalstack-mssql:/tmp/mssql-$DATE.bak" "$BACKUP_DIR/mssql/"
-docker exec signalstack-mssql rm -f "/tmp/mssql-$DATE.bak"
+# PostgreSQL dump
+docker exec signalstack-postgres pg_dump -U signalstack signalstack > "/tmp/postgres-$DATE.sql"
+docker cp "signalstack-postgres:/tmp/postgres-$DATE.sql" "$BACKUP_DIR/postgres/"
+docker exec signalstack-postgres rm -f "/tmp/postgres-$DATE.sql"
+gzip -f "$BACKUP_DIR/postgres/postgres-$DATE.sql"
 
 # Cleanup old backups
 find "$BACKUP_DIR/mongo" -name "*.gz" -mtime +$RETENTION_DAYS -delete
-find "$BACKUP_DIR/mssql" -name "*.bak" -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR/postgres" -name "*.sql.gz" -mtime +$RETENTION_DAYS -delete
 
 echo "Backup complete: $DATE"
 EOF
@@ -594,7 +594,7 @@ The deploy workflow does NOT run migrations — the runtime containers don't hav
 ```bash
 cd ~/signalstack
 
-# SQL Server migrations
+# PostgreSQL migrations
 docker run --rm \
   --network signalstack-prod_default \
   -v $(pwd)/repo:/src \
@@ -658,7 +658,7 @@ Before you start provisioning the VM, verify these in your repo:
 1. [ ] `docker compose pull` — download all base images
 2. [ ] `docker compose build api worker` — build API + Worker with bootstrap files baked in
 3. [ ] `docker compose up -d otel-collector` — start OTLP collector first
-4. [ ] `docker compose up -d mongo redis mssql` — start databases
+4. [ ] `docker compose up -d mongo redis postgres` — start databases
 5. [ ] `docker compose up -d api worker` — finally start the apps
 6. [ ] `docker compose ps` — verify all 7 containers are running
 7. [ ] `docker compose logs api --tail 30` — no crash errors

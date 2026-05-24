@@ -169,7 +169,7 @@ For each activity: purpose, data categories used, lawful basis, retention, recip
 - **Purpose:** Operate the platform's databases, secret stores, configuration stores, and observability pipeline.
 - **Data categories:** All categories listed above are hosted on Azure infrastructure.
 - **Lawful basis:** Performance of contract; legitimate interest in operational integrity.
-- **Retention:** Backups retained per REQ-BCP-001 to REQ-BCP-005 (MongoDB PITR with 24-hour rolling, SQL Server daily/weekly, Key Vault soft-delete 90 days, geo-redundant copies in India South).
+- **Retention:** Backups retained per REQ-BCP-001 to REQ-BCP-005 (MongoDB PITR with 24-hour rolling, PostgreSQL daily/weekly, Key Vault soft-delete 90 days, geo-redundant copies in India South).
 - **Recipients:** Microsoft Azure (Central India and South India regions).
 
 ---

@@ -1,3 +1,4 @@
+# Local development infrastructure: PostgreSQL (migrated from SQL Server), MongoDB, Redis, OTel collectors
 name: signalstack-local
 
 services:

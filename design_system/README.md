@@ -13,7 +13,7 @@ This design system encodes the brand's visual foundations, voice & tone, and UI 
   - `docs/product-scope.md` — product goal and user journeys
   - `docs/terminology.md` — canonical component names (Signal, RME, DataSync, EODSR, LMDS, LADS, NDJ…)
   - `docs/requirements-spec.md` — all `REQ-*` ids (UI language in `REQ-LEGAL-006`, dashboard in `REQ-PORT-*`, admin in `REQ-ADMIN-*`)
-  - `CLAUDE.md` — technology stack (Next.js + TypeScript, ASP.NET Core, MongoDB, SQL Server, Azure)
+  - `CLAUDE.md` — technology stack (Next.js + TypeScript, ASP.NET Core, MongoDB, PostgreSQL, Azure)
 
 This design system is **not** pre-loaded with any visual assets from the repo (there are none — the repo is spec-only, no code yet). The visual language below was derived from the product's **regulatory posture**, **domain**, and **target persona** (self-directed Indian retail trader using FYERS + TradingView-lightweight-charts).
 

@@ -66,7 +66,7 @@ From the admin portal, confirm:
 
 DataSync writes are candle-level upserts with idempotent behaviour (REQ-MARKET-010). A partial run does not corrupt existing data; re-running completes gap fills. If bad data was written and identified during Step 2's data quality investigation, use the HistoricDataSeed job with an explicit from-date parameter (REQ-MARKET-010) to overwrite rows for the specific affected symbols.
 
-Do not delete rows directly from SQL Server. Always use HistoricDataSeed for corrections.
+Do not delete rows directly from PostgreSQL. Always use HistoricDataSeed for corrections.
 
 ## Post-incident
 

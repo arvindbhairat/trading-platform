@@ -6,7 +6,7 @@ Preferred internal layout (see `docs/repo-structure.md`) lives under `app/`:
 - `app/api`: route handlers and transport models
 - `app/domain`: core business entities and rules
 - `app/services`: orchestration and application services
-- `app/repositories`: MongoDB + SQL Server access layers
+- `app/repositories`: MongoDB + PostgreSQL access layers
 - `app/integrations`: provider adapters (FYERS, Telegram, OAuth, etc.)
 - `app/config`: config loading and runtime setting access
 - `app/admin`: admin-only workflows (imports under `app/admin/imports`)

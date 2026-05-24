@@ -14,7 +14,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - initialize repo structure
 - configure local environment, linting, typing, formatting, and tests
 - set up GitHub Actions pipelines (CI + deployment workflows)
-- define MongoDB, SQL Server, Redis, and worker runtime patterns
+- define MongoDB, PostgreSQL, Redis, and worker runtime patterns
 - establish ASP.NET Core backend and .NET worker baselines
 - establish Worker Service single-instance deployment invariant per REQ-RME-CONC-006: IaC template sets `workerCount = 1` with no auto-scale rule; GitHub Actions deployment workflow includes a preflight check that fails the build if the target Worker App Service plan has any other instance count or any auto-scale rule attached; Worker startup includes the Redis-backed `rme:worker:singleton` lease with hard exit on conflict and graceful degrade (warning only) if Redis is unreachable. **All three enforcement layers are authored once in Phase 0 and then treated as frozen scaffolding** — they must not be revisited or "improved" until the Phase C multi-instance partitioning extension described in ADR-0003 is formally adopted in a new ADR. The IaC and pipeline gate in particular are not active engineering concerns between Phase 0 and Phase C; their sole job is to stay exactly as authored.
 - establish OpenTelemetry, OTLP, Serilog, and collector wiring
@@ -31,7 +31,7 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - add FYERS credential management and token lifecycle handling
 - add dirty-token and re-auth-required UX
 - build the `sys_config` seeder console application per REQ-CONFIG-011: dedicated .NET console job that reads a source-controlled manifest mirroring the Required Seed Table in `docs/system-config.md`, inserts missing rows only (never overwrites), resolves per-deployment keys from pipeline parameters (fails fast with a list of unresolved keys), and upserts the `platform.seed.version` sentinel with the release identifier on every run; emits a structured report artefact for operator review
-- wire the GitHub Actions deployment workflow to run migrations and seeding in the mandatory order defined by REQ-CONFIG-010: **FluentMigrator (SQL Server) → Mongo.Migration (MongoDB) → `sys_config` seeder → API/Worker activation**; all three migration/seed steps must succeed before API or Worker deployment slots are activated
+- wire the GitHub Actions deployment workflow to run migrations and seeding in the mandatory order defined by REQ-CONFIG-010: **FluentMigrator (PostgreSQL) → Mongo.Migration (MongoDB) → `sys_config` seeder → API/Worker activation**; all three migration/seed steps must succeed before API or Worker deployment slots are activated
 - add the sentinel-row startup check to the API and Worker services per REQ-CONFIG-010: on startup, read the `platform.seed.version` row from `sys_config` and fail fast with a clear error if absent — turns a missed seeder step into an actionable deployment failure rather than a silent circular dependency; neither service may self-seed `sys_config` from its startup path
 - define the `sys_config` collection schema (stable document shape per REQ-CONFIG-003) and commit the initial manifest backing the seeder; new requirements that introduce a `sys_config` key must add both the spec row and the manifest row in the same change per REQ-CONFIG-009
 - build admin management UI for shared runtime `sys_config` settings
@@ -56,12 +56,12 @@ Ship in thin vertical slices that end in something a user or operator can valida
 - build HistoricDataSeed job: operator-triggered, batched, resumable, fetches backward from current date; implement scoped per-symbol table materialisation per REQ-HIST-009a (create `D_{suffix}`, `W_{suffix}`, `M_{suffix}` idempotently with `IF NOT EXISTS` semantics inside a per-symbol transaction before writing candles; shared DDL template keyed by timeframe prefix; each creation event logged to `job_runs`)
 - build post-market DataSync job: daily, fetches current day minus 10 sessions through current session as recovery buffer
 - build chart-data endpoints and live quote flows routing through provider abstraction
-- define SQL Server historical schema and sync patterns
+- define PostgreSQL historical schema and sync patterns
 
 ## Phase 3: Strategy Research
 
 - model Signal Subscription definitions, versions, and persisted parameter sets
-- implement SQL Server historical query layer
+- implement PostgreSQL historical query layer
 - implement shared timeframe aggregation
 - build backtest engine and result storage
 - deliver Signal Builder and backtest result screens

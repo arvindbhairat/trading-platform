@@ -75,7 +75,7 @@ Stop level breach alerts, add/reduce advisory triggers, and pending-entry supers
 The browser-tier FYERS Data WebSocket for live quotes uses a Redis lease keyed by `session:fyers:pld:{user_id}` with eviction notification (close code 4001). The plan does not call this out. **Add to Phase 2 (Universe and Market Data) or Phase 3 (Strategy Research) once charting work begins.**
 
 **F-13. BCP / backup configuration is missing.**
-REQ-BCP-001..009 require MongoDB Atlas PITR (RPO 1h / RTO 2h), SQL Server market-data backups (RPO 24h / RTO 4h), SQL Server backtest backups (RPO 7d / RTO 8h), Key Vault soft-delete + 90-day retention + purge protection, geo-redundant replication to South India, restore procedures and an annual restore drill, secret-rotation cadence (FYERS yearly + on compromise; Telegram on-demand; Key Vault auto-rotated 90d; session signing keys 90d with 7-day overlap), and admin MFA validated via the `amr` claim with admin OAuth restricted to Google/Microsoft. None of this is in the plan. **Add to Phase 0 / Phase 1 as appropriate.**
+REQ-BCP-001..009 require MongoDB Atlas PITR (RPO 1h / RTO 2h), PostgreSQL market-data backups (RPO 24h / RTO 4h), PostgreSQL backtest backups (RPO 7d / RTO 8h), Key Vault soft-delete + 90-day retention + purge protection, geo-redundant replication to South India, restore procedures and an annual restore drill, secret-rotation cadence (FYERS yearly + on compromise; Telegram on-demand; Key Vault auto-rotated 90d; session signing keys 90d with 7-day overlap), and admin MFA validated via the `amr` claim with admin OAuth restricted to Google/Microsoft. None of this is in the plan. **Add to Phase 0 / Phase 1 as appropriate.**
 
 **F-14. Security baseline (CSRF, CSP, security headers, WAF, rate limiting, dep scanning, SAST, secret scanning, Serilog redaction) is missing.**
 REQ-SEC-001..013 and `engineering-standards.md` § Security Standards (token redaction in structured logs) require these as Phase A baselines. Only OAuth and FYERS-credential storage are mentioned in the plan. **Add to Phase 0 (CI gates, redaction policy, headers) and Phase 1 (CSRF tokens, rate limiting on auth endpoints, admin step-up re-auth).**
@@ -329,7 +329,7 @@ The full revised plan is at `execution_plan/execution_plan_revised.md`. A conden
 - P1-T7 — Serilog destructuring redaction policy + unit test (NEW; engineering-standards § Security Standards).
 - P1-T8 — Security baseline: TLS, security headers, CSP nonce, HSTS, X-Frame-Options, Permissions-Policy, WAF (REQ-SEC-001..005, REQ-NFR-013) (NEW).
 - P1-T9 — CI gates: dep scan, SAST, secret scan, axe-core, contract-diff scaffolding, coverage thresholds (REQ-SEC-007/008/009, REQ-NFR-014, REQ-NFR-016, REQ-ACCESS-001) (NEW).
-- P1-T10 — BCP / backup configuration: MongoDB Atlas PITR, SQL Server market+backtest backups, Key Vault soft-delete + purge protection + 90-day retention, geo-redundant secondary in South India, restore drill placeholder runbook (REQ-BCP-001..009) (NEW).
+- P1-T10 — BCP / backup configuration: MongoDB Atlas PITR, PostgreSQL market+backtest backups, Key Vault soft-delete + purge protection + 90-day retention, geo-redundant secondary in South India, restore drill placeholder runbook (REQ-BCP-001..009) (NEW).
 - P1-T11 — Mongo.Migration: provision the full `data-management.md` collection catalog with indexes, TTL/Online-Archive policies, required fields (REQ-DATA-001..006a) (NEW).
 - P1-T12 — Per-position channel registry skeleton (ADR-0003): registry, channel lifecycle, per-position consumer task, EOD trailing-stop carve-out, idle-channel cap (REQ-RME-CONC-001..006) (NEW).
 - P1-T13 — Per-user trade-ledger write lock primitives (REQ-PORT-031/031a/031b): Redis lock + fencing token + ledger_snapshot_version helper; not yet wired into ledger writers (NEW).
@@ -366,7 +366,7 @@ The full revised plan is at `execution_plan/execution_plan_revised.md`. A conden
 - P3-T8 — MDP interface contract + `IMarketDataProvider` operations (history, quote) + REST-only constraint codified (REQ-MARKET-002a/b, engineering-standards § MDP Standards).
 - P3-T9 — FYERS adapter (REST only; rate-limit / throttle layer; per-second/minute/day budgets; back-off; daily budget metric) (REQ-RATE-003/004/011/012, integrations.fyers.* sys_config keys).
 - P3-T10 — Cross-provider swap test scaffolding with a stub TrueData adapter (REQ-MARKET-002d).
-- P3-T11 — SQL Server historical schema + symbol-table mapping service (single shared `ISymbolTableMapping`) + chart data endpoints + REST query pattern (REQ-HIST-001..011, REQ-HIST-010a).
+- P3-T11 — PostgreSQL historical schema + symbol-table mapping service (single shared `ISymbolTableMapping`) + chart data endpoints + REST query pattern (REQ-HIST-001..011, REQ-HIST-010a).
 - P3-T12 — HistoricDataSeed: scoped per-symbol table materialisation (REQ-HIST-009a) + idempotent + resumable + earliest-available-date persistence (REQ-HIST-009).
 - P3-T13 — DataSync (DS) post-market job: 10-session recovery buffer; weekly/monthly upserts; success marker; admin-token freshness re-check at every batch boundary (REQ-MARKET-005/005a/006/007).
 - P3-T14 — Live quote / portal live data flow using browser-tier FYERS Data WebSocket + PLD lease + MDP REST fallback (REQ-MARKET-002b, REQ-DASH-013, REQ-STOP-006c).

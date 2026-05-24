@@ -24,9 +24,9 @@ All background jobs run inside the Worker Service. Each has a canonical name and
 
 | Canonical Name | Abbreviation | Trigger | Description |
 |---|---|---|---|
-| **DataSync** | DS | Scheduled post-market | Fetches the current session's daily OHLCV candles from the configured Market Data Provider and writes them to SQL Server. Derives and upserts weekly and monthly candles for any completed periods. Recovers up to 10 sessions of missed data per run. |
-| **HistoricDataSeed** | HDS | Operator-triggered or auto-triggered on new symbols | Seeds SQL Server with full historical OHLCV data for one or more symbols. Gap-fill by default; can overwrite from a specified date on operator request. |
-| **EOD Signal Runner** | EODSR | Scheduled post-market, after DataSync succeeds | Evaluates all active (non-paused) Signal Subscriptions across all users against the latest SQL Server data. Emits entry signals and writes notifications. Depends on the DataSync success marker. |
+| **DataSync** | DS | Scheduled post-market | Fetches the current session's daily OHLCV candles from the configured Market Data Provider and writes them to PostgreSQL. Derives and upserts weekly and monthly candles for any completed periods. Recovers up to 10 sessions of missed data per run. |
+| **HistoricDataSeed** | HDS | Operator-triggered or auto-triggered on new symbols | Seeds PostgreSQL with full historical OHLCV data for one or more symbols. Gap-fill by default; can overwrite from a specified date on operator request. |
+| **EOD Signal Runner** | EODSR | Scheduled post-market, after DataSync succeeds | Evaluates all active (non-paused) Signal Subscriptions across all users against the latest PostgreSQL data. Emits entry signals and writes notifications. Depends on the DataSync success marker. |
 | **Live Market Data Scan** | LMDS | Continuous during NSE market hours | Monitors stop, add, and reduce price levels for every open position across all users using the shared Market Data Provider token. Writes alert records to the notifications collection when a level is breached. Never uses individual user FYERS tokens. |
 | **Live Account Data Scan** | LADS | Recurring interval during NSE market hours | Fetches orders, trades, positions, and holdings from FYERS per user using each user's own token. Updates portfolio state and notifies the RME when confirmed trades are detected. |
 | **Notification Delivery Job** | NDJ | Continuous / event-driven | The sole component responsible for reading pending notification records from MongoDB and dispatching Telegram messages. No other component dispatches to Telegram directly. |
@@ -39,7 +39,7 @@ All background jobs run inside the Worker Service. Each has a canonical name and
 |---|---|---|
 | **Risk Management Engine** | RME | Strategy-independent, pluggable module responsible for all risk calculations across trade, position, portfolio, and account levels. Operates consistently in both live and backtest modes. All RME outputs are advisory. |
 | **Market Data Provider** | MDP | Abstract interface layer isolating market data access from specific provider implementations. Concrete providers include FYERS (admin daily token), TrueData, and Global Data Feeds. All background jobs requiring market data call through the MDP; nothing binds directly to a specific provider. |
-| **Backtest Engine** | BTE | The .NET module responsible for replaying historical entry signals through RME profile configurations to produce per-trade, per-position, and portfolio-level performance records. Stores results in the SQL Server backtest database. Uses the same RME implementation as the live signal workflow with no divergence. |
+| **Backtest Engine** | BTE | The .NET module responsible for replaying historical entry signals through RME profile configurations to produce per-trade, per-position, and portfolio-level performance records. Stores results in the PostgreSQL backtest database. Uses the same RME implementation as the live signal workflow with no divergence. |
 
 ---
 
@@ -50,7 +50,7 @@ Three distinct data access concerns exist in the platform. Each has its own toke
 | Canonical Name | Abbreviation | Description |
 |---|---|---|
 | **Market Data Provider** | MDP | See Core Modules. Configurable shared abstraction for background job market data ingestion using the admin FYERS token (or an alternative configured provider). Never uses individual user tokens. |
-| **Portal Live Data** | PLD | Fetches live quotes and real-time OHLCV updates for display in the portal using the individual logged-in user's own FYERS token. Distributes API load across user-scoped rate limits. Historical OHLCV for charts is served from SQL Server; only live and intraday price updates are fetched via this pattern. |
+| **Portal Live Data** | PLD | Fetches live quotes and real-time OHLCV updates for display in the portal using the individual logged-in user's own FYERS token. Distributes API load across user-scoped rate limits. Historical OHLCV for charts is served from PostgreSQL; only live and intraday price updates are fetched via this pattern. |
 | **User Account Data** | UAD | Fetches user-specific account state — orders, trades, positions, holdings, and profile — from FYERS using the individual user's own FYERS token. Always FYERS; not configurable. Owned by the Live Account Data Scan (LADS) for background sync and by the API layer for on-demand user requests. |
 
 ---
@@ -62,7 +62,7 @@ These are internal structural layers within the API Service and Worker Service. 
 | Layer Name | Owner | Description |
 |---|---|---|
 | **Configuration Layer** | API Service, Worker Service (shared) | Resolves configuration from environment bootstrap values, Azure App Configuration, Azure Key Vault, and MongoDB `sys_config`. All applications load config through this layer; no component queries `sys_config` ad hoc from business logic. |
-| **Historical Data Layer** | API Service, Worker Service (shared) | Encapsulates all SQL Server access for daily, weekly, and monthly OHLCV data. Provides query patterns for chart data, EOD Signal Runner runs, backtesting, and DataSync writes. |
+| **Historical Data Layer** | API Service, Worker Service (shared) | Encapsulates all PostgreSQL access for daily, weekly, and monthly OHLCV data. Provides query patterns for chart data, EOD Signal Runner runs, backtesting, and DataSync writes. |
 | **Timeframe and Calendar Layer** | API Service, Worker Service (shared) | Provides the single shared implementation of all timeframe and session boundary logic — daily, weekly, monthly, rolling 3/5/7-day bars, and trading-session-aware calendar boundaries. This implementation must be shared without divergence across charting, backtesting, and the EOD Signal Runner. |
 | **Signal Layer** | API Service | Manages Signal Subscription definitions, versioned parameter sets, schedules, run state, backtest run records, RME profile optimisation results, and generated entry signals. Does not contain entry-finding logic — that lives in the deployed Signal type implementations. |
 | **Portfolio Analytics Layer** | API Service | Builds portfolio state from synced trades and manual adjustments. Exposes holdings, positions, average buy, realized PnL, unrealized PnL, mismatch state, and adjusted-state flags. Owns the `portfolio_snapshots` and `equity_curve` collections. |

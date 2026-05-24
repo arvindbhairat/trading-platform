@@ -15,7 +15,7 @@ Requirements live in [docs/requirements-spec.md](../../docs/requirements-spec.md
 ## Backend Focus
 
 - start from domain model and API contract
-- keep MongoDB and SQL Server ownership boundaries explicit
+- keep MongoDB and PostgreSQL ownership boundaries explicit
 - keep ASP.NET Core and .NET worker implementation idiomatic to C#
 - use `ILogger` in service code and keep Serilog/OpenTelemetry wiring in infrastructure
 - implement service logic before transport glue

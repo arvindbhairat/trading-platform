@@ -116,43 +116,38 @@ Before starting, make sure you have:
 
 ---
 
-## Step 5: Create SQL Server + Database
+## Step 5: Create PostgreSQL Server + Database
 
-**Where:** Azure Portal → SQL databases
+**Where:** Azure Portal → Azure Database for PostgreSQL Flexible Servers
 
-1. Click **+ Create** → **SQL Database**
+1. Click **+ Create** → **Azure Database for PostgreSQL Flexible Server**
 2. Resource group: `rg-signalstack-solo`
-3. Database name: `sqldb-signalstack-solo`
-4. **Server:** Click **Create new**
-   - Server name: `sql-signalstack-solo`
-   - Location: **Central India**
-   - Authentication method: **Use SQL Authentication** (simpler for Phase 1)
-   - Server admin login: `sqladmin`
-   - Password: *(create a strong password and save it somewhere safe)*
-   - Click **OK**
-5. *Do you want to use SQL elastic pool?* **No**
-6. Workload environment: **Development**
-7. Compute + storage: Click **Configure database**
-   - Service tier: **General Purpose — Serverless** (it pauses when idle, saving $)
-   - vCores: **1 vCore**
-   - Max vCores: **1**
-   - Auto-pause delay: **60 minutes** (pauses after 1hr idle)
-   - Click **Apply**
-8. Backup storage redundancy: **Locally-redundant backup storage**
+3. Server name: `psql-signalstack-solo`
+4. **Region:** **Central India**
+5. **PostgreSQL version:** **16**
+6. **Workload type:** **Development** (Burstable, cheaper)
+7. **Compute + storage:** Configure:
+   - Compute tier: **Burstable**
+   - Size: **Standard_B1ms** (1 vCore, 2 GB RAM) — ~$5-15/month
+   - Storage: **32 GB** (GPSSD)
+   - **Enable storage autogrowth:** Yes
+8. **Admin credentials:**
+   - Admin username: `sqladmin` (or your choice)
+   - Password: *(create a strong password and save it)*
+   - Confirm password
 9. Click **Review + Create → Create**
 
 **After creation — get connection string:**
 
-10. Go to the SQL server resource → **Firewalls and virtual networks**
-11. Click **+ Add client IPv4 address** (your IP) and **Save**
+10. Go to the PostgreSQL server resource → **Networking**
+11. Click **+ Add current client IP address** (your IP) and **Save**
 12. Also check **Allow Azure services and resources to access this server** → **Yes**
-13. Go to the database (`sqldb-signalstack-solo`) → **Connection strings**
-14. Copy the **ADO.NET** connection string
-15. Replace `{your_password}` with your actual password
-16. Save this for the Key Vault later
+13. Go to the server → **Connect**
+14. Copy the **pgAdmin connection string** or build your own:
+15. Save this for the Key Vault later
 
 > ⚠ The connection string looks like:
-> `Server=tcp:sql-signalstack-solo.database.windows.net,1433;Initial Catalog=sqldb-signalstack-solo;Persist Security Info=False;User ID=sqladmin;Password={YOUR_PASSWORD};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;`
+> `Host=psql-signalstack-solo.postgres.database.azure.com;Database=signalstack;Username=sqladmin;Password={YOUR_PASSWORD};SSL Mode=Require;Trust Server Certificate=true`
 
 ---
 
@@ -421,7 +416,7 @@ Click **+ Generate/Import** for each:
 | `oauth--google--client-secret` | Google OAuth Client Secret |
 | `telegram--bot-token` | Your Telegram bot token |
 | `mongodb--connection-string` | MongoDB Atlas connection string (from Step 7) |
-| `sqlserver--connection-string` | SQL Server connection string (from Step 5) |
+| `sqlserver--connection-string` | PostgreSQL connection string (from Step 5) |
 | `redis--connection-string` | Redis connection string (from Step 6) |
 | `session-signing-key` | Run this to generate: *(see below)* |
 | `orders-intent-hmac-key` | Run this to generate: *(see below)* |
@@ -483,7 +478,7 @@ The deployment plan includes a complete `deploy-all.yml` workflow (Section 8.1).
 | `AZURE_WEBAPP_PUBLISH_PROFILE_API` | Publish profile from API App Service *(see below)* |
 | `AZURE_WEBAPP_PUBLISH_PROFILE_WORKER` | Publish profile from Worker App Service |
 | `AZURE_WEBAPP_PUBLISH_PROFILE_WEB` | Publish profile from Web App Service |
-| `SQL_CONNECTION_STRING` | SQL Server connection string |
+| `SQL_CONNECTION_STRING` | PostgreSQL connection string |
 | `MONGO_CONNECTION_STRING` | MongoDB Atlas connection string |
 
 **How to get publish profiles:**
@@ -561,7 +556,7 @@ Tick these off after the first successful deployment:
 
 ### Database connectivity
 
-- [ ] API can connect to MongoDB and SQL Server (check App Service Log Stream for no connection errors)
+- [ ] API can connect to MongoDB and PostgreSQL (check App Service Log Stream for no connection errors)
 - [ ] Worker started successfully (check Log Stream for startup messages)
 
 ### Authentication
@@ -587,7 +582,7 @@ Tick these off after the first successful deployment:
 | Service | SKU | Cost |
 |---------|-----|------|
 | App Service Plan (shared B1) | Linux B1 | ~$13 |
-| SQL Database | Serverless GP 1 vCore | ~$5-15 |
+| PostgreSQL (Flexible Server) | Burstable B1ms (1 vCore) | ~$5-15 |
 | Redis Cache | Standard C0 | ~$15 |
 | Key Vault | Standard | ~$0 |
 | App Configuration | Free | $0 |
@@ -659,7 +654,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       # Step 1: Run database migrations and seeding
-      - name: SQL Server migrations
+      - name: PostgreSQL migrations
         run: dotnet run --project packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj
         env:
           ConnectionStrings__SqlServer: ${{ secrets.SQL_CONNECTION_STRING }}
@@ -726,7 +721,7 @@ jobs:
 | API App Service | `app-signalstack-api-solo` |
 | Worker App Service | `app-signalstack-worker-solo` |
 | Web App Service | `app-signalstack-web-solo` |
-| SQL Server | `sql-signalstack-solo` |
-| SQL Database | `sqldb-signalstack-solo` |
+| PostgreSQL Server | `psql-signalstack-solo` |
+| PostgreSQL Database | `psqldb-signalstack-solo` |
 | Redis Cache | `redis-signalstack-solo` |
 | MongoDB Atlas Cluster | `SignalStack-Solo` |

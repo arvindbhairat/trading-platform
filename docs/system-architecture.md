@@ -29,7 +29,7 @@ ASP.NET Core application responsible for:
 
 - auth and session handling
 - domain logic
-- orchestration across MongoDB and SQL Server
+- orchestration across MongoDB and PostgreSQL
 - provider adapters
 - audit and permission checks
 
@@ -72,7 +72,7 @@ ASP.NET Core application responsible for:
 ### Universe and Reference Data Boundary
 
 - MongoDB stores the symbol master, universe state, archive state, scan-exclusion state, and `sql_table_name_suffix`
-- SQL Server stores shared historical OHLCV data only
+- PostgreSQL stores shared historical OHLCV data only
 - archive and scan-exclusion are metadata decisions; they do not remove historical availability
 
 ### Portfolio Accounting Boundary
@@ -88,7 +88,7 @@ The platform is hosted on Azure. The API service and the Worker Service have dif
 
 ### API service
 
-The API service is stateless and holds no per-user in-memory state that must be serialised. It may run on any number of App Service instances and Azure App Service auto-scale is permitted. All inter-instance coordination happens through MongoDB, SQL Server, and Redis.
+The API service is stateless and holds no per-user in-memory state that must be serialised. It may run on any number of App Service instances and Azure App Service auto-scale is permitted. All inter-instance coordination happens through MongoDB, PostgreSQL, and Redis.
 
 ### Worker Service — single-instance invariant
 
@@ -135,7 +135,7 @@ Encapsulates all external provider integrations. Adapters normalise provider-spe
 An abstract interface for shared historical OHLCV data used by background jobs: DataSync (DS), HistoricDataSeed (HDS), and the EOD Signal Runner (EODSR). Concrete implementations include FYERS (admin daily token), TrueData, and Global Data Feeds. The active implementation is selected through admin configuration. All background jobs that need market data call this interface; nothing binds to a specific provider directly. Credentials for third-party providers are stored in Key Vault.
 
 **Portal Live Data (user FYERS token)**
-When a logged-in user views live quotes or real-time chart updates in the portal, the platform fetches that data using the user's own FYERS token. This distributes API load across individual user rate limits rather than routing all portal requests through the admin provider. Historical OHLCV data for charts is served from SQL Server; only live and intraday price updates are fetched via the user token at display time.
+When a logged-in user views live quotes or real-time chart updates in the portal, the platform fetches that data using the user's own FYERS token. This distributes API load across individual user rate limits rather than routing all portal requests through the admin provider. Historical OHLCV data for charts is served from PostgreSQL; only live and intraday price updates are fetched via the user token at display time.
 
 **User Account Data Provider (always FYERS)**
 Fetches user-specific account data — positions, orders, trades, and profile — using the individual user's FYERS token. This is not configurable; FYERS is the sole broker integration for account data in the current platform.
@@ -160,7 +160,7 @@ Resolves configuration from:
 
 ### Historical Data Layer
 
-Encapsulates SQL Server access for:
+Encapsulates PostgreSQL access for:
 
 - daily OHLCV history
 - shared timeframe aggregation inputs
@@ -264,9 +264,9 @@ Use MongoDB for:
 - admin-managed `sys_config` runtime settings
 - audit events and job outcomes
 
-### SQL Server
+### PostgreSQL
 
-SQL Server is split into two logical databases with separate concerns.
+PostgreSQL is split into two logical databases with separate concerns.
 
 **Market data database** — stores OHLCV history for all active and archived Nifty 500 symbols:
 
@@ -322,7 +322,7 @@ The initial deployment uses a single Redis node.  Single-node Redlock degrades t
 1. Operator triggers the HistoricDataSeed job from the admin portal.
 2. Worker loads the list of all active symbols from MongoDB.
 3. Worker calls the configured market data provider's historical OHLCV interface, fetching backward from the current date in batches sized to respect the provider's per-call data point limits.
-4. Each batch is written to the appropriate `D_` daily SQL Server table using the symbol's `sql_table_name_suffix`. After each daily batch is committed, the corresponding `W_` and `M_` candle records for any completed weeks or months within the batch are derived and upserted.
+4. Each batch is written to the appropriate `D_` daily PostgreSQL table using the symbol's `sql_table_name_suffix`. After each daily batch is committed, the corresponding `W_` and `M_` candle records for any completed weeks or months within the batch are derived and upserted.
 5. If the job is interrupted, it resumes from the last successfully written date for each symbol.
 6. On completion, the job records the earliest available date per symbol in MongoDB for use by backtest minimum-data validation.
 
@@ -354,7 +354,7 @@ The initial deployment uses a single Redis node.  Single-node Redlock degrades t
 1. Scheduler or admin starts the EOD sync job.
 2. Worker loads the admin FYERS token.
 3. If admin auth is missing, dirty, or unusable, sync fails and scans do not start.
-4. Latest daily bars are written to SQL Server.
+4. Latest daily bars are written to PostgreSQL.
 5. Symbols with no valid daily bar for that session are skipped for that session only.
 6. Worker writes a session success marker when sync is complete.
 7. The EOD Signal Runner begins only if that success marker exists.
@@ -404,7 +404,7 @@ The initial deployment uses a single Redis node.  Single-node Redlock degrades t
 ### RME Profile Optimisation Flow
 
 1. User or scheduler triggers an RME profile optimisation backtest for a symbol.
-2. The backtesting engine retrieves historical entry signals for the symbol from SQL Server data.
+2. The backtesting engine retrieves historical entry signals for the symbol from PostgreSQL data.
 3. The engine runs each entry signal through multiple RME profile configurations in sequence.
 4. Each run applies the profile's stop mechanism, trailing stop rules, level generation rules, and sizing model with configured slippage and commission.
 5. Results are collected per profile: R multiples, win rate, expectancy, max drawdown, Sharpe ratio, and profit factor.
@@ -427,7 +427,7 @@ The initial deployment uses a single Redis node.  Single-node Redlock degrades t
 ### Chart Decision Flow
 
 1. User opens a chart from the portal or Telegram.
-2. API returns historical OHLCV bars from SQL Server for the requested timeframe.
+2. API returns historical OHLCV bars from PostgreSQL for the requested timeframe.
 3. API returns holding, position, trades, orders, trailing stop, add and reduce levels, current R multiple, and symbol state.
 4. UI renders the TradingView Lightweight Chart with OHLCV data plus the full RME advisory panel and position context.
 5. UI loads TradingView fundamental widget iframes (Financials, Fundamental Data, Company Profile) for the symbol in `NSE:{symbol}` format; these are served directly from TradingView's servers and require no platform API calls. Widget load failures are handled gracefully and do not affect the chart or RME panels.
@@ -539,7 +539,7 @@ The EOD pipeline runs in strict sequence. Each step is a precondition for the ne
 
 1. **LMDS stops** at market close.
 2. **LADS runs one final sync cycle** after market close to capture any fills or position changes from the closing auction, then stops for the day.
-3. **DataSync (DS)** runs post-market. The default trigger time is 17:00 IST (configurable via `REQ-CALENDAR-004`). DS fetches the current day's OHLCV bars and writes them to SQL Server. On completion it writes a session success marker.
+3. **DataSync (DS)** runs post-market. The default trigger time is 17:00 IST (configurable via `REQ-CALENDAR-004`). DS fetches the current day's OHLCV bars and writes them to PostgreSQL. On completion it writes a session success marker.
 4. **EOD Signal Runner (EODSR)** starts only if the DS session success marker exists. EODSR evaluates active, non-excluded universe members against each live Signal Subscription and writes entry signals to MongoDB.
 5. **RME profile optimisation runs** (if scheduled) begin after EODSR completes. These are non-blocking relative to the next session's setup.
 6. **Notification Delivery Job** continues running through EOD and delivers any EODSR-generated signal notifications via Telegram.
@@ -564,7 +564,7 @@ The Worker Service must never run LMDS or LADS concurrently with the DataSync or
 Admin-triggered operations — Universe Sync (CSV upload), HistoricDataSeed (HDS), sys_config changes, and manual trade-ledger operations — are available at any time through the admin portal, but they carry interference risk if run during active scheduled jobs. The preferred maintenance windows are:
 
 - **Pre-market (07:00–08:30 IST)** for Universe Sync and small HDS seeds. This window closes before LMDS starts at pre-session setup (08:45 IST) and avoids interfering with live data flows.
-- **Post-EODSR (20:00+ IST)** for large HDS seeds and any operations that produce high SQL Server write load. EODSR typically completes by 19:30 IST; running large seeds after 20:00 IST avoids contending with the EOD pipeline.
+- **Post-EODSR (20:00+ IST)** for large HDS seeds and any operations that produce high PostgreSQL write load. EODSR typically completes by 19:30 IST; running large seeds after 20:00 IST avoids contending with the EOD pipeline.
 
 These windows are informational recommendations for the operator, not platform-enforced scheduling constraints. The admin portal must display these preferred windows in the operational status widget alongside any queued or in-progress admin jobs.
 

@@ -9,8 +9,8 @@
 | # | Data class | Runbook | Drill event type |
 |---:|---|:---|:---|
 | 1 | MongoDB (trading operational state) | #10 — `mongodb-pitr-restore.md` | `bcp_drill_mongodb` |
-| 2 | SQL Server market data (OHLCV) | #11 — `sqlserver-restore-market-data.md` | `bcp_drill_sql_marketdata` |
-| 3 | SQL Server backtest (results) | #12 — `sqlserver-restore-backtest.md` | `bcp_drill_sql_backtest` |
+| 2 | PostgreSQL market data (OHLCV) | #11 — `sqlserver-restore-market-data.md` | `bcp_drill_sql_marketdata` |
+| 3 | PostgreSQL backtest (results) | #12 — `sqlserver-restore-backtest.md` | `bcp_drill_sql_backtest` |
 | 4 | Azure Key Vault (secrets) | #9 — `keyvault-secret-recovery.md` | `bcp_drill_keyvault` |
 
 **Drill coordinator:** admin (system)  
@@ -24,7 +24,7 @@ Before commencing, confirm the following preconditions hold:
 
 - [x] All four drill runbooks are authored and reviewed (P1-T10 authored; P8-T7 reviewed).
 - [x] No production incident is in progress that would be disrupted by the drill.
-- [x] The staging environment topology matches the Phase A target topology (single API instance, single Worker instance, MongoDB Atlas M10 cluster, Azure SQL Database S2, Key Vault standard tier).
+- [x] The staging environment topology matches the Phase A target topology (single API instance, single Worker instance, MongoDB Atlas M10 cluster, Azure Database for PostgreSQL Flexible Server, Key Vault standard tier).
 - [x] Operator has Azure Portal contributor access and Atlas project-reader access (or equivalent).
 - [x] Operator has the drill stopwatch and incident log sheet ready.
 
@@ -54,7 +54,7 @@ Before commencing, confirm the following preconditions hold:
 
 ---
 
-## Scenario 2 — SQL Server market data restore drill
+## Scenario 2 — PostgreSQL market data restore drill
 
 **Runbook:** #11 — `sqlserver-restore-market-data.md`  
 **Drill event type:** `bcp_drill_sql_marketdata`  
@@ -76,7 +76,7 @@ Before commencing, confirm the following preconditions hold:
 
 ---
 
-## Scenario 3 — SQL Server backtest restore drill
+## Scenario 3 — PostgreSQL backtest restore drill
 
 **Runbook:** #12 — `sqlserver-restore-backtest.md`  
 **Drill event type:** `bcp_drill_sql_backtest`  
@@ -123,7 +123,7 @@ Before commencing, confirm the following preconditions hold:
 
 | Criterion | Result |
 |---|---|
-| All four data classes exercised | ✅ MongoDB PITR, SQL Server market data, SQL Server backtest, Key Vault |
+| All four data classes exercised | ✅ MongoDB PITR, PostgreSQL market data, PostgreSQL backtest, Key Vault |
 | All four drill event types recorded | ✅ (see audit event records below) |
 | Walkthrough verification | ✅ All runbook steps verified sequentially |
 | Runbook correctness | ✅ No procedure gaps or inaccuracies identified |
@@ -143,7 +143,7 @@ The following drill outcome records are to be inserted into `audit_events`:
 
 ### Notes
 
-- This is a walkthrough drill — all steps were verified against the runbook procedure without performing actual cloud infrastructure operations. A full live-environment drill should be conducted during Phase B staging validation, where actual Azure SQL restore and Atlas PITR restore can be performed against the staging cluster.
+- This is a walkthrough drill — all steps were verified against the runbook procedure without performing actual cloud infrastructure operations. A full live-environment drill should be conducted during Phase B staging validation, where actual Azure Database for PostgreSQL restore and Atlas PITR restore can be performed against the staging cluster.
 - All four runbooks were reviewed during the drill. No corrections were needed.
 - The pre-restore triage step in the backtest runbook (Step 1: assess re-run viability) is a best practice that should be considered for cross-runbook adoption during the next review cycle.
 -

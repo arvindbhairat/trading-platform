@@ -130,7 +130,7 @@ Each task carries:
 - **Depends on:** P1-T6.
 - **REQ:** REQ-BCP-001..008, REQ-LEGAL-009.
 - **Touches:** `infra/azure`, `docs/operations/runbooks/`.
-- **Vertical slice:** Mongo Atlas PITR enabled with >=24h retention; SQL Server market-data and backtest backups configured per RPO/RTO; Key Vault soft-delete + 90d + purge protection on; geo-redundant secondary in South India.
+- **Vertical slice:** Mongo Atlas PITR enabled with >=24h retention; PostgreSQL market-data and backtest backups configured per RPO/RTO; Key Vault soft-delete + 90d + purge protection on; geo-redundant secondary in South India.
 - **Frozen-after-author.**
 
 ### P1-T11 — Provision the full `data-management.md` collection catalogue
@@ -360,7 +360,7 @@ Each task carries:
 - **REQ:** REQ-MARKET-002d.
 - **Vertical slice:** stub TrueData adapter returns canned OHLCV; integration test swaps `market_data.provider.active` and asserts DataSync, EODSR, chart layer continue without code changes.
 
-### P3-T11 — SQL Server historical schema + symbol-table mapping service + chart data endpoints
+### P3-T11 — PostgreSQL historical schema + symbol-table mapping service + chart data endpoints
 - **Depends on:** P3-T2, P3-T8.
 - **REQ:** REQ-HIST-001..011, REQ-HIST-010a.
 - **Vertical slice:** chart endpoint returns OHLCV via `ISymbolTableMapping`; weekly Muhurat-on-Saturday case verified by unit test.

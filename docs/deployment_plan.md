@@ -46,7 +46,7 @@ The repo (`SignalStack.sln`) contains 11 projects across 3 deployable applicatio
 | **SignalStack.Configuration** | `packages/config/` | .NET 10.0 | Class library (shared config) | Library — not standalone |
 | **SignalStack.MarketData** | `packages/market-data/` | .NET 10.0 | Class library (MDP abstraction) | Library — not standalone |
 | **SignalStack.Migrations** | `packages/migrations/` | .NET 10.0 | Class library (MongoDB migrations) | Migration-time only |
-| **SignalStack.SqlMigrations** | `packages/migrations/` | .NET 10.0 | Class library (SQL Server migrations) | Migration-time only |
+| **SignalStack.SqlMigrations** | `packages/migrations/` | .NET 10.0 | Class library (PostgreSQL migrations) | Migration-time only |
 | **SignalStack.Api.Tests** | `tests/api/` | .NET 10.0 | xUnit test project | CI only |
 | **SignalStack.Worker.Tests** | `tests/worker/` | .NET 10.0 | xUnit test project | CI only |
 | **SignalStack.Migrations.Tests** | `tests/migrations/` | .NET 10.0 | xUnit test project | CI only |
@@ -76,7 +76,7 @@ apps/worker (.NET Worker Service)
 | Service | Used By | Purpose |
 |---------|---------|---------|
 | MongoDB | api, worker, seed | Operational data: users, signals, portfolio, notifications, sys_config |
-| SQL Server | api, worker | Historical OHLCV data (marketdata + backtest databases) |
+| PostgreSQL | api, worker | Historical OHLCV data (marketdata + backtest databases) |
 | Redis | worker, api | Coordination locks, singleton lease, cache, queue |
 | Key Vault | api, worker | Secrets: FYERS credentials, OAuth secrets, Telegram token, signing keys |
 | Azure App Configuration | api, worker | Shared non-secret technical configuration |
@@ -113,7 +113,7 @@ A single-user deployment where you are the only user and also the admin. The goa
 |----------|---------------------|----------------|
 | Environments | dev + staging + production | **Single environment** |
 | Front Door / WAF | Premium Azure Front Door | **Not used** — direct App Service URL |
-| Geo-redundancy | SQL Server DR in South India | **Not used** — single region |
+| Geo-redundancy | PostgreSQL DR in South India | **Not used** — single region |
 | Deployment slots | staging → production swap | **Not used** — deploy directly |
 | Recovery Services Vault | Full backup policies | **Not used** — built-in automated backups only |
 | Application Insights | Full workspace-based | **Free tier or skip** |
@@ -137,7 +137,7 @@ These are not optional — the application code depends on them:
 | Key Vault | Standard | ~$0 |
 | App Configuration | Free tier | $0 |
 | MongoDB Atlas | M0 (free) | $0 |
-| SQL Server (single DB) | Azure SQL Database — Serverless (General Purpose, 1 vCore) | ~$5-15 (pauses when idle) |
+| PostgreSQL (single DB) | Azure Database for PostgreSQL Flexible Server — Serverless (General Purpose, 1 vCore) | ~$5-15 (pauses when idle) |
 | Redis Cache | Standard C0 (250 MB) | ~$15 |
 | App Service Plan (Linux B1) | Shared plan for API + Worker + Web | ~$13 |
 | Google OAuth | Free | $0 |
@@ -157,7 +157,7 @@ Provision these **once**, manually (not through pipeline):
 - [ ] **API App Service:** Linux .NET 10, `app-signalstack-api-solo` on the shared plan
 - [ ] **Worker App Service:** Linux .NET 10, `app-signalstack-worker-solo` on the shared plan (run `infra/azure/worker-appservice.bicep` or create via portal — must stay at 1 instance)
 - [ ] **Web App Service:** Linux Node.js 24, `app-signalstack-web-solo` on the shared plan
-- [ ] **SQL Server:** Azure SQL Database Serverless (General Purpose, 1 vCore), `sql-signalstack-solo` in Central India — single database covering both marketdata and backtest schemas (use `sqlserver-backup.bicep` but skip geo-redundancy parameters)
+- [ ] **PostgreSQL:** Azure Database for PostgreSQL Flexible Server (Burstable, 1 vCore), `psql-signalstack-solo` in Central India — single database covering both marketdata and backtest schemas (use `sqlserver-backup.bicep` but skip geo-redundancy parameters)
 - [ ] **Redis Cache:** Standard C0 (250 MB), `redis-signalstack-solo` in Central India
 - [ ] **MongoDB Atlas:** M0 free tier cluster in Azure Central India region
 
@@ -197,7 +197,7 @@ Populate these in Key Vault:
 | `oauth--google--client-secret` | Google OAuth Client Secret |
 | `telegram--bot-token` | Token from BotFather |
 | `mongodb--connection-string` | MongoDB Atlas connection string (from M0 cluster) |
-| `sqlserver--connection-string` | SQL Server connection string |
+| `sqlserver--connection-string` | PostgreSQL connection string |
 | `redis--connection-string` | Redis connection string |
 | `session-signing-key` | Generate a new RSA 2048 key or use a random 256-bit key for HMAC |
 | `orders-intent-hmac-key` | Random 256-bit key (needed once Phase 7 code runs) |
@@ -231,8 +231,8 @@ Phase 2 is entered when any of these conditions is met:
 |----------|---------|----------------------|
 | Separate dev/staging/prod environments | Safe deployment pipeline | ~$50-80 (additional minimal environments) |
 | Front Door Premium + WAF | CDN, DDoS protection, OWASP CRS, rate limiting | ~$30-50 |
-| Full SQL Server GP (2 vCore) | Two separate databases (marketdata + backtest) | ~$150-300 |
-| SQL Server secondary (South India) | Geo-redundant DR standby | ~$70-150 |
+| Full PostgreSQL GP (2 vCore) | Two separate databases (marketdata + backtest) | ~$150-300 |
+| PostgreSQL secondary (South India) | Geo-redundant DR standby | ~$70-150 |
 | MongoDB Atlas M10+ | PITR, replication, production-grade IOPS | ~$50-100 |
 | Redis Standard C1 (1 GB) | More capacity for queue/cache workloads | ~$50 |
 | Application Insights | Full observability with alerts | ~$20-50/month depending on ingestion |
@@ -258,14 +258,14 @@ Each production environment needs:
 - [ ] **API App Service:** With staging slot, `app-signalstack-api-prd`
 - [ ] **Worker App Service:** Preflight-checked singleton, `app-signalstack-worker-prd`
 - [ ] **Web App Service:** With staging slot, `app-signalstack-web-prd`
-- [ ] **SQL Server:** `sql-signalstack-prd` in Central India with geo-replication to South India
-- [ ] **Market Data DB:** GP_Gen5 (2 vCore), `sqldb-signalstack-marketdata-prd`
-- [ ] **Backtest DB:** GP_Gen5 (2 vCore), `sqldb-signalstack-backtest-prd`
-- [ ] **SQL Secondary:** In South India for DR
+- [ ] **PostgreSQL:** `psql-signalstack-prd` in Central India with geo-replication to South India
+- [ ] **Market Data DB:** Flexible Server General Purpose (2 vCore), `psqldb-signalstack-marketdata-prd`
+- [ ] **Backtest DB:** Flexible Server General Purpose (2 vCore), `psqldb-signalstack-backtest-prd`
+- [ ] **PostgreSQL Secondary:** In South India for DR
 - [ ] **Redis:** Standard C1 (1 GB), `redis-signalstack-prd` with separate DB indexes (0 = cache, 1 = locks)
 - [ ] **MongoDB Atlas:** M10 or higher for PITR and replication
 - [ ] **Front Door Premium:** WAF with OWASP CRS + Bot Manager
-- [ ] **Recovery Services Vault:** Backup policies for SQL Server
+- [ ] **Recovery Services Vault:** Backup policies for PostgreSQL
 - [ ] **Application Insights:** Workspace-based
 - [ ] **Log Analytics Workspace:** Linked to App Insights
 
@@ -282,7 +282,7 @@ These work for Phase 1 without the B1 plan cost:
 | **App Service F1 (Linux)** | 60 CPU minutes/day, 1 GB storage | Only for very intermittent testing — **app goes to sleep** after 20 min idle, no custom domain, shared infra |
 | **App Configuration** | Free tier — 1 store | **Yes** |
 | **Key Vault Standard** | 1M transactions/month | **Yes** |
-| **Azure SQL Database Free** | 100,000 vCore seconds/month, 32 GB, 1 DB | **Yes** — single DB covers marketdata + backtest schemas. Pauses after 1 hour idle |
+| **Azure Database for PostgreSQL Flexible Server** | 100,000 vCore seconds/month, 32 GB, 1 DB | **Yes** — single DB covers marketdata + backtest schemas. Pauses after 1 hour idle |
 | **Azure Cosmos DB (MongoDB API)** | 1000 RU/s, 25 GB | Partial — RU-based pricing works differently, some aggregation pipelines may not work identically to MongoDB. Test first. |
 | **Application Insights** | 5 GB/month ingested | **Yes** for basic monitoring |
 | **GitHub Actions** | 2,000-3,000 minutes/month | **Yes** |
@@ -295,7 +295,7 @@ These reduce Phase 1 cost further but require different infrastructure managemen
 
 | Provider | Free Tier | India Region | .NET 10 + SQL + MongoDB + Redis? | Estimated Phase 1 Cost |
 |----------|-----------|-------------|----------------------------------|----------------------|
-| **Oracle Cloud (Always Free)** | 4 ARM cores + 24 GB RAM VM, 200 GB storage, 10 TB egress | Mumbai | Run Docker Compose on the VM with all services (MSSQL via Docker, MongoDB, Redis). .NET runs on Linux. | **$0/month** |
+| **Oracle Cloud (Always Free)** | 4 ARM cores + 24 GB RAM VM, 200 GB storage, 10 TB egress | Mumbai | Run Docker Compose on the VM with all services (PostgreSQL via Docker, MongoDB, Redis). .NET runs on Linux. | **$0/month** |
 | **AWS Free Tier** (12-month) | t2.micro (750h/mo), 20 GB RDS, 5 GB S3 | Mumbai (ap-south-1) | t2.micro is too small for all services. Would need multiple instances. | ~$10-20/month after free tier |
 | **Google Cloud Free** | e2-micro VM (1/month), 2M Cloud Functions | Mumbai (asia-south1) | e2-micro too small for full stack. Cloud Run for stateless apps. | ~$15-25/month |
 
@@ -306,7 +306,7 @@ Run everything on a single always-free VM using Docker Compose (matching `infra/
 ```
 Single Oracle Cloud VM (Ampere A1, 4 OCPU, 24 GB RAM)
   ├── Docker: MongoDB 7
-  ├── Docker: SQL Server 2022 (Express edition or Developer)
+  ├── Docker: PostgreSQL 16
   ├── Docker: Redis 7
   ├── Docker: OTLP collector
   ├── Process 1: dotnet SignalStack.Api.dll
@@ -471,7 +471,7 @@ Single Oracle Cloud VM (Ampere A1, 4 OCPU, 24 GB RAM)
 | `oauth--facebook--app-secret` | Facebook/Meta App secret | API | P2 |
 | `telegram--bot-token` | Telegram bot token | Worker | P1 |
 | `mongodb--connection-string` | MongoDB connection string | API, Worker, Seed | P1 |
-| `sqlserver--connection-string` | SQL Server connection string | API, Worker | P1 |
+| `sqlserver--connection-string` | PostgreSQL connection string | API, Worker | P1 |
 | `redis--connection-string` | Redis connection string (to Standard C0 in P1, C1 in P2) | API, Worker | P1 |
 | `orders-intent-hmac-key` | HMAC key for signed order payloads | API | P1 (Phase 7 code) |
 | `session-signing-key` | Session JWT signing key | API | P1 |
@@ -574,7 +574,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       # Step 1: Run database migrations and seeding
-      - name: SQL Server migrations
+      - name: PostgreSQL migrations
         run: dotnet run --project packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj
         env:
           ConnectionStrings__SqlServer: ${{ secrets.SQL_CONNECTION_STRING }}
@@ -635,7 +635,7 @@ jobs:
 | Secret | `AZURE_WEBAPP_PUBLISH_PROFILE_API` | Publish profile from API App Service |
 | Secret | `AZURE_WEBAPP_PUBLISH_PROFILE_WORKER` | Publish profile from Worker App Service |
 | Secret | `AZURE_WEBAPP_PUBLISH_PROFILE_WEB` | Publish profile from Web App Service |
-| Secret | `SQL_CONNECTION_STRING` | SQL Server connection string |
+| Secret | `SQL_CONNECTION_STRING` | PostgreSQL connection string |
 | Secret | `MONGO_CONNECTION_STRING` | MongoDB Atlas connection string |
 | Variable | `API_APP_NAME` | `app-signalstack-api-solo` |
 | Variable | `WORKER_APP_NAME` | `app-signalstack-worker-solo` |
@@ -670,7 +670,7 @@ Push to main → CI (build + test) → Deploy-all (migrations → API → Worker
 **Phase 2:**
 ```
 Push to main → CI (build + test + security scan)
-  ├─→ Migrations (SQL → Mongo → Seed)
+  ├─→ Migrations (PostgreSQL → Mongo → Seed)
   ├─→ API (staging → warm → swap)
   ├─→ Worker (preflight → deploy)
   └─→ Web (build → deploy)
@@ -704,8 +704,8 @@ API App Service:           app-signalstack-api-solo
 Worker App Service:        app-signalstack-worker-solo
 Web App Service:           app-signalstack-web-solo
 Shared Plan:               asp-signalstack-solo
-SQL Server:                sql-signalstack-solo
-SQL Database:              sqldb-signalstack-solo       (single DB, both schemas)
+PostgreSQL:                psql-signalstack-solo
+PostgreSQL Database:       psqldb-signalstack-solo       (single DB, both schemas)
 Redis:                     redis-signalstack-solo
 Key Vault:                 kv-signalstack-solo
 App Configuration:         appcs-signalstack-solo
@@ -721,9 +721,9 @@ Web App Service:           app-signalstack-web-{env}
 API Plan:                  asp-signalstack-api-{env}
 Worker Plan:               asp-signalstack-worker-{env}
 Web Plan:                  asp-signalstack-web-{env}
-SQL Server:                sql-signalstack-{env}
-Market Data DB:            sqldb-signalstack-marketdata-{env}
-Backtest DB:               sqldb-signalstack-backtest-{env}
+PostgreSQL:                psql-signalstack-{env}
+Market Data DB:            psqldb-signalstack-marketdata-{env}
+Backtest DB:               psqldb-signalstack-backtest-{env}
 Redis:                     redis-signalstack-{env}
 Key Vault:                 kv-signalstack-{env}
 App Configuration:         appcs-signalstack-{env}
@@ -741,7 +741,7 @@ Recovery Vault:            rsv-signalstack-{env}
 | Data Store | Backup Method | What You Lose | Acceptable for Solo? |
 |-----------|-------------|---------------|---------------------|
 | MongoDB (Atlas M0) | Atlas automated snapshots (shared cluster) | No PITR, snapshots are best-effort | **Yes** — you can re-seed most data from FYERS |
-| SQL Server | Azure automated backups (7-day PITR included) | Can restore to any point in last 7 days | **Yes** — built-in, no extra config |
+| PostgreSQL | Azure automated backups (7-day PITR included) | Can restore to any point in last 7 days | **Yes** — built-in, no extra config |
 | Key Vault | Soft-delete enabled (90-day window) | Purge-protected by default | **Yes** |
 | Redis | Not backed up | Cache/locks are ephemeral | **Yes** — locks are re-acquired, cache rebuilt |
 
@@ -752,8 +752,8 @@ Recovery Vault:            rsv-signalstack-{env}
 | Data Store | Backup Type | Frequency | Retention | RPO | RTO |
 |-----------|-------------|-----------|-----------|-----|-----|
 | MongoDB (Atlas M10+) | Continuous PITR | Real-time | ≥24 hours | 1 hour | 2 hours |
-| SQL Server marketdata | Full + Transaction log | Daily full, log every 6h | Daily: 5 days, Weekly: 4 weeks, Monthly: 3 months | 24 hours | 4 hours |
-| SQL Server backtest | Weekly full | Weekly (Sunday) | 8 weeks | 7 days | 8 hours |
+| PostgreSQL marketdata | Full + Write-ahead log archiving | Daily full, WAL archive continuous | Daily: 5 days, Weekly: 4 weeks, Monthly: 3 months | 24 hours | 4 hours |
+| PostgreSQL backtest | Weekly full | Weekly (Sunday) | 8 weeks | 7 days | 8 hours |
 | Key Vault | Soft-delete + purge protection | Platform-managed | 90 days | — | — |
 | App Configuration | Azure-managed snapshots | Automatic | 7-day PITR | — | — |
 
@@ -765,9 +765,9 @@ All Phase 2 backups geo-redundant: Central India → South India per REQ-BCP-005
 |----------|----------|
 | API service down | Swap staging slot, or redeploy previous version |
 | Worker service down | App Service auto-restart; verify singleton lease after restart |
-| SQL Server region failure | Manual failover to South India secondary |
+| PostgreSQL region failure | Manual failover to South India secondary |
 | MongoDB Atlas outage | Restore from PITR to new cluster; update connection string in Key Vault |
-| Full Azure region failure | Promote South India SQL Server; deploy App Services from Bicep to South India; update DNS/Front Door; restore MongoDB from Atlas cross-region snapshot |
+| Full Azure region failure | Promote South India PostgreSQL; deploy App Services from Bicep to South India; update DNS/Front Door; restore MongoDB from Atlas cross-region snapshot |
 
 ---
 
@@ -803,7 +803,7 @@ The code already emits OTLP. When you're ready for observability, just point `Te
 - Dedicated OTLP collector (Azure Container Instances or VM)
 - Application Insights (Workspace-based) in Central India
 - Log Analytics Workspace linked to App Insights
-- Key alerts: API 5xx rate, Worker process down, singleton violation, SQL DTU > 80%, FYERS token expiry
+- Key alerts: API 5xx rate, Worker process down, singleton violation, PostgreSQL CPU > 80%, FYERS token expiry
 
 ---
 
@@ -821,7 +821,7 @@ Before the first deployment, complete these:
 - [ ] **API App Service** `app-signalstack-api-solo` created (Linux .NET 10, on shared plan)
 - [ ] **Worker App Service** `app-signalstack-worker-solo` created (Linux .NET 10, on shared plan)
 - [ ] **Web App Service** `app-signalstack-web-solo` created (Linux Node.js 24, on shared plan)
-- [ ] **SQL Server** `sql-signalstack-solo` created with single database
+- [ ] **PostgreSQL** `psql-signalstack-solo` created with single database
 - [ ] **Redis Cache** `redis-signalstack-solo` (Standard C0) created
 - [ ] **MongoDB Atlas** M0 cluster created in Azure Central India region
 - [ ] **Managed identity** enabled on all 3 App Services with Key Vault access
@@ -840,7 +840,7 @@ Before the first deployment, complete these:
 After every deployment:
 
 - [ ] `/health` endpoint returns 200 for API, Worker, and Web
-- [ ] API can connect to MongoDB and SQL Server
+- [ ] API can connect to MongoDB and PostgreSQL
 - [ ] Worker started successfully and acquired Redis singleton lease
 - [ ] Google OAuth sign-in works (you can log in)
 - [ ] You are auto-elevated to admin (your email matches `SEED_ADMIN_EMAIL`)
@@ -855,8 +855,8 @@ Before moving to Phase 2, complete these additional items:
 - [ ] Front Door Premium + WAF deployed with OWASP CRS
 - [ ] Custom domain configured and verified
 - [ ] SSL certificates provisioned (Front Door managed TLS)
-- [ ] Full SQL Server deployment with separate marketdata + backtest databases
-- [ ] SQL geo-replication to South India configured
+- [ ] Full PostgreSQL deployment with separate marketdata + backtest databases
+- [ ] PostgreSQL geo-replication to South India configured
 - [ ] MongoDB Atlas upgraded to M10+ with PITR enabled
 - [ ] Redis upgraded to Standard C1 with separate DB indexes
 - [ ] Application Insights + Log Analytics deployed
@@ -896,7 +896,7 @@ Each trading day, you must:
 |--------|------|-------------|-------------|
 | Worker App Service | `infra/azure/worker-appservice.bicep` | **Yes** — uses the singleton enforcement (`numberOfWorkers: 1`) | **Yes** |
 | Key Vault | `infra/azure/keyvault.bicep` | **Yes** — standard SKU, soft-delete, RBAC. Purge protection and 90-day retention apply in both phases | **Yes** |
-| SQL Server + Databases | `infra/azure/sqlserver-backup.bicep` | **Partially** — use for the SQL Server itself, but skip geo-redundancy and secondary region for Phase 1 | **Yes** — full deployment |
+| PostgreSQL + Databases | `infra/azure/sqlserver-backup.bicep` | **Partially** — use for the PostgreSQL server itself, but skip geo-redundancy and secondary region for Phase 1 | **Yes** — full deployment |
 | Front Door + WAF | `infra/azure/frontdoor-waf.bicep` | **No** — direct App Service URL is fine for solo testing | **Yes** |
 | Backup Geo-Redundancy | `infra/azure/backup-geo-redundancy.bicep` | **No** — not needed for solo testing | **Yes** |
 

@@ -2,15 +2,15 @@
 
 ## Purpose
 
-This document catalogues all persistent storage used by the platform: MongoDB collections and SQL Server databases. It is the reference for database setup, TTL index configuration, MongoDB Online Archive policies, and SQL Server database provisioning.
+This document catalogues all persistent storage used by the platform: MongoDB collections and PostgreSQL databases. It is the reference for database setup, TTL index configuration, MongoDB Online Archive policies, and PostgreSQL database provisioning.
 
 This document is a setup and operational reference. Product requirements live in [requirements-spec.md](./requirements-spec.md).
 
 ---
 
-## SQL Server Databases
+## PostgreSQL Databases
 
-The platform uses two separate SQL Server databases. They must be provisioned separately to isolate backtest write load from market data read performance.
+The platform uses two separate PostgreSQL databases. They must be provisioned separately to isolate backtest write load from market data read performance.
 
 ### Market Data Database
 
@@ -93,7 +93,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ### `symbol_master`
 
-**Purpose**: Nifty 500 symbol definitions including ISIN, trading symbol, company name, series, industry classification (the `Industry` field from the NSE CSV, used as the platform's sector grouping), archive state, scan-exclusion state, and the stable `sql_table_name_suffix` used to construct the `D_`, `W_`, and `M_` SQL Server table names for that symbol. ISIN is stored alongside symbol as the continuity anchor used by the rename-detection workflow (REQ-UNIV-020) and the Symbol Validity Probe resolution path (REQ-UNIV-021b): when an NSE rebranding changes the trading symbol but leaves the underlying security unchanged, the ISIN match drives an in-place update that preserves `sql_table_name_suffix` and the associated historical tables. Stock splits, bonus issues, and consolidations change the ISIN while leaving the trading symbol unchanged — the symbol master record updates ISIN in place and the suffix remains stable.
+**Purpose**: Nifty 500 symbol definitions including ISIN, trading symbol, company name, series, industry classification (the `Industry` field from the NSE CSV, used as the platform's sector grouping), archive state, scan-exclusion state, and the stable `sql_table_name_suffix` used to construct the `D_`, `W_`, and `M_` PostgreSQL table names for that symbol. ISIN is stored alongside symbol as the continuity anchor used by the rename-detection workflow (REQ-UNIV-020) and the Symbol Validity Probe resolution path (REQ-UNIV-021b): when an NSE rebranding changes the trading symbol but leaves the underlying security unchanged, the ISIN match drives an in-place update that preserves `sql_table_name_suffix` and the associated historical tables. Stock splits, bonus issues, and consolidations change the ISIN while leaving the trading symbol unchanged — the symbol master record updates ISIN in place and the suffix remains stable.
 
 **Lifecycle**: Permanent. Symbols are archived in place when removed from the universe; historical records are never deleted because the `sql_table_name_suffix` mapping must remain stable for backtest queries. `sql_table_name_suffix` is immutable once assigned: it never changes for the lifetime of the symbol master record, even across trading symbol renames.
 
@@ -293,7 +293,7 @@ Retention: no expiry. Stored backtest results must remain queryable by the RME p
 
 ### `portfolio_snapshots`
 
-**Purpose**: Cached point-in-time portfolio state per user, written after each account sync completion and after each user-triggered manual refresh. Stores: total invested (cost basis), current market value, unrealised PnL, realised PnL, portfolio heat, sector exposure breakdown, cash reserve, equity high-water mark, active position count, and the timestamp and source of the last price data used (SQL Server close or FYERS live quote). The dashboard serves figures from the most recent snapshot on page load, avoiding a live FYERS API call on every visit. The admin portfolio monitoring view reads snapshots across all users to track platform-wide portfolio health. Snapshots are overwritten in place on each update; the previous snapshot is not retained.
+**Purpose**: Cached point-in-time portfolio state per user, written after each account sync completion and after each user-triggered manual refresh. Stores: total invested (cost basis), current market value, unrealised PnL, realised PnL, portfolio heat, sector exposure breakdown, cash reserve, equity high-water mark, active position count, and the timestamp and source of the last price data used (PostgreSQL close or FYERS live quote). The dashboard serves figures from the most recent snapshot on page load, avoiding a live FYERS API call on every visit. The admin portfolio monitoring view reads snapshots across all users to track platform-wide portfolio health. Snapshots are overwritten in place on each update; the previous snapshot is not retained.
 
 **Lifecycle**: Permanent per active user. A snapshot record is maintained for each user indefinitely while their account is active. No archiving is needed since only the latest snapshot per user is kept (the record is updated in place, not appended).
 

@@ -1,32 +1,32 @@
 <#
 .SYNOPSIS
-    Verifies that all pending SQL Server migrations apply cleanly against a
+    Verifies that all pending PostgreSQL migrations apply cleanly against a
     restored production database snapshot (REQ-MIGRATION-007).
 
 .DESCRIPTION
-    This script restores the latest production backup to a staging SQL Server,
-    runs FluentMigrator against the restored copy, and reports pass/fail.
+    This script restores the latest production backup to a staging PostgreSQL
+    server, runs FluentMigrator against the restored copy, and reports pass/fail.
     It is invoked by the deploy.yml pre-deploy-verify job before any
     deployment slot is activated.
 
     Azure environment:
-        - Source: production SQL Server (geo-redundant backup)
-        - Target: staging SQL Server (restored snapshot)
+        - Source: production Azure Database for PostgreSQL Flexible Server (PITR)
+        - Target: staging PostgreSQL server (restored snapshot)
         - Uses Azure CLI for point-in-time restore.
 
     Non-Azure / local dev:
-        - Source: production backup file (.bak)
-        - Target: local SQL Server instance
-        - Uses sqlcmd for RESTORE DATABASE.
+        - Source: production dump file (.sql or .dump)
+        - Target: local PostgreSQL instance
+        - Uses psql / pg_restore for restore.
 
 .PARAMETER SourceServer
-    The production SQL Server instance name.
+    The production PostgreSQL server instance name.
 
 .PARAMETER SourceDatabase
     The production database name (e.g. marketdata or backtest).
 
 .PARAMETER TargetServer
-    The staging SQL Server to restore into.
+    The staging PostgreSQL server to restore into.
 
 .PARAMETER TargetDatabase
     The name for the restored database copy.
@@ -36,9 +36,9 @@
 
 .EXAMPLE
     .\Verify-MigrationSnapshot.ps1 `
-        -SourceServer "prod-sql.database.windows.net" `
+        -SourceServer "psql-signalstack-prd.postgres.database.azure.com" `
         -SourceDatabase "marketdata" `
-        -TargetServer "staging-sql.database.windows.net" `
+        -TargetServer "psql-signalstack-stg.postgres.database.azure.com" `
         -TargetDatabase "marketdata_verify" `
         -MigrationProjectPath "packages/migrations/SignalStack.SqlMigrations"
 
@@ -67,7 +67,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== Migration Snapshot Verification ==="
+Write-Host "=== Migration Snapshot Verification (PostgreSQL) ==="
 Write-Host "Source:     $SourceServer/$SourceDatabase"
 Write-Host "Target:     $TargetServer/$TargetDatabase"
 Write-Host "Timestamp:  $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
@@ -77,11 +77,12 @@ Write-Host ""
 Write-Host "[1/3] Restoring production snapshot..."
 Write-Host "       Restoring $SourceDatabase from $SourceServer to $TargetServer as $TargetDatabase"
 
-# Azure SQL: point-in-time restore
-# az sql db restore --resource-group "<rg>" --server "$TargetServer" `
-#     --name "$TargetDatabase" --edition "Standard" `
+# Azure Database for PostgreSQL Flexible Server: point-in-time restore
+# az postgres flexible-server restore --source-server "$SourceServer" `
+#     --subscription "<sub>" --resource-group "<rg>" `
+#     --name "$TargetDatabase" `
 #     --restore-point-in-time "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')" `
-#     --source-database "$SourceDatabase" --source-server "$SourceServer"
+#     --source-database "$SourceDatabase"
 
 Write-Host "       [WARNING] Restore command must be configured for target deployment environment."
 Write-Host "       [WARNING] See infra/azure/ for Bicep templates and connection strings."
@@ -90,7 +91,7 @@ Write-Host "       [WARNING] See infra/azure/ for Bicep templates and connection
 Write-Host ""
 Write-Host "[2/3] Running FluentMigrator against restored snapshot..."
 
-$targetConnection = "Server=$TargetServer;Database=$TargetDatabase;Integrated Security=True;TrustServerCertificate=True;"
+$targetConnection = "Host=$TargetServer;Database=$TargetDatabase;Username=postgres;SSL Mode=Require;Trust Server Certificate=true;"
 
 try {
     dotnet run --project "$MigrationProjectPath" -- `

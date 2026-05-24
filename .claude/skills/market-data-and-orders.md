@@ -22,6 +22,6 @@ Requirements live in [docs/requirements-spec.md](../../docs/requirements-spec.md
 ## Checklist
 
 - provider gaps and stale data are handled intentionally
-- SQL Server access stays abstracted behind repositories or services
+- PostgreSQL access stays abstracted behind repositories or services
 - EOD sync and scan workflows have explicit coordination markers
 - client-facing data remains consistent after reconnects or retries

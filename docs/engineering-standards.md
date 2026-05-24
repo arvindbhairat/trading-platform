@@ -10,7 +10,7 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 - prefer explicit, readable code over clever abstractions
 - keep business rules in domain or service layers, not controllers or UI handlers
 - isolate provider adapters from internal domain models
-- keep MongoDB operational models separate from SQL Server historical models
+- keep MongoDB operational models separate from PostgreSQL historical models
 - make important state transitions explicit and validated
 - in .NET services, prefer `ILogger` in application code and keep Serilog behind the logging provider boundary
 
@@ -136,7 +136,7 @@ A UI task is not complete unless: no hardcoded styles are introduced, all UI ele
 ### Test classes
 
 - unit test calculations, rules, and state transitions
-- integration test persistence-backed workflows across MongoDB and SQL Server
+- integration test persistence-backed workflows across MongoDB and PostgreSQL
 - end-to-end test the critical user journeys via a real browser harness
 - contract test the Market Data Provider abstraction against each concrete provider implementation
 
@@ -146,7 +146,7 @@ A UI task is not complete unless: no hardcoded styles are introduced, all UI ele
 
 #### Load-test SLO targets (Phase B gate)
 
-All targets are p95 measured at the tester_ceiling concurrent user count with LMDS running. Measurements must be taken against a production-equivalent environment (Azure-hosted, real MongoDB + SQL Server, Redis active).
+All targets are p95 measured at the tester_ceiling concurrent user count with LMDS running. Measurements must be taken against a production-equivalent environment (Azure-hosted, real MongoDB + PostgreSQL, Redis active).
 
 | Surface | Endpoint / operation | p95 target |
 |---|---|---|
@@ -197,10 +197,10 @@ Recovery targets are differentiated by datastore role and time-of-day. "Market h
 |---|---|---|---|
 | MongoDB (positions, intent ledger, rme_incidents, trade ledger) | Market hours | ≤ 1 minute | ≤ 15 minutes |
 | MongoDB (positions, intent ledger, rme_incidents, trade ledger) | Off-hours / weekends | ≤ 4 hours | ≤ 1 hour |
-| SQL Server (historical OHLCV) | Any | ≤ 24 hours | ≤ 4 hours |
+| PostgreSQL (historical OHLCV) | Any | ≤ 24 hours | ≤ 4 hours |
 | Redis (session cache, singleton lease, throttle state) | Any | No durability requirement — Redis is a rebuildable cache; loss is operationally recoverable | ≤ 15 minutes |
 
-These targets define the Azure backup and geo-replication configuration minimums. The MongoDB market-hours targets require continuous backup or change-stream-based replication to a secondary; a daily snapshot alone is insufficient. SQL Server historical data is fully rebuildable from the MDP via HDS and DS, so a daily Azure Backup snapshot is sufficient. Recovery exercises validating these targets must be included in the Phase C chaos exercises.
+These targets define the Azure backup and geo-replication configuration minimums. The MongoDB market-hours targets require continuous backup or change-stream-based replication to a secondary; a daily snapshot alone is insufficient. PostgreSQL historical data is fully rebuildable from the MDP via HDS and DS, so a daily Azure Backup snapshot is sufficient. Recovery exercises validating these targets must be included in the Phase C chaos exercises.
 
 ## Caching Conventions
 

@@ -1,7 +1,7 @@
 # Deployment workflow: migration → seeding → API/Worker activation
 #
 # Ordering (REQ-CONFIG-010, REQ-MIGRATION-006):
-#   1. FluentMigrator — SQL Server schema (marketdata + backtest)
+#   1. FluentMigrator — PostgreSQL schema (marketdata + backtest)
 #   2. Mongo.Migration — MongoDB schema evolution
 #   3. sys_config seeder — insert missing keys + upsert sentinel
 #   4. API deployment + Worker deployment (parallel after seeding)
@@ -84,7 +84,7 @@ jobs:
       - name: Restore production snapshot to staging DB
         run: |
           echo "::group::Restoring production snapshot"
-          echo "Restoring to staging-environment SQL Server..."
+          echo "Restoring to staging-environment PostgreSQL..."
           echo "Connection: ${{ secrets.SQL_SNAPSHOT_STAGING_CONNECTION }}"
           # Production snapshot restore is environment-specific:
           #   - Azure:  az sql db restore --resource-group ... --dest-name ...
@@ -111,9 +111,9 @@ jobs:
           echo "Verified $(date -u +%Y-%m-%dT%H:%M:%SZ) for environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "Result: PASS — all migrations applied cleanly against restored snapshot." >> $GITHUB_STEP_SUMMARY
 
-  # ── Stage 1: FluentMigrator — SQL Server ──────────────────────────────
+  # ── Stage 1: FluentMigrator — PostgreSQL ──────────────────────────────
   fluent-migrator:
-    name: "FluentMigrator (SQL Server)"
+    name: "FluentMigrator (PostgreSQL)"
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'staging' }}
     needs: [pre-deploy-verify]
@@ -286,7 +286,7 @@ jobs:
           echo "## Deployment complete: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| FluentMigrator (SQL Server) | ${{ needs.fluent-migrator.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| FluentMigrator (PostgreSQL) | ${{ needs.fluent-migrator.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Mongo.Migration (MongoDB) | ${{ needs.mongo-migration.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| sys_config seeder | ${{ needs.seeder.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy API | ${{ needs.deploy-api.result }} |" >> $GITHUB_STEP_SUMMARY

@@ -39,17 +39,17 @@ Unless the repository evolves in another direction, use these defaults:
 
 - Developer profile: primary developer is proficient in C# and TypeScript, knows some HTML and CSS, and is new to Node.js full-stack patterns — keep frontend simple and push all business logic to the .NET backend
 - Frontend: Next.js + TypeScript (Node.js app; chosen for TypeScript-first beginner accessibility; keep it thin — no business logic, no risk calculations)
-- Charting: TradingView `lightweight-charts` (self-hosted JS library, renders OHLCV data from SQL Server)
+- Charting: TradingView `lightweight-charts` (self-hosted JS library, renders OHLCV data from PostgreSQL)
 - Fundamental data widgets: TradingView embeddable widgets (Financials, Fundamental Data, Company Profile) loaded as iframe embeds on the chart page; data sourced from TradingView servers, no API key required, uses `NSE:{symbol}` format
 - Backend API: ASP.NET Core + C#
 - Realtime: WebSockets
 - Operational database: MongoDB
-- Historical database: SQL Server
+- Historical database: PostgreSQL
 - Cache and queues: Redis where needed
 - Background jobs: .NET worker services or Quartz/Hangfire-style .NET scheduling where appropriate
 - Auth: OAuth with Google, Microsoft, and Facebook/Meta
 - Market Data Provider (MDP): configurable abstraction layer; initial supported providers are FYERS (admin daily token), TrueData, and Global Data Feeds; active provider is admin-configured; used by background jobs only (DataSync (DS), HistoricDataSeed (HDS), EOD Signal Runner (EODSR)). FYERS is the initial provider because its market-data APIs are free during the testing and evaluation phase only; the platform will migrate to a commercial third-party provider (TrueData, GDF, or equivalent) ahead of broader rollout. All FYERS-specific quirks must remain encapsulated behind the MDP abstraction so the migration is a configuration and adapter change — see REQ-MARKET-002a/b/c. Backend services access all market data and account data exclusively through REST; the FYERS Data WebSocket is permitted in the browser tier only.
-- Portal live quotes and real-time chart data: fetched using the individual logged-in user's FYERS token at display time; historical OHLCV served from SQL Server
+- Portal live quotes and real-time chart data: fetched using the individual logged-in user's FYERS token at display time; historical OHLCV served from PostgreSQL
 - User account data (positions, orders, trades, profile): always FYERS via individual user token
 - Execution assistance: FYERS API Connect JS widget (branded button SDK); order parameters are pre-populated by the platform frontend and passed to the widget; the FYERS-hosted pop-up handles final submission; the platform backend must never call the FYERS order placement REST API directly
 - Logging in .NET apps: `ILogger` with Serilog
@@ -67,7 +67,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Never design the platform to place orders autonomously.
 - Never use a regular user's FYERS token for shared market-data ingestion regardless of which market data provider is configured.
 - Never bind market data ingestion code directly to a specific provider; always route through the Market Data Provider (MDP) abstraction layer.
-- Never store user-specific operational state in SQL Server.
+- Never store user-specific operational state in PostgreSQL.
 - Never blur the line between entry signal generation and user-initiated execution assistance.
 - Never bypass server-side validation for auth, Signal, portfolio, or admin-sensitive behavior.
 - Never let timeframe logic diverge across charting, backtesting, and the EOD Signal Runner.

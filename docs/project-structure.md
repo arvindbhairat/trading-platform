@@ -118,7 +118,7 @@ apps/api/
 ├── Services/               ← Orchestration and application services
 ├── Repositories/
 │   ├── Mongo/              ← MongoDB access (users, signals, portfolio, notifications…)
-│   └── Sql/                ← SQL Server access (historical OHLCV only)
+│   └── Sql/                ← PostgreSQL access (historical OHLCV only)
 ├── Integrations/
 │   ├── Fyers/              ← FYERS adapter (token, quotes, account data, widget signing)
 │   ├── Telegram/           ← Telegram bot integration
@@ -131,7 +131,7 @@ apps/api/
 ```
 
 **Key rules for `apps/api/`:**
-- SQL Server historical access and MongoDB operational access must live in separate repository classes.
+- PostgreSQL historical access and MongoDB operational access must live in separate repository classes.
 - Provider adapters (FYERS, Telegram, OAuth) must not leak into domain models.
 - The backend must never call the FYERS order-placement REST API directly.
 - All business logic, validation, and permission checks belong here, not in `apps/web/`.
@@ -178,7 +178,7 @@ apps/web/src/
 
 **Key rules for `apps/web/`:**
 - Keep this layer thin: no risk calculations, no business logic.
-- Historical OHLCV data comes from SQL Server via the API — never from FYERS directly in the backend.
+- Historical OHLCV data comes from PostgreSQL via the API — never from FYERS directly in the backend.
 - Live quotes and real-time chart data use the logged-in user's FYERS token at display time (browser-tier WebSocket is permitted).
 - TradingView fundamental widgets load as iframes using `NSE:{symbol}` format — no platform API call needed.
 
@@ -221,7 +221,7 @@ apps/worker/
 ```
 apps/worker/
 ├── Jobs/                   ← One class per background job
-│   ├── DataSync/           ← Daily OHLCV sync to SQL Server
+│   ├── DataSync/           ← Daily OHLCV sync to PostgreSQL
 │   ├── HistoricDataSeed/   ← Full historical backfill
 │   ├── EodSignalRunner/    ← Post-market signal scan
 │   ├── LiveMarketScan/     ← LMDS: continuous intraday price + level monitoring
@@ -278,7 +278,7 @@ packages/
 │                                        provider-resolution service from admin config
 ├── migrations/
 │   ├── SignalStack.Migrations/       ← Mongo.Migration migrations (collection catalogue, indexes)
-│   └── SignalStack.SqlMigrations/    ← FluentMigrator migrations for SQL Server historical schema
+│   └── SignalStack.SqlMigrations/    ← FluentMigrator migrations for PostgreSQL historical schema
 ├── shared-types/    ← PLANNED: Cross-app DTOs, request/response contracts, domain enums
 ├── ui/              ← PLANNED: Shared React components, design tokens, layout primitives
 └── testing/         ← PLANNED: Shared test helpers, fixtures, mocks, integration utilities
@@ -294,7 +294,7 @@ Do not put application business logic in packages. Packages are for types, utili
 infra/
 ├── README.md
 ├── docker/
-│   ├── docker-compose.yml            ← Local dev stack (MongoDB, SQL Server, Redis, OTEL collector)
+│   ├── docker-compose.yml            ← Local dev stack (MongoDB, PostgreSQL, Redis, OTEL collector)
 │   ├── .env.example                  ← Template for local secrets (copy to .env, never commit .env)
 │   ├── .gitignore                    ← Excludes .env from source control
 │   ├── up.ps1                        ← Convenience script: starts all containers
@@ -313,7 +313,7 @@ infra/
 ```powershell
 cd infra/docker
 cp .env.example .env   # fill in secrets
-./up.ps1               # starts MongoDB, SQL Server, Redis, OTEL collector
+./up.ps1               # starts MongoDB, PostgreSQL, Redis, OTEL collector
 ```
 
 **Azure deployment note:** `worker-appservice.bicep` is load-bearing. It enforces the single-instance invariant at the infrastructure layer. Do not modify `workerCount` or add auto-scale rules without first completing the Phase C partitioning extension described in ADR-0003.
@@ -502,7 +502,7 @@ All three enforce the same non-negotiable guardrails. When in doubt, read `CLAUD
 | Domain entity or value object | `apps/api/Domain/` |
 | Orchestration / application service | `apps/api/Services/` |
 | MongoDB repository | `apps/api/Repositories/Mongo/` |
-| SQL Server repository (OHLCV only) | `apps/api/Repositories/Sql/` |
+| PostgreSQL repository (OHLCV only) | `apps/api/Repositories/Sql/` |
 | FYERS / Telegram / OAuth adapter | `apps/api/Integrations/{Provider}/` |
 | Risk rule or sizing model | `apps/api/Risk/` |
 | Admin workflow (universe, jobs) | `apps/api/Admin/` |
@@ -537,7 +537,7 @@ These are enforced by `CLAUDE.md` / `AGENTS.md` and checked by CI:
 - **No autonomous order placement.** Every order action is user-initiated. The backend never calls the FYERS order-placement REST API directly.
 - **MDP abstraction boundary.** All market-data ingestion goes through the `IMarketDataProvider` interface. No direct FYERS calls outside the adapter.
 - **No user tokens for shared ingestion.** The shared MDP (used by LMDS, DS, EODSR) uses the admin FYERS token only.
-- **SQL Server = historical OHLCV only.** User-specific operational state lives in MongoDB.
+- **PostgreSQL = historical OHLCV only.** User-specific operational state lives in MongoDB.
 - **Worker single-instance invariant.** Exactly one Worker instance. No auto-scale until ADR-0003 Phase C is complete.
 - **Startup config independence.** Apps must be able to start logging and load bootstrap config before MongoDB is reachable.
 - **No secrets in source control.** Use environment variables and Azure Key Vault. Never commit `.env` files.

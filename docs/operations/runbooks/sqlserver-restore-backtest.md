@@ -1,4 +1,6 @@
-# Runbook 12 — SQL Server Restore (Backtest Database)
+# Runbook 12 — PostgreSQL Restore (Backtest Database)
+
+> **Note:** This runbook was originally written for Azure SQL Server and has been updated for the PostgreSQL migration. The codebase now uses PostgreSQL. Azure Database for PostgreSQL Flexible Server is the target platform.
 
 **REQ coverage:** REQ-BCP-003, REQ-BCP-006  
 **Last reviewed:** 2026-05-05 — drill-execution-001 (P8-T8); field-test required before Phase A user onboarding
@@ -8,7 +10,7 @@
 ## When to use
 
 Open this runbook when:
-- The `backtest` SQL Server database is corrupted, missing, or contains incorrect results that cannot be repaired by re-running the backtest engine.
+- The `backtest` PostgreSQL database is corrupted, missing, or contains incorrect results that cannot be repaired by re-running the backtest engine.
 - A restore drill exercise is being conducted per REQ-BCP-007.
 
 **Note:** Per REQ-BCP-003, stored backtest results are reproducible from retained market data, Signal code, and Signal Subscription parameter history. Before committing to an 8-hour RTO restore, evaluate whether re-running affected backtests is faster.
@@ -17,9 +19,9 @@ Open this runbook when:
 
 ## Preconditions
 
-- You have contributor or owner access to the Azure SQL Server resource group.
+- You have contributor or owner access to the Azure Database for PostgreSQL Flexible Server resource group.
 - The API service is shut down if the database will be restored in-place.
-- You have identified the target point-in-time (UTC) within the 7-day PITR retention window, or a weekly backup from the long-term retention policy.
+- You have identified the target point-in-time (UTC) within the PITR retention window, or a weekly backup from the long-term retention policy.
 - Backtest re-run has been evaluated and ruled out (or is insufficient because the Signal code or parameters have been deleted).
 
 ---
@@ -45,22 +47,22 @@ If no → continue with the restore procedure below.
 
 ### 3 — Identify the restore target
 
-**Option A — PITR restore (within 7-day window)**
+**Option A — PITR restore (within retention window)**
 
-1. Azure portal → SQL Server → `backtest` database → Restore.
+1. Azure portal → Azure Database for PostgreSQL Flexible Server → `backtest` server → Restore.
 2. Choose "Point-in-time" restore.
 3. Enter the target UTC timestamp.
 
 **Option B — Long-term retention restore (weekly backup)**
 
-1. Azure portal → SQL Server → `backtest` database → Manage Backups.
+1. Azure portal → Azure Database for PostgreSQL Flexible Server → `backtest` server → Backups.
 2. Select the applicable weekly backup.
 3. Initiate restore.
 
 ### 4 — Perform the restore
 
-1. In the Azure portal, click "Restore."
-2. Select "New database" for the restore target: `backtest-restore-<YYYYMMDD>`.
+1. In the Azure portal, navigate to the PostgreSQL Flexible Server, click "Restore."
+2. Enter server name for the restore target: `psql-backtest-restore-<YYYYMMDD>`.
 3. Confirm restore region is Central India per REQ-LEGAL-009.
 4. Initiate restore and wait for completion (15–45 minutes for PITR; up to 2 hours for LTR from weekly backup).
 
@@ -69,7 +71,7 @@ If no → continue with the restore procedure below.
 1. **Schema check:** Confirm the `signal_runs` result table structure matches the current FluentMigrator migration state.
 2. **Row count check:** Query the result count for at least 3 known `signal_run_id` values and confirm the row counts match the expected state from the pre-incident MongoDB `signal_runs` records.
 3. **Referential integrity:** Spot-check that `signal_run_id` values in the backtest database match `signal_runs._id` values in MongoDB.
-4. **DBCC check:** Run `DBCC CHECKDB ('backtest-restore-<YYYYMMDD>')` and confirm no errors.
+4. **Index check:** Run `SELECT schemaname, tablename, indexname FROM pg_indexes WHERE tablename = 'signal_runs';` to verify indexes exist.
 
 ### 6 — Update the connection string
 
@@ -88,7 +90,7 @@ If no → continue with the restore procedure below.
 
 - Backtest result pages load for at least 2 known Signal Subscriptions.
 - A new backtest run completes successfully and results persist to the database.
-- No SQL connection errors in OTLP traces for 10 minutes post-restart.
+- No PostgreSQL connection errors in OTLP traces for 10 minutes post-restart.
 
 ---
 

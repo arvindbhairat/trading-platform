@@ -121,12 +121,12 @@ These notes document the exact procedure performed on 2026-05-01.
 
 ## 6. Local Database Configuration
 
-The platform uses **MongoDB** and **SQL Server** for local development. Connection strings are configured via a `.env` file at the repo root.
+The platform uses **MongoDB** and **PostgreSQL** for local development. Connection strings are configured via a `.env` file at the repo root.
 
 ### Prerequisites
 
 - [MongoDB](https://www.mongodb.com/try/download/community) installed locally (default port 27017)
-- [SQL Server Express](https://go.microsoft.com/fwlink/?linkid=866662) (or full SQL Server) with the `SQLEXPRESS` instance name
+- [PostgreSQL 16](https://www.postgresql.org/download/) installed locally (default port 5432)
 
 ### Setup
 
@@ -146,14 +146,14 @@ Contents (already created):
 
 export ConnectionStrings__MongoDb="mongodb://localhost:27017/signalstack"
 export MongoDB__DatabaseName="signalstack"
-export ConnectionStrings__SqlServer="Server=localhost\SQLEXPRESS;Database=signalstack;Trusted_Connection=True;TrustServerCertificate=True;"
+export ConnectionStrings__SqlServer="Host=localhost;Port=5432;Database=signalstack;Username=postgres;Password=your_password_here;"
 ```
 
 2. Create both databases (if they don't exist):
 
 ```bash
-# Create SQL Server database
-sqlcmd -S localhost\SQLEXPRESS -Q "CREATE DATABASE signalstack"
+# Create PostgreSQL database
+psql -h localhost -U postgres -c "CREATE DATABASE signalstack"
 
 # MongoDB creates databases on first use — the application will create it automatically.
 ```
@@ -166,7 +166,7 @@ Both `apps/api` and `apps/worker` load the `.env` file at startup via the `DotNe
 |---|---|---|
 | `ConnectionStrings:MongoDb` | `ConnectionStrings__MongoDb` | MongoDB connection string |
 | `MongoDB:DatabaseName` | `MongoDB__DatabaseName` | MongoDB database name |
-| `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | SQL Server connection string |
+| `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | PostgreSQL connection string (Npgsql format) |
 
 The `.env` file is git-ignored (`*.env` rule in `.gitignore`) so secrets stay local.
 

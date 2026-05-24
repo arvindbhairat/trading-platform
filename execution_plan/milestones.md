@@ -66,7 +66,7 @@ Plan revision applied 2026-04-25 per `docs/build_docs_reviews/execution_plan_rev
   - Symbol Validity Probe + admin work queue + rename / delisting / dismiss resolutions work (REQ-UNIV-021..021b).
   - MDP interface + REST-only constraint enforced; FYERS adapter + throttle layer + budget metric live (REQ-MARKET-002a/002b, REQ-RATE-003/004/011/012, engineering-standards § MDP).
   - Cross-provider swap test scaffolding works against a stub TrueData adapter (REQ-MARKET-002d).
-  - SQL Server historical schema + symbol-table mapping service + chart endpoints serve OHLCV (REQ-HIST-001..011, REQ-HIST-010a).
+  - PostgreSQL historical schema + symbol-table mapping service + chart endpoints serve OHLCV (REQ-HIST-001..011, REQ-HIST-010a).
   - HistoricDataSeed scoped per-symbol table materialisation + idempotent + resumable (REQ-HIST-009/009a).
   - DataSync 10-session recovery + weekly/monthly upserts + success marker + token re-check (REQ-MARKET-005/005a/006/007).
   - Browser-tier FYERS WebSocket for live quotes + PLD lease + REST fallback (REQ-MARKET-002b, REQ-DASH-013, REQ-STOP-006c).

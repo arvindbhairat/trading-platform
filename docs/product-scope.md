@@ -18,7 +18,7 @@ The platform combines charting, backtesting, live scans, portfolio analytics, ad
 - notification-first and decision-support-first
 - user-initiated execution assistance only; no autonomous order placement (V1 delivery of in-portal execution assistance is conditional on the FYERS CNC sandbox verification defined in REQ-ORDER-010b; if that verification fails, REQ-ORDER-010a applies and V1 ships advisory-only with a deep-link handoff to the FYERS app or web platform, while the "no autonomous order placement" stance remains absolute in every configuration)
 - FYERS for broker and market-data integration
-- MongoDB for live and user data, SQL Server for shared historical data
+- MongoDB for live and user data, PostgreSQL for shared historical data
 - Azure-hosted delivery with GitHub (GitHub Actions for CI/CD)
 
 ## Primary Users
@@ -33,7 +33,7 @@ V1 focuses on:
 - OAuth sign-in and admin approval
 - FYERS authentication and account sync
 - admin-managed Nifty 500 universe and internal trading calendar
-- shared SQL Server historical data plus EOD sync
+- shared PostgreSQL historical data plus EOD sync
 - charting with shared timeframe semantics
 - Signal creation as after-market opportunity scanners generating entry signals
 - automated RME profile optimisation backtests with mechanism comparison and symbol-level recommendations (delivered as part of the RME phase, after core RME is operational)
