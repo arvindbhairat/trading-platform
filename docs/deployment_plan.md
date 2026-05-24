@@ -308,7 +308,7 @@ Single Oracle Cloud VM (Ampere A1, 4 OCPU, 24 GB RAM)
   ├── Docker: MongoDB 7
   ├── Docker: PostgreSQL 16
   ├── Docker: Redis 7
-  ├── Docker: OTLP collector
+  ├── Docker: OTLP/HTTP export (no collector sidecar)
   ├── Process 1: dotnet SignalStack.Api.dll
   ├── Process 2: dotnet SignalStack.Worker.dll
   └── Process 3: npm start (apps/web)
@@ -484,8 +484,8 @@ Non-secret shared technical configuration:
 
 | Key | Phase 1 Example Value | Phase 2 Example Value |
 |-----|----------------------|----------------------|
-| `Telemetry:Otlp:PrimaryEndpoint` | `http://localhost:4317` | OTLP collector endpoint |
-| `Telemetry:Otlp:UseFallbackEndpoint` | `false` | `false` |
+| `Telemetry:Otlp:Endpoint` | *(leave blank)* | OTLP endpoint (e.g. `https://otlp.eu01.nr-data.net:443`) |
+| `Telemetry:Otlp:ApiKey` | *(leave blank)* | Provider API key |
 | `Logging:LogLevel:Default` | `Information` | `Information` |
 | `Logging:LogLevel:SignalStack` | `Debug` | `Information` |
 
@@ -788,19 +788,19 @@ That's it. No dedicated OTLP collector, no Application Insights, no alerts. For 
 az webapp log tail --name app-signalstack-api-solo --resource-group rg-signalstack-solo
 ```
 
-The code already emits OTLP. When you're ready for observability, just point `Telemetry:Otlp:PrimaryEndpoint` in App Configuration to an OTLP endpoint and telemetry flows automatically.
+The code already emits OTLP. When you're ready for observability, just set `Telemetry:Otlp:Endpoint` and `Telemetry:Otlp:ApiKey` in App Configuration and telemetry flows automatically.
 
 ### 11.2 Phase 2 — Full Observability
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────────┐
-│  API     │────▶│ OTLP     │────▶│ Application  │
-│  Worker  │────▶│ Collector │────▶│ Insights     │
-│  Web     │────▶│ (Azure)  │     │ (or Grafana) │
-└──────────┘     └──────────┘     └──────────────┘
+┌──────────┐     ┌──────────────┐
+│  API     │────▶│ Application  │
+│  Worker  │────▶│ Insights     │
+│  Web     │────▶│ (or Grafana) │
+└──────────┘     └──────────────┘
 ```
 
-- Dedicated OTLP collector (Azure Container Instances or VM)
+- Update `Telemetry:Otlp:Endpoint` and `Telemetry:Otlp:ApiKey` in App Configuration (no collector needed)
 - Application Insights (Workspace-based) in Central India
 - Log Analytics Workspace linked to App Insights
 - Key alerts: API 5xx rate, Worker process down, singleton violation, PostgreSQL CPU > 80%, FYERS token expiry
@@ -861,7 +861,7 @@ Before moving to Phase 2, complete these additional items:
 - [ ] Redis upgraded to Standard C1 with separate DB indexes
 - [ ] Application Insights + Log Analytics deployed
 - [ ] Recovery Services Vault deployed with backup policies
-- [ ] OTLP collector deployed and configured
+- [ ] OTLP endpoint and API key configured for observability vendor
 - [ ] Microsoft and Facebook OAuth providers registered
 - [ ] Azure Communication Services set up for email fallback
 - [ ] All three OAuth providers configured with production redirect URIs

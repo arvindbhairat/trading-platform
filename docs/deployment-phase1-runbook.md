@@ -88,8 +88,8 @@ Before starting, make sure you have:
 
 | Key | Value | Label |
 |-----|-------|-------|
-| `Telemetry:Otlp:PrimaryEndpoint` | `http://localhost:4317` | *(leave blank)* |
-| `Telemetry:Otlp:UseFallbackEndpoint` | `false` | *(leave blank)* |
+| `Telemetry:Otlp:Endpoint` | *(leave blank)* | *(leave blank)* |
+| `Telemetry:Otlp:ApiKey` | *(leave blank)* | *(leave blank)* |
 | `Logging:LogLevel:Default` | `Information` | *(leave blank)* |
 | `Logging:LogLevel:SignalStack` | `Debug` | *(leave blank)* |
 

@@ -53,7 +53,7 @@ Unless the repository evolves in another direction, use these defaults:
 - User account data (positions, orders, trades, profile): always FYERS via individual user token
 - Execution assistance: FYERS API Connect JS widget (branded button SDK); order parameters are pre-populated by the platform frontend and passed to the widget; the FYERS-hosted pop-up handles final submission; the platform backend must never call the FYERS order placement REST API directly
 - Logging in .NET apps: `ILogger` with Serilog
-- Cross-system observability: OpenTelemetry with OTLP export through a stable collector or gateway
+- Cross-system observability: OpenTelemetry with OTLP/HTTP export directly to the configured vendor endpoint (no collector sidecar)
 - Shared technical configuration: Azure App Configuration
 - Secrets: environment variables and Azure Key Vault
 - Admin-managed runtime settings: MongoDB `sys_config`

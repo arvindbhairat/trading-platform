@@ -14,7 +14,7 @@ public sealed class BootstrapConfigurationLoaderTests
       """
       {
         "Values": {
-          "Telemetry:Otlp:PrimaryEndpoint": "@kv:otlp-primary",
+          "Telemetry:Otlp:Endpoint": "@kv:otlp-endpoint",
           "FeatureFlags:Example": "true"
         }
       }
@@ -23,7 +23,7 @@ public sealed class BootstrapConfigurationLoaderTests
     fixture.WriteKeyVaultSnapshot(
       """
       {
-        "otlp-primary": "http://localhost:4317"
+        "otlp-endpoint": "https://otlp.example.com:443"
       }
       """);
 
@@ -32,7 +32,7 @@ public sealed class BootstrapConfigurationLoaderTests
 
     Assert.True(result.AppConfigurationReachable);
     Assert.Equal(ConfigurationSourceKind.AzureAppConfiguration, result.SourceKind);
-    Assert.Equal("http://localhost:4317", result.Values["Telemetry:Otlp:PrimaryEndpoint"]);
+    Assert.Equal("https://otlp.example.com:443", result.Values["Telemetry:Otlp:Endpoint"]);
     Assert.Equal("true", result.Values["FeatureFlags:Example"]);
     Assert.True(File.Exists(fixture.CachePath));
   }
@@ -46,7 +46,7 @@ public sealed class BootstrapConfigurationLoaderTests
       """
       {
         "Values": {
-          "Telemetry:Otlp:PrimaryEndpoint": "http://localhost:4317"
+          "Telemetry:Otlp:Endpoint": "https://otlp.example.com:443"
         }
       }
       """);
@@ -62,7 +62,7 @@ public sealed class BootstrapConfigurationLoaderTests
 
     Assert.False(fallbackResult.AppConfigurationReachable);
     Assert.Equal(ConfigurationSourceKind.LastKnownGoodCache, fallbackResult.SourceKind);
-    Assert.Equal("http://localhost:4317", fallbackResult.Values["Telemetry:Otlp:PrimaryEndpoint"]);
+    Assert.Equal("https://otlp.example.com:443", fallbackResult.Values["Telemetry:Otlp:Endpoint"]);
   }
 
   [Fact]
@@ -74,7 +74,7 @@ public sealed class BootstrapConfigurationLoaderTests
       """
       {
         "Values": {
-          "Telemetry:Otlp:PrimaryEndpoint": "http://localhost:4317"
+          "Telemetry:Otlp:Endpoint": "https://otlp.example.com:443"
         }
       }
       """);

@@ -1,9 +1,8 @@
 {
   "LastSuccessfulReadUtc": "2026-05-16T05:46:09.2134238+00:00",
   "Values": {
-    "Telemetry:Otlp:PrimaryEndpoint": "http://localhost:4317",
-    "Telemetry:Otlp:FallbackEndpoint": "http://localhost:14317",
-    "Telemetry:Otlp:UseFallbackEndpoint": "false",
+    "Telemetry:Otlp:Endpoint": "",
+    "Telemetry:Otlp:ApiKey": "",
     "Telemetry:Otlp:ExportTimeoutMilliseconds": "5000"
   }
 }

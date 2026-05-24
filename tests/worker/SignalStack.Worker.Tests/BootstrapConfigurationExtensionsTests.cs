@@ -17,7 +17,7 @@ public sealed class BootstrapConfigurationExtensionsTests
       """
       {
         "Values": {
-          "Telemetry:Otlp:PrimaryEndpoint": "@kv:otlp-primary",
+          "Telemetry:Otlp:Endpoint": "@kv:otlp-endpoint",
           "WorkerSingleton:LeaseTtlSeconds": "120"
         }
       }
@@ -26,7 +26,7 @@ public sealed class BootstrapConfigurationExtensionsTests
     fixture.WriteKeyVaultSnapshot(
       """
       {
-        "otlp-primary": "http://localhost:4317"
+        "otlp-endpoint": "https://otlp.example.com:443"
       }
       """);
 
@@ -49,7 +49,7 @@ public sealed class BootstrapConfigurationExtensionsTests
 
     Assert.Equal(ConfigurationSourceKind.AzureAppConfiguration, state.SourceKind);
     Assert.True(state.AppConfigurationReachable);
-    Assert.Equal("http://localhost:4317", config["Telemetry:Otlp:PrimaryEndpoint"]);
+    Assert.Equal("https://otlp.example.com:443", config["Telemetry:Otlp:Endpoint"]);
     Assert.Equal("120", config["WorkerSingleton:LeaseTtlSeconds"]);
   }
 
