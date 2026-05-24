@@ -25,7 +25,7 @@ Examples:
 - seeded admin email
 - Azure App Configuration endpoint
 - Key Vault references
-- OTLP collector endpoint bootstrap value if needed at startup
+- OTLP endpoint (for direct export to observability vendor)
 
 Rules:
 
@@ -42,7 +42,7 @@ Source:
 
 Examples:
 
-- OTLP collector endpoint
+- OTLP endpoint (observability vendor URL)
 - default log level
 - feature-flag defaults
 - shared timeout defaults

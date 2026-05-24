@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (revised 2026-05-24 — removed OTel collector sidecar; apps export OTLP/HTTP directly)
 
 ## Context
 
@@ -14,7 +14,7 @@ The platform uses:
 The system needs:
 
 - consistent observability across all applications
-- vendor portability for Better Stack, Axiom, Grafana Cloud, or similar backends
+- a simple setup that works with the developer's existing New Relic account
 - centrally managed configuration
 - admin-managed runtime settings without direct database edits
 
@@ -25,8 +25,8 @@ Use the following model:
 - OpenTelemetry is the cross-system observability standard
 - OTLP is the export protocol for logs, traces, and metrics
 - .NET services use `ILogger` with Serilog as the logging provider
-- applications send telemetry to a stable OTLP collector or gateway endpoint
-- vendor routing is handled by collector or gateway configuration rather than application code
+- applications export OTLP/HTTP directly to the configured vendor endpoint, passing the API key as a header — no intermediate collector or gateway is deployed
+- the OTLP endpoint and API key are configuration values; changing vendors requires a config update and is not a zero-touch operation (accepted trade-off for solo-POC scope)
 - startup-critical configuration comes from environment variables, Azure App Configuration, and secret stores such as Azure Key Vault
 - mutable admin-managed runtime settings are stored in MongoDB `sys_config`
 - seeded admin email and connection strings remain outside MongoDB
@@ -38,7 +38,7 @@ Azure App Configuration is a startup dependency for both the API service and the
 **At startup — App Config unreachable:**
 1. The service attempts to connect to Azure App Configuration at the configured endpoint.
 2. On connection failure, the service checks for a local last-known-good (LKG) cache file at a process-local directory path determined by the `APPCONFIG_LKG_CACHE_PATH` environment variable (required at deployment; must be a writable local path, not a MongoDB or network path — the LKG cache must be reachable without any network I/O to preserve the guardrail that startup-critical config must not depend solely on a remote service).
-3. **If an LKG cache exists and its age is within the threshold configured in `sys_config` under `config.last_known_good.max_age_seconds` (default 86400 — 24 hours):** the service warms-starts from the cache, logs a structured Warning (`config.source: lkg_cache; config.source.app_config_unreachable: true`), and emits an OpenTelemetry gauge metric `config.source.last_reached_seconds` with the elapsed seconds since the timestamp recorded in the cache. The admin System Health widget (REQ-ADMIN-014) must surface any service running from an LKG cache with a visible warning.
+3. **If an LKG cache exists and its age is within the threshold configured in `sys_config` under `config.last_known_good.max_age_seconds` (default 86400 — 24 hours):** the service warm-starts from the cache, logs a structured Warning (`config.source: lkg_cache; config.source.app_config_unreachable: true`), and emits an OpenTelemetry gauge metric `config.source.last_reached_seconds` with the elapsed seconds since the timestamp recorded in the cache. The admin System Health widget (REQ-ADMIN-014) must surface any service running from an LKG cache with a visible warning.
 4. **If no LKG cache exists, or the cache is older than the configured max age:** the service must refuse to start, log a structured Error naming the missing or stale cache, and exit with a non-zero status code so the process supervisor produces a visible crash-loop signal. This is a hard-fail — starting from unbounded-stale or absent configuration is more dangerous than failing closed.
 
 **During normal operation — LKG cache maintenance:**
@@ -60,36 +60,20 @@ Azure App Configuration is a startup dependency for both the API service and the
 
 **Required sys_config seed key**: `config.last_known_good.max_age_seconds` (default 86400, type integer). This key is bootstrap-tier only — it must be seeded from the LKG cache or environment variables, not read from MongoDB, since MongoDB may also be unavailable at startup.
 
-## OTLP collector saturation policy (tick-spike budget)
-
-During a 50× tick spike (e.g., a gap-open with simultaneous LMDS ticks, LADS fills, and RME events across many positions), the OTLP collector may receive telemetry faster than its downstream ingest endpoint can accept. The following policy is binding:
-
-**Saturation handling — local disk buffer:**
-- The OTLP collector must be configured with a local disk buffer as the first line of defence when downstream ingest is saturated.
-- The buffer must be bounded to a maximum size of **256 MB** on the collector host. This bound is configurable via the collector configuration file (not `sys_config`).
-- The collector must emit an `otel.collector.buffer_spill_total` counter (cumulative) each time a telemetry batch is discarded because the disk buffer ceiling has been reached. This counter is the primary signal that signal fidelity has been compromised during a spike.
-- The admin System Health widget (REQ-ADMIN-014) must surface a non-dismissible warning banner when `otel.collector.buffer_spill_total` has incremented since the last page load, naming the affected collector instance and the incremental spill count.
-- An `otel.collector.buffer_fill_ratio` gauge (0.0–1.0) must also be emitted on each flush cycle. A value at or above **0.8** (80% buffer fill) triggers a one-time `otel.collector.buffer_near_capacity` admin notification via Telegram+email (edge-triggered — fires once on first breach per fill/drain cycle, not on every flush).
-
-**Priority under saturation:**
-- Under sustained saturation, the collector must prioritise metrics and structured error/warning logs over trace spans. Span sampling may be reduced automatically to protect metric and log throughput. This is a collector-tier policy; applications must not implement their own sampling strategy.
-
-**Consequence for engineering:**
-- Applications must not assume 100% telemetry delivery under spike conditions. Alerting rules that depend on the *absence* of a metric (e.g., "no heartbeat for 60 s") must account for the possibility of collector buffer saturation as a benign explanation. Such rules should require absence of the metric *and* absence of an active `otel.collector.buffer_near_capacity` alert before firing a severity-1 incident.
-
 ## Consequences
 
 Positive:
 
-- vendor switching becomes a configuration change rather than a code rewrite
+- no collector infrastructure to deploy, configure, or monitor
+- single configuration step: set endpoint URL and API key
 - .NET services stay idiomatic for C# developers
-- frontend and backend share one observability model
 - admin-editable runtime settings can be managed through the portal
 - services can survive transient Azure App Configuration outages without restarting, using a bounded-age LKG cache
 
 Trade-offs:
 
+- changing observability vendors requires a code/config change rather than just a collector config change (acceptable for solo-POC scope)
+- no local buffer for telemetry under saturation — if the vendor endpoint is slow or unreachable, telemetry is dropped at the application tier (acceptable for solo-POC scope; a collector sidecar can be reintroduced later if needed)
 - configuration is split across bootstrap config and runtime config by design
-- OTLP collector or gateway infrastructure becomes an important dependency
 - developers must keep startup config and mutable runtime config clearly separated
 - a new `APPCONFIG_LKG_CACHE_PATH` environment variable is required at every deployment target; failing to set it means no LKG cache is written and a first-ever App Config outage becomes a hard startup failure

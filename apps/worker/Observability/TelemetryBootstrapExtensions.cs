@@ -32,48 +32,64 @@ internal static class TelemetryBootstrapExtensions
     builder.Logging.ClearProviders();
     builder.Logging.AddSerilog(serilogLogger, dispose: true);
 
-    builder.Services.AddOpenTelemetry()
+    var otelBuilder = builder.Services.AddOpenTelemetry()
       .ConfigureResource(resource => resource
         .AddService(serviceName: serviceName, serviceVersion: "v0.2")
         .AddAttributes(new Dictionary<string, object>
         {
-          ["deployment.environment"] = builder.Environment.EnvironmentName,
-          ["signalstack.telemetry.endpoint"] = telemetryOptions.GetActiveEndpoint().ToString()
-        }))
-      .WithLogging(
-        logging => logging
-          .AddProcessor(new SensitiveDataRedactionLogProcessor())
-          .AddOtlpExporter(exporter =>
-          {
-            exporter.Endpoint = telemetryOptions.GetActiveEndpoint();
-            exporter.Protocol = OtlpExportProtocol.Grpc;
-            exporter.TimeoutMilliseconds = telemetryOptions.ExportTimeoutMilliseconds;
-          }),
-        options =>
-        {
-          options.IncludeFormattedMessage = true;
-          options.IncludeScopes = true;
-          options.ParseStateValues = true;
-        })
-      .WithTracing(tracing => tracing
-        .AddSource(WorkerTelemetry.ActivitySource.Name)
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter(exporter =>
-        {
-          exporter.Endpoint = telemetryOptions.GetActiveEndpoint();
-          exporter.Protocol = OtlpExportProtocol.Grpc;
-          exporter.TimeoutMilliseconds = telemetryOptions.ExportTimeoutMilliseconds;
-        }))
-      .WithMetrics(metrics => metrics
-        .AddRuntimeInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddMeter(WorkerTelemetry.Meter.Name)
-        .AddMeter(ConfigurationBootstrapTelemetry.MeterName)
-        .AddOtlpExporter(exporter =>
-        {
-          exporter.Endpoint = telemetryOptions.GetActiveEndpoint();
-          exporter.Protocol = OtlpExportProtocol.Grpc;
-          exporter.TimeoutMilliseconds = telemetryOptions.ExportTimeoutMilliseconds;
+          ["deployment.environment"] = builder.Environment.EnvironmentName
         }));
+
+    bool hasOtlpEndpoint = !string.IsNullOrWhiteSpace(telemetryOptions.Endpoint);
+
+    if (hasOtlpEndpoint)
+    {
+      otelBuilder
+        .WithLogging(
+          logging => logging
+            .AddProcessor(new SensitiveDataRedactionLogProcessor())
+            .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)),
+          options =>
+          {
+            options.IncludeFormattedMessage = true;
+            options.IncludeScopes = true;
+            options.ParseStateValues = true;
+          })
+        .WithTracing(tracing => tracing
+          .AddSource(WorkerTelemetry.ActivitySource.Name)
+          .AddHttpClientInstrumentation()
+          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)))
+        .WithMetrics(metrics => metrics
+          .AddRuntimeInstrumentation()
+          .AddHttpClientInstrumentation()
+          .AddMeter(WorkerTelemetry.Meter.Name)
+          .AddMeter(ConfigurationBootstrapTelemetry.MeterName)
+          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)));
+    }
+    else
+    {
+      otelBuilder
+        .WithLogging()
+        .WithTracing(tracing => tracing
+          .AddSource(WorkerTelemetry.ActivitySource.Name)
+          .AddHttpClientInstrumentation())
+        .WithMetrics(metrics => metrics
+          .AddRuntimeInstrumentation()
+          .AddHttpClientInstrumentation()
+          .AddMeter(WorkerTelemetry.Meter.Name)
+          .AddMeter(ConfigurationBootstrapTelemetry.MeterName));
+    }
+  }
+
+  private static void ConfigureExporter(OtlpExporterOptions exporter, OtlpTelemetryOptions options)
+  {
+    exporter.Endpoint = new Uri(options.Endpoint);
+    exporter.Protocol = OtlpExportProtocol.HttpProtobuf;
+    exporter.TimeoutMilliseconds = options.ExportTimeoutMilliseconds;
+
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+    {
+      exporter.Headers = $"api-key={options.ApiKey}";
+    }
   }
 }

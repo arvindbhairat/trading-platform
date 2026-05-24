@@ -294,14 +294,11 @@ Do not put application business logic in packages. Packages are for types, utili
 infra/
 ├── README.md
 ├── docker/
-│   ├── docker-compose.yml            ← Local dev stack (MongoDB, PostgreSQL, Redis, OTEL collector)
+│   ├── docker-compose.yml            ← Local dev stack (MongoDB, PostgreSQL, Redis)
 │   ├── .env.example                  ← Template for local secrets (copy to .env, never commit .env)
 │   ├── .gitignore                    ← Excludes .env from source control
 │   ├── up.ps1                        ← Convenience script: starts all containers
-│   ├── down.ps1                      ← Convenience script: stops and removes containers
-│   └── otel/
-│       ├── collector-primary-config.yaml    ← OTLP collector config (prod-like routing)
-│       └── collector-fallback-config.yaml   ← OTLP collector config (local / offline fallback)
+│   └── down.ps1                      ← Convenience script: stops and removes containers
 └── azure/
     ├── worker-appservice.bicep        ← Worker App Service plan: pins workerCount=1, no auto-scale
     └── scripts/
@@ -313,7 +310,7 @@ infra/
 ```powershell
 cd infra/docker
 cp .env.example .env   # fill in secrets
-./up.ps1               # starts MongoDB, PostgreSQL, Redis, OTEL collector
+./up.ps1               # starts MongoDB, PostgreSQL, Redis
 ```
 
 **Azure deployment note:** `worker-appservice.bicep` is load-bearing. It enforces the single-instance invariant at the infrastructure layer. Do not modify `workerCount` or add auto-scale rules without first completing the Phase C partitioning extension described in ADR-0003.

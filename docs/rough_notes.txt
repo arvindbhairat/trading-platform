@@ -1,0 +1,21 @@
+
+new relic
+url: https://otlp.eu01.nr-data.net
+ports: 443, 4317, 4318
+key: eu01xcd83ae386b02bfbb70153de0eed186fNRAL
+
+Supabase:
+JQ5bSRnfdwmICX5k
+
+Redis:
+Free redis database
+
+MongoDB:
+Free Atlas M0 cluster
+
+
+
+
+ssh -i "ssh-key-2026-05-23.key" ubuntu@80.225.232.198
+
+

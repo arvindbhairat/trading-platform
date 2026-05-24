@@ -6,28 +6,26 @@ namespace SignalStack.Api.Tests;
 public sealed class OtlpTelemetryOptionsTests
 {
   [Fact]
-  public void GetActiveEndpoint_returns_primary_endpoint_by_default()
+  public void Endpoint_defaults_to_empty()
   {
-    var options = new OtlpTelemetryOptions
-    {
-      PrimaryEndpoint = "http://localhost:4317",
-      FallbackEndpoint = "http://localhost:14317",
-      UseFallbackEndpoint = false
-    };
+    var options = new OtlpTelemetryOptions();
 
-    Assert.Equal(new Uri("http://localhost:4317"), options.GetActiveEndpoint());
+    Assert.Equal(string.Empty, options.Endpoint);
   }
 
   [Fact]
-  public void GetActiveEndpoint_returns_fallback_endpoint_when_enabled()
+  public void ApiKey_defaults_to_empty()
   {
-    var options = new OtlpTelemetryOptions
-    {
-      PrimaryEndpoint = "http://localhost:4317",
-      FallbackEndpoint = "http://localhost:14317",
-      UseFallbackEndpoint = true
-    };
+    var options = new OtlpTelemetryOptions();
 
-    Assert.Equal(new Uri("http://localhost:14317"), options.GetActiveEndpoint());
+    Assert.Equal(string.Empty, options.ApiKey);
+  }
+
+  [Fact]
+  public void ExportTimeout_defaults_to_5000()
+  {
+    var options = new OtlpTelemetryOptions();
+
+    Assert.Equal(5000, options.ExportTimeoutMilliseconds);
   }
 }

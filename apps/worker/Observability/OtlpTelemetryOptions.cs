@@ -3,20 +3,8 @@ namespace SignalStack.Worker.Observability;
 public sealed class OtlpTelemetryOptions
 {
   public const string SectionName = "Telemetry:Otlp";
-  private const string DefaultPrimaryEndpoint = "http://localhost:4317";
-  private const string DefaultFallbackEndpoint = "http://localhost:14317";
 
-  public string PrimaryEndpoint { get; set; } = DefaultPrimaryEndpoint;
-  public string FallbackEndpoint { get; set; } = DefaultFallbackEndpoint;
-  public bool UseFallbackEndpoint { get; set; }
+  public string Endpoint { get; set; } = string.Empty;
+  public string ApiKey { get; set; } = string.Empty;
   public int ExportTimeoutMilliseconds { get; set; } = 5000;
-
-  public Uri GetActiveEndpoint()
-  {
-    var selectedEndpoint = UseFallbackEndpoint && !string.IsNullOrWhiteSpace(FallbackEndpoint)
-      ? FallbackEndpoint
-      : PrimaryEndpoint;
-
-    return new Uri(selectedEndpoint, UriKind.Absolute);
-  }
 }

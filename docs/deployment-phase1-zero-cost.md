@@ -1,8 +1,8 @@
-# Phase 1 Deployment — $0/Month Architecture (Oracle VM + Vercel + Free Observability)
+# Phase 1 Deployment — $0/Month Architecture (Supabase + Atlas + Vercel)
 
-## Architecture (Corrected for Bootstrap Config)
+> **Update (May 2026):** Replaced Oracle Cloud VM with managed free-tier services after Oracle's convoluted setup became a blocker. Databases are now fully managed (Supabase, MongoDB Atlas). API/Worker compute hosting is TBD and will be added when unparked.
 
-> **Important finding:** The code's bootstrap configuration system REQUIRES local JSON snapshot files to exist at startup, or the app crashes. Environment variables don't bypass this. And the OTLP exporter uses **gRPC protocol** (not HTTP) and doesn't set auth headers — so apps can't connect directly to cloud providers. The fix: run a local **OTel Collector** container that receives unauthenticated gRPC on port 4317 and forwards with auth to the cloud provider. This matches the architecture intent in `docs/system-architecture.md` (a collector fans telemetry out to a cloud observability backend).
+## Architecture (Current — Databases + Observability Only)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -13,782 +13,420 @@
 │             │ HTTPS calls                                │
 │             ▼                                            │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  API (ASP.NET Core)  api.yourdomain.com          │   │
-│  │  sends OTLP gRPC → otel-collector:4317           │   │
+│  │  API (ASP.NET Core) — hosting TBD                │   │
+│  │  (will be added when unparked)                   │   │
 │  └──────────────────────────────────────────────────┘   │
-│                                                         │
-│         ┌─────── Same docker compose network ──────┐    │
-│         ▼                                           │    │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│  Oracle Cloud VM — All containers in one Docker network │
-│                                                         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │ Worker   │  │ API      │  │ Web      │  ← not used  │
-│  │ (.NET)   │  │ (.NET)   │  │ container│  (Vercel)    │
-│  └────┬─────┘  └────┬─────┘  └──────────┘              │
-│       │             │                                    │
-│       ▼             ▼                                    │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  OTel Collector (gRPC :4317, internal only)      │   │
-│  │  ┌─ exporters: ───────────────────────────────┐  │   │
-│  │  │  adds auth header → forwards to cloud      │  │   │
-│  │  └────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌──────────┐  ┌────────┐  ┌────────┐  ┌──────────────┐  │
-│  │ PostgreSQL  │  │ MongoDB│  │ Redis  │  │ Caddy (443)  │  │
-│  │ 16        │  │ 7      │  │ 7      │  │ Let's Encrypt│  │
-│  └──────────┘  └────────┘  └────────┘  └──────────────┘  │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│  MongoDB Atlas M0    │  │  Supabase Free        │  │  Redis Cloud Free    │
+│  (Free Tier)         │  │  (PostgreSQL)         │  │  (redis.com)         │
+│  Nifty 500 data      │  │  OHLCV historical     │  │  Caching, sessions   │
+│  512MB storage       │  │  500MB database       │  │  50MB                │
+└──────────────────────┘  └──────────────────────┘  └──────────────────────┘
+
 ┌─────────────────────────────────────────────────────────┐
-│  New Relic (Free Tier)                                  │
-│  Receives OTLP from collector, not from apps directly   │
+│  New Relic Free (100 GB/mo logs, 100 GB/mo traces,      │
+│   10k metrics/month)                                     │
+│  Direct OTLP/HTTP export — no collector sidecar needed   │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  GitHub Actions — CI/CD (2000-3000 min/month free)      │
 └─────────────────────────────────────────────────────────┘
 ```
+
+> **Note on OTLP Export:** The .NET apps now export OTLP/HTTP directly to the New Relic endpoint, passing the license key in the `api-key` header. No intermediate collector sidecar is needed.
 
 ## Cost Breakdown
 
 | Component | Service | Monthly Cost | Notes |
 |-----------|---------|-------------|-------|
 | **Web** (Next.js) | Vercel Hobby | **$0** | 100 GB bandwidth, 6000 build min/mo |
-| **API** (.NET 10) | Oracle VM (Docker) | **$0** | 4 ARM cores, 24 GB RAM |
-| **Worker** (.NET 10) | Oracle VM (Docker) | **$0** | Always-on for market hours |
-| **MongoDB** | Oracle VM (Docker) | **$0** | Tuned for Nifty 500 data volume |
-| **PostgreSQL** | Oracle VM — Docker 16 | **$0** | Ample for Phase 1 |
-| **Redis** | Oracle VM (Docker) | **$0** | 7-alpine, append-only |
-| **HTTPS** | Caddy + Let's Encrypt | **$0** | Auto-renewing |
+| **API** (.NET 10) | TBD | **TBD** | Parked — options below |
+| **Worker** (.NET 10) | TBD | **TBD** | Parked — options below |
+| **MongoDB** | MongoDB Atlas M0 | **$0** | 512 MB shared storage, free forever |
+| **PostgreSQL** | Supabase Free | **$0** | 500 MB database, 2 GB bandwidth |
+| **Redis** | Redis Cloud Free | **$0** | 50 MB, redis.com — user's existing account |
 | **Observability** | New Relic Free | **$0** | 100 GB/mo logs, 100 GB/mo traces, 10k metrics |
 | **CI/CD** | GitHub Actions | **$0** | 2000-3000 min/month free |
 | **Domain** | `.in` or `.dev` | **~$0.80** | ~₹65/month (~$10/year) |
-| **Total** | | **~$0.80/month** | |
+| **Total (current)** | | **~$0.80/month** | Databases + observability only |
+| **Total (with compute)** | | **~$5-10/month** | Adding Hetzner VM or equivalent |
 
 ---
 
-## Step 1: Oracle Cloud Free Account + VM
+## Step 1: Supabase (PostgreSQL — replaces SQL Server)
 
-### 1.1 Sign Up
+### What Changed
 
-1. Go to [https://www.oracle.com/cloud/free/](https://www.oracle.com/cloud/free/)
-2. Click **Start for free**
-3. Fill in details (credit card required for identity verification — you won't be charged)
-4. After signup, log in to the OCI Console
+The original architecture called for SQL Server. Supabase provides fully managed PostgreSQL on a free tier — zero setup, zero maintenance, just a connection string.
 
-### 1.2 Create the Always Free VM
+Supabase free tier limits:
+- **500 MB database** — ample for Nifty 500 OHLCV (daily data for 500 stocks × 10 years ≈ 40-50 MB)
+- **2 GB bandwidth**
+- **50,000 monthly active users**
+- **Automatic backups** and point-in-time recovery
 
-1. In the OCI Console, go to **Compute → Instances**
-2. Click **Create instance**
-3. **Name:** `signalstack-solo`
-4. **Placement:** Select an Always Free-eligible availability domain
-5. **Image:** **Canonical Ubuntu 24.04** (or Oracle Linux 8)
-6. **Shape:** Select **Ampere A1** (Always Free)
-   - **OCPU count:** **4** (the maximum free allocation)
-   - **Memory:** **24 GB**
-7. **Networking:**
-   - Create a new VCN or use the default
-   - **Assign a public IPv4 address:** Yes
-8. **Add SSH keys:**
-   - Choose **Generate a key pair for me** (download both private and public keys)
-   - Or paste your existing public key
-9. **Boot volume:** **200 GB** (Always Free total)
-10. Click **Create**
+### 1.1 Create a Supabase Project
 
-### 1.3 Open Firewall Ports
+1. Go to [https://supabase.com](https://supabase.com) and sign up (GitHub OAuth recommended)
+2. Click **New project**
+3. Fill in:
 
-1. Go to **Networking → Virtual Cloud Networks → your VCN**
-2. Click **Security Lists → Default Security List**
-3. Click **Add Ingress Rules** and add:
+   | Setting | Value |
+   |---------|-------|
+   | **Name** | `signalstack` |
+   | **Database Password** | Generate a strong password (save this) |
+   | **Region** | Choose the closest to you (e.g., `Singapore` for India) |
+   | **Pricing Plan** | **Free** |
 
-| Source Type | Source | IP Protocol | Destination Port | Description |
-|-------------|--------|-------------|-----------------|-------------|
-| CIDR | `0.0.0.0/0` | TCP | 80 | HTTP (for Let's Encrypt) |
-| CIDR | `0.0.0.0/0` | TCP | 443 | HTTPS |
-| CIDR | `0.0.0.0/0` | TCP | 22 | SSH (your IP only if preferred) |
+4. Click **Create new project** (takes ~2 minutes to provision)
+
+### 1.2 Get Your Connection String
+
+1. In your Supabase project dashboard, go to **Project Settings → Database**
+2. Under **Connection string**, find the **URI** entry. It looks like:
+
+   ```
+   postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres
+   ```
+
+3. Replace `<password>` with the database password you set during creation
+4. Replace the default database name `postgres` with `signalstack` (or create a new database)
+5. **Important:** Supabase enforces SSL/TLS for external connections. EF Core / Npgsql handles this automatically when you set `SSL Mode=Require` in the connection string.
+
+### 1.3 Connection String for .NET Configuration
+
+For the app's `appsettings.Production.json` or environment variable:
+
+```
+Host=db.<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;
+```
+
+### 1.4 Schema Management
+
+Since Supabase is PostgreSQL (not SQL Server), the EF Core provider changes:
+
+| Before | After |
+|--------|-------|
+| `Microsoft.EntityFrameworkCore.SqlServer` | `Npgsql.EntityFrameworkCore.PostgreSQL` |
+| SQL Server connection string | PostgreSQL connection string (above) |
+
+**Code change needed** in the API and Worker projects:
+
+```csharp
+// Before (SQL Server):
+builder.AddNpgsqlDbContext<SignalStackDbContext>("SqlServer");
+
+// After (PostgreSQL):
+builder.AddNpgsqlDbContext<SignalStackDbContext>("Postgres");
+```
+
+### 1.5 Supabase Studio (Built-in Admin UI)
+
+Supabase comes with a web-based SQL editor, table browser, and API explorer — no need for SQL Server Management Studio or Azure Data Studio.
+
+- **Table Editor** — browse and edit data visually
+- **SQL Editor** — run ad-hoc queries
+- **API Docs** — auto-generated REST and GraphQL APIs
+- **Database Migrations** — apply raw SQL migrations if needed
 
 ---
 
-## Step 2: VM Setup
+## Step 2: MongoDB Atlas (Free Tier)
 
-### 2.1 SSH In
+### 2.1 Create an Atlas Cluster
 
-```bash
-# From your machine (adjust path to your SSH key)
-ssh -i ~/.ssh/oracle_key ubuntu@<VM_PUBLIC_IP>
+1. Go to [https://www.mongodb.com/atlas](https://www.mongodb.com/atlas) and sign up (GitHub OAuth recommended)
+2. Click **Build a Database** → select **FREE** (M0) tier
+3. Configure:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Provider** | AWS, GCP, or Azure (any) |
+   | **Region** | Choose closest to you (e.g., `Mumbai — ap-south-1`) |
+   | **Cluster Tier** | **M0 Sandbox** (free, 512 MB storage, shared RAM) |
+   | **Cluster Name** | `SignalStack` |
+
+4. Click **Create Cluster** (takes ~5-10 minutes to provision)
+
+### 2.2 Set Up Database Access
+
+1. Go to **Security → Database Access**
+2. Click **Add New Database User**
+3. Create a user:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Authentication Method** | Password |
+   | **Username** | `signalstack` |
+   | **Password** | Generate a strong password (save this) |
+   | **Database User Privileges** | **Read and write to any database** (or restrict to `signalstack` DB) |
+
+### 2.3 Configure Network Access
+
+1. Go to **Security → Network Access**
+2. Click **Add IP Address**
+3. For Phase 1 (when API/Worker hosting is decided), you have two options:
+
+   - **Option A:** `0.0.0.0/0` (allow all — simpler but less secure; appropriate for POC with a strong password)
+   - **Option B:** Add the specific IP of wherever API/Worker will be hosted
+
+4. Click **Confirm**
+
+### 2.4 Get Your Connection String
+
+1. Go to **Database → Connect** → **Drivers**
+2. Select **C# / .NET** as the driver
+3. Copy the connection string:
+
+   ```
+   mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   ```
+
+### 2.5 Connection String for .NET Configuration
+
+```
+mongodb+srv://signalstack:<password>@cluster0.xxxxx.mongodb.net/signalstack?retryWrites=true&w=majority
 ```
 
-### 2.2 Install Docker + Caddy
+### 2.6 Atlas UI (Built-in Admin)
 
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
+- **Data Explorer** — browse collections and documents
+- **Performance Advisor** — index recommendations
+- **Real-time metrics** — operations/sec, latency, connections
 
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
+---
 
-# Log out and back in for Docker group to take effect
-exit
-ssh -i ~/.ssh/oracle_key ubuntu@<VM_PUBLIC_IP>
+## Step 3: New Relic (Free Observability)
 
-# Install Caddy
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update && sudo apt install caddy -y
-```
+### 3.1 Sign Up
 
-### 2.3 Create the Production Docker Compose (with OTLP Collector)
+1. Go to [https://newrelic.com/signup](https://newrelic.com/signup) — select **Free forever** tier
+2. Complete signup (no credit card required for free tier)
+3. After logging in, go to **Add Data** → **OpenTelemetry**
+4. Find your **OTLP endpoint** and **license key**:
+   - **OTLP endpoint:** `otlp.eu01.nr-data.net:443` (or `otlp.nr-data.net:443` for US region)
+   - **License key:** Looks like `eu01xx...`
 
-On the VM, create the deploy directory:
+### 3.2 Free Tier Limits
 
-```bash
-mkdir -p ~/signalstack && cd ~/signalstack
-```
+| Telemetry Type | Free Limit |
+|----------------|-----------|
+| Logs | 100 GB/month |
+| Traces | 100 GB/month |
+| Metrics | 10,000 metrics/month |
+| Data retention | 8 days |
 
-Create `~/signalstack/docker-compose.yml`:
+These limits are more than sufficient for a solo POC.
+
+### 3.3 .NET Configuration
+
+The .NET apps export OTLP/HTTP directly to the New Relic endpoint. No collector sidecar is needed. When API/Worker compute hosting is set up, configure the following environment variables:
+
+| Variable | Value |
+|----------|-------|
+| `Telemetry__Otlp__Endpoint` | `https://otlp.eu01.nr-data.net:443` (or `https://otlp.nr-data.net:443` for US region) |
+| `Telemetry__Otlp__ApiKey` | Your New Relic license key (e.g. `eu01xx...`) |
+
+When `Endpoint` is left empty (local dev default), OTLP export is disabled — logs still go to console via Serilog.
+
+Save your New Relic license key somewhere safe — you'll need it when the API and Worker are deployed.
+
+---
+
+## Step 4: CI/CD — GitHub Actions
+
+The project already has GitHub Actions workflows in `.github/workflows/`. For the current phase (databases only), the CI pipeline validates:
+
+1. **Code builds** — verify both API and Worker compile
+2. **Tests pass** — run unit tests on PR
+3. **Linting** — static analysis
+
+### 4.1 Required GitHub Secrets
+
+| Secret | Value | Status |
+|--------|-------|--------|
+| `MONGODB_ATLAS_URI` | MongoDB Atlas connection string | Create when CI needs connectivity |
+| `SUPABASE_CONNECTION_STRING` | Supabase PostgreSQL connection string | Create when CI needs connectivity |
+| `NEW_RELIC_LICENSE_KEY` | Your New Relic license key | Create when apps deploy |
+
+### 4.2 CI Workflow (Updated)
 
 ```yaml
-name: signalstack-prod
+# .github/workflows/ci.yml
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
-services:
-  # ── OTLP Collector (receives unauthenticated gRPC, forwards to cloud) ──
-  # The apps hardcode OtlpExportProtocol.Grpc and don't set auth headers,
-  # so they can't talk to cloud providers directly.  The collector is the
-  # auth gateway — apps send to :4317 locally, collector adds the api-key
-  # header and relays to New Relic.
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.102.1
-    container_name: signalstack-otel
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:4317:4317"     # gRPC — the apps talk here (not directly to cloud)
-    volumes:
-      - ./otel-config.yaml:/etc/otelcol/config.yaml:ro
-      - otel_data:/var/lib/otelcol
-    environment:
-      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
-
-  # ── Data Stores ──────────────────────────────────────
-  mongo:
-    image: mongo:7
-    container_name: signalstack-mongo
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    command: ["--quiet"]
-
-  redis:
-    image: redis:7-alpine
-    container_name: signalstack-redis
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
-
-  postgres:
-    image: postgres:16
-    container_name: signalstack-postgres
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:5432:5432"
-    environment:
-      POSTGRES_DB: signalstack
-      POSTGRES_USER: signalstack
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U signalstack -d signalstack || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # ── API ──────────────────────────────────────────────
-  api:
-    image: signalstack-api:latest
-    container_name: signalstack-api
-    build:
-      context: /home/ubuntu/signalstack/repo
-      dockerfile: apps/api/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:5000:8080"      # Caddy proxies from port 443 → 5000
-    environment:
-      - ENVIRONMENT=Production
-      - ASPNETCORE_ENVIRONMENT=Production
-      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
-      # ── Connection strings ──
-      - ConnectionStrings__MongoDb=mongodb://signalstack-mongo:27017/signalstack
-      - ConnectionStrings__SqlServer=Host=postgres;Database=signalstack;Username=signalstack;Password=${POSTGRES_PASSWORD};SSL Mode=Disable;
-      - ConnectionStrings__Redis=redis:6379
-      # ── OTLP — point at local collector, NOT directly at cloud ──
-      # Env vars (__ notation) take highest priority in .NET config,
-      # so this overrides whatever the bootstrap snapshot files contain.
-      - Telemetry__Otlp__PrimaryEndpoint=http://otel-collector:4317
-      # ── Secrets (all via env vars for Phase 1) ──
-      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
-      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
-      - Fyers__AppId=${FYERS_APP_ID}
-      - Fyers__SecretKey=${FYERS_SECRET_KEY}
-      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
-      - Session__SigningKey=${SESSION_SIGNING_KEY}
-      - Orders__HmacKey=${ORDERS_HMAC_KEY}
-    depends_on:
-      otel-collector:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-
-  # ── Worker ───────────────────────────────────────────
-  worker:
-    image: signalstack-worker:latest
-    container_name: signalstack-worker
-    build:
-      context: /home/ubuntu/signalstack/repo
-      dockerfile: apps/worker/Dockerfile
-    restart: unless-stopped
-    ports: []                       # No public ports
-    environment:
-      - ENVIRONMENT=Production
-      - ASPNETCORE_ENVIRONMENT=Production
-      # ── Connection strings ──
-      - ConnectionStrings__MongoDb=mongodb://signalstack-mongo:27017/signalstack
-      - ConnectionStrings__SqlServer=Host=postgres;Database=signalstack;Username=signalstack;Password=${POSTGRES_PASSWORD};SSL Mode=Disable;
-      - ConnectionStrings__Redis=redis:6379
-      # ── OTLP — point at local collector ──
-      - Telemetry__Otlp__PrimaryEndpoint=http://otel-collector:4317
-      # ── Secrets ──
-      - Fyers__AppId=${FYERS_APP_ID}
-      - Fyers__SecretKey=${FYERS_SECRET_KEY}
-      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN}
-      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
-      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
-    depends_on:
-      otel-collector:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-
-volumes:
-  otel_data:
-  mongo_data:
-  redis_data:
-  postgres_data:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - run: dotnet test --no-build -c Release
 ```
 
-Create `~/signalstack/otel-config.yaml`:
+### 4.3 Deploy Workflow (When Compute Is Ready)
 
-```yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:           # Apps send gRPC OTLP to :4317
-      http:           # Also accept HTTP OTLP (for future use)
+The deploy workflow will be updated when the API/Worker hosting provider is chosen. Current options:
 
-processors:
-  memory_limiter:
-    check_interval: 1s
-    limit_mib: 128
-    spike_limit_mib: 32
-  batch:
-    timeout: 1s
-    send_batch_size: 512
+- **Hetzner VM** — SSH + Docker Compose (similar to original Oracle approach)
+- **Railway / Fly.io** — Dockerfile push with `flyctl` or `railway` CLI
+- **Azure Container Apps** — `az` CLI deploy
 
-exporters:
-  otlp:
-    endpoint: "otlp.eu01.nr-data.net:4317"      # New Relic gRPC endpoint
-    headers:
-      api-key: "${NEW_RELIC_LICENSE_KEY}"         # Your New Relic license key
-  debug:
-    verbosity: detailed                          # Also log locally for troubleshooting
-
-service:
-  pipelines:
-    logs:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [otlp, debug]
-    metrics:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [otlp, debug]
-    traces:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [otlp, debug]
-```
-
-Create `~/signalstack/.env`:
-
-```bash
-# PostgreSQL
-POSTGRES_PASSWORD=YourStrong!Pass123
-
-# Admin email (your Google account — will be auto-promoted to admin)
-SEED_ADMIN_EMAIL=your-email@gmail.com
-
-# FYERS
-FYERS_APP_ID=your_fyers_app_id
-FYERS_SECRET_KEY=your_fyers_secret_key
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your_client_secret
-
-# Telegram
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklmNOPqrstUVwxyz
-
-# Session & order signing keys (generate with: openssl rand -base64 32)
-SESSION_SIGNING_KEY=base64_32_byte_key_here
-ORDERS_HMAC_KEY=another_base64_32_byte_key_here
-
-# Observability — New Relic OTLP (get this from New Relic)
-NEW_RELIC_LICENSE_KEY=eu01xcd83ae386b02bfbb70153de0eed186fNRAL
-
-# Domain
-DOMAIN=api.yourdomain.com
-```
-
-### 2.4 Build and Start
-
-**Important:** Before the API and Worker will start, they need the bootstrap snapshot files baked into their Docker images. These are in the repo at `apps/api/bootstrap/` and `apps/worker/bootstrap/`. The Dockerfiles in Appendix A include them.
-
-```bash
-cd ~/signalstack
-
-# Pull all images
-docker compose pull
-
-# Build API and Worker (includes bootstrap files)
-docker compose build api worker
-
-# Start the OTLP collector first (so apps can connect on startup)
-docker compose up -d otel-collector
-
-# Start databases
-docker compose up -d mongo redis postgres
-docker compose logs postgres --tail 20   # Verify PostgreSQL started
-
-# Start apps
-docker compose up -d api worker
-
-# Check all running
-docker compose ps
-
-# Follow logs
-docker compose logs -f
-```
+The workflow will be adjusted based on whichever provider is chosen.
 
 ---
 
-## Step 3: HTTPS with Caddy
+## Step 5: Vercel (Web — Next.js)
 
-### 3.1 Get a Domain
+Unchanged from the original plan. Vercel is the native hosting platform for Next.js and requires no VM.
 
-You need a domain for OAuth callbacks. Options:
-
-| Option | Cost | Provider |
-|--------|------|----------|
-| `.in` domain | ~₹600-800/year | GoDaddy, Namecheap, Hostinger |
-| `.dev` domain | ~$12/year (~₹1,000) | Google Domains, Cloudflare |
-| `.xyz` domain | ~$1/year (~₹85) | Cloudflare (first year) |
-| Freenom (`.tk`, `.ml`) | Free | Freenom (limited availability) |
-
-**Recommended:** A `.in` domain from Cloudflare (~₹600/year) — cheapest reliable option.
-
-### 3.2 Point Domain to Your VM
-
-In your DNS provider (e.g., Cloudflare):
-
-| Type | Name | Value |
-|------|------|-------|
-| A | `api` | `<VM_PUBLIC_IP>` |
-
-### 3.3 Configure Caddy
-
-Create `/etc/caddy/Caddyfile`:
-
-```caddy
-api.yourdomain.com {
-    reverse_proxy 127.0.0.1:5000
-
-    # Security headers
-    header /health {
-        Access-Control-Allow-Origin *
-    }
-
-    header /* {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-    }
-
-    # Rate limiting is handled by the API app itself
-}
-
-# Redirect HTTP to HTTPS (automatic with Caddy)
-```
-
-Restart Caddy:
-
-```bash
-sudo systemctl restart caddy
-sudo journalctl -u caddy -n 20   # Verify it started and got certs
-```
-
-Caddy automatically provisions Let's Encrypt certificates and renews them.
-
----
-
-## Step 4: Deploy Web to Vercel (Free, Native Next.js)
-
-Vercel is built by the Next.js team — it's the best possible hosting for the Web app.
-
-### 4.1 Sign Up
+### 5.1 Deploy
 
 1. Go to [https://vercel.com](https://vercel.com)
 2. Sign up with your GitHub account
 3. Click **Import Project** → Select your `signalstack` repo
 4. Configure:
 
-| Setting | Value |
-|---------|-------|
-| Framework Preset | Next.js |
-| Root Directory | `apps/web` |
-| Build Command | `npm run build` (default) |
-| Output Directory | `.next` (default) |
+   | Setting | Value |
+   |---------|-------|
+   | Framework Preset | Next.js |
+   | Root Directory | `apps/web` |
+   | Build Command | `npm run build` (default) |
+   | Output Directory | `.next` (default) |
 
 5. Add Environment Variables:
 
-| Name | Value |
-|------|-------|
-| `NEXT_PUBLIC_API_BASE_URL` | `https://api.yourdomain.com` |
+   | Name | Value |
+   |------|-------|
+   | `NEXT_PUBLIC_API_BASE_URL` | `https://api.yourdomain.com` (TBD until API is hosted) |
 
 6. Click **Deploy**
 
-**That's it.** Vercel auto-deploys on every push to main. The site is live at `signalstack.vercel.app` (or your custom domain).
-
-### 4.2 (Optional) Custom Domain on Vercel
+### 5.2 Custom Domain
 
 1. In Vercel dashboard → your project → **Settings** → **Domains**
-2. Add `www.yourdomain.com` (or whatever you want users to visit)
-3. Follow Vercel's DNS instructions
+2. Add `www.yourdomain.com` (optional — can defer until API is ready)
 
 ---
 
-## Step 5: Free Observability — OTLP Collector + New Relic
+## Step 6: API & Worker Hosting (TBD — Options When Ready)
 
-### How It Works
+These are parked for now. When you're ready to deploy them, here are the recommended options ranked by ease of setup:
 
-The apps send OTLP data to the **local collector** (`otel-collector:4317` via gRPC). The collector adds your New Relic license key as the `api-key` header and forwards everything to New Relic's OTLP endpoint. The collector is needed because:
+### Option A: Hetzner CX22 (~€3.99/month) — Recommended for Ease of Setup
 
-1. **gRPC protocol is hardcoded** (`OtlpExportProtocol.Grpc`) — the apps can't switch to HTTP
-2. **No auth header support** in the exporter — the apps can't add the `api-key` header themselves
+One VM running Docker Compose with all services. Same architecture as the original Oracle plan, but on a platform that actually works well.
 
-The collector handles both: it receives unauthenticated gRPC locally and adds the auth header before forwarding.
+| Spec | Value |
+|------|-------|
+| vCPU | 2 |
+| RAM | 4 GB |
+| Storage | 40 GB (NVMe SSD) |
+| Cost | **€3.99/month** (~$5) |
+| Setup | SSH in, `docker compose up` |
 
-### 5.1 Set New Relic in Your .env
+**What runs on it:**
+- API container
+- Worker container
+- Caddy (HTTPS reverse proxy)
+- (Databases are managed — Supabase + Atlas + Redis Cloud)
 
-Add this line to `~/signalstack/.env`:
+**Pros:** Single dashboard, single SSH, everything in one Docker compose, 4 GB RAM is plenty since databases are managed off-box.
 
-```
-NEW_RELIC_LICENSE_KEY=eu01xcd83ae386b02bfbb70153de0eed186fNRAL
-```
+**Setup:** Same as the original Oracle doc's Steps 2-3, minus the database containers (they're managed now).
 
-**That's it.** The collector config already references `${NEW_RELIC_LICENSE_KEY}`.
+### Option B: Hetzner CX32 (~€7.99/month) — Headroom
 
-### 5.2 Verify Telemetry is Flowing
+Double the capacity if you want breathing room.
 
-1. Wait ~2 minutes after starting the containers
-2. Go to [New Relic](https://one.eu01.nr-data.net) → **APM** → **Services**
-3. You should see `SignalStack.Api` and `SignalStack.Worker` appearing
-4. Click into a service to see logs, metrics, and traces
-5. You can also set up a **Dashboard** for key metrics like request rate, error rate, and response time
+| Spec | Value |
+|------|-------|
+| vCPU | 4 |
+| RAM | 8 GB |
+| Storage | 80 GB |
+| Cost | **€7.99/month** (~$9) |
 
-### Bypassing the Collector (Future Enhancement)
+### Option C: Railway / Fly.io / Render
 
-If you later modify the OpenTelemetry code to support auth headers, you could remove the collector and point apps directly at New Relic:
+Dockerfile-based PaaS — less to manage, but each service is separate (API one service, Worker another). Good if you prefer managed compute, but more dashboards to juggle.
 
-```csharp
-// In TelemetryBootstrapExtensions.cs, add:
-exporter.Headers = "api-key=eu01xcd83ae386b02bfbb70153de0eed186fNRAL";
-```
+| Service | Free Tier | Notes |
+|---------|-----------|-------|
+| **Railway** | $5 credit/month | ~$0.20/hr for .NET — might need $5-10/mo |
+| **Fly.io** | 3 shared VMs, 256 MB RAM each | Just enough for API + Worker |
+| **Render** | Free (spins down after inactivity) | Not suitable for always-on Worker |
 
-For now, the collector approach works without any code changes.
+### Option D: Azure Container Apps (When Ready to Migrate to Cloud)
 
----
-
-## Step 6: Backups (Cron-based Approach)
-
-Since databases run on a single VM (no managed backups), set up daily dumps:
-
-```bash
-# Create backup script
-cat > ~/signalstack/backup.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR="/home/ubuntu/backups"
-DATE=$(date +%Y%m%d)
-RETENTION_DAYS=14
-
-mkdir -p "$BACKUP_DIR/mongo"
-mkdir -p "$BACKUP_DIR/postgres"
-
-# MongoDB dump
-docker exec signalstack-mongo mongodump --out "/tmp/mongodump-$DATE" --quiet
-docker cp "signalstack-mongo:/tmp/mongodump-$DATE" "$BACKUP_DIR/mongo/"
-docker exec signalstack-mongo rm -rf "/tmp/mongodump-$DATE"
-gzip -f "$BACKUP_DIR/mongo/mongodump-$DATE/signalstack/*.bson"
-
-# PostgreSQL dump
-docker exec signalstack-postgres pg_dump -U signalstack signalstack > "/tmp/postgres-$DATE.sql"
-docker cp "signalstack-postgres:/tmp/postgres-$DATE.sql" "$BACKUP_DIR/postgres/"
-docker exec signalstack-postgres rm -f "/tmp/postgres-$DATE.sql"
-gzip -f "$BACKUP_DIR/postgres/postgres-$DATE.sql"
-
-# Cleanup old backups
-find "$BACKUP_DIR/mongo" -name "*.gz" -mtime +$RETENTION_DAYS -delete
-find "$BACKUP_DIR/postgres" -name "*.sql.gz" -mtime +$RETENTION_DAYS -delete
-
-echo "Backup complete: $DATE"
-EOF
-
-chmod +x ~/signalstack/backup.sh
-
-# Add cron job (runs daily at 2 AM IST = 8:30 PM UTC previous day)
-(crontab -l 2>/dev/null; echo "30 20 * * * /home/ubuntu/signalstack/backup.sh >> /home/ubuntu/backups/backup.log 2>&1") | crontab -
-```
+The eventual production target. ~$15-30/month for a minimal setup with managed Postgres/MongoDB/Redis.
 
 ---
 
-## Step 7: CI/CD
+## Complete Connection String Reference
 
-The workflow file `.github/workflows/deploy-vm.yml` already exists in the repo. It handles:
+When configuring the API and Worker, these are the connection strings:
 
-1. SSH into the VM
-2. Git pull latest code
-3. Build API + Worker Docker images
-4. Restart containers
-5. Verify API health
-
-### One-time migration run (initial setup only)
-
-The deploy workflow does NOT run migrations — the runtime containers don't have the .NET SDK, so `dotnet run` won't work inside them. Run migrations once during initial VM setup:
-
-```bash
-cd ~/signalstack
-
-# PostgreSQL migrations
-docker run --rm \
-  --network signalstack-prod_default \
-  -v $(pwd)/repo:/src \
-  -w /src \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet run --project packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj
-
-# MongoDB migrations
-docker run --rm \
-  --network signalstack-prod_default \
-  -v $(pwd)/repo:/src \
-  -w /src \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet run --project packages/migrations/SignalStack.Migrations/SignalStack.Migrations.csproj
-
-# Run seed
-docker run --rm \
-  --network signalstack-prod_default \
-  -v $(pwd)/repo:/src \
-  -w /src \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet run --project apps/seed/SignalStack.Seed/SignalStack.Seed.csproj
-```
-
-**GitHub Secrets needed for CI/CD:**
-
-| Secret | Value |
-|--------|-------|
-| `VM_HOST` | Your Oracle VM public IP |
-| `VM_SSH_KEY` | Your private SSH key |
-| `API_HOSTNAME` (variable) | `api.yourdomain.com` |
-
-**Web app deployment** is automatic via Vercel — just connect your repo.
+| Service | Format |
+|---------|--------|
+| **MongoDB (Atlas)** | `mongodb+srv://<user>:<password>@<cluster>.mongodb.net/signalstack?retryWrites=true&w=majority` |
+| **PostgreSQL (Supabase)** | `Host=<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;` |
+| **Redis (Redis Cloud)** | `redis://:<password>@<host>:<port>` (get from Redis Cloud dashboard) |
+| **OTLP Endpoint** | `Telemetry__Otlp__Endpoint` environment variable (direct to New Relic, no collector) |
 
 ---
 
-## Step 8: First Launch Checklist
+## First Launch Checklist
 
-### ⚠ Prerequisites — Code Changes
+### Setup completed:
 
-Before you start provisioning the VM, verify these in your repo:
+- [x] **Supabase project** created — PostgreSQL connection string saved
+- [x] **MongoDB Atlas cluster** created — connection string saved
+- [x] **Redis Cloud account** configured — 50 MB free tier, connection string saved
+- [ ] New Relic free account set up — license key saved
 
-- [x] **Dockerfiles created** — `apps/api/Dockerfile` and `apps/worker/Dockerfile` already exist in the repo with the bootstrap `COPY` lines (see Appendix A)
-- [x] **Bootstrap files exist** — Both API and Worker have `bootstrap/appconfig.local.json`, `bootstrap/keyvault.local.json`, and `bootstrap/appconfig.lkg.json` in the repo
+### When compute hosting is ready:
 
-### Before first deploy:
-
-- [ ] Oracle VM created and SSH accessible
-- [ ] Docker and Caddy installed on VM
-- [ ] Domain DNS pointing to VM IP
-- [ ] Caddy reverse proxy configured and HTTPS working
-- [ ] Google OAuth created with redirect URI `https://api.yourdomain.com/api/v1/auth/google/callback`
-- [ ] FYERS app updated with redirect URI `https://api.yourdomain.com/api/v1/auth/fyers/callback`
-- [ ] `~/signalstack/.env` populated with all secrets on the VM
-- [ ] `~/signalstack/otel-config.yaml` created with your New Relic license key
-- [ ] Vercel project created and builds successfully
-- [ ] New Relic free account set up (otlp.eu01.nr-data.net)
-
-### First startup sequence (important):
-
-1. [ ] `docker compose pull` — download all base images
-2. [ ] `docker compose build api worker` — build API + Worker with bootstrap files baked in
-3. [ ] `docker compose up -d otel-collector` — start OTLP collector first
-4. [ ] `docker compose up -d mongo redis postgres` — start databases
-5. [ ] `docker compose up -d api worker` — finally start the apps
-6. [ ] `docker compose ps` — verify all 7 containers are running
-7. [ ] `docker compose logs api --tail 30` — no crash errors
-8. [ ] `docker compose logs worker --tail 30` — should show "acquired singleton lease"
-
-### Health checks:
-
-```bash
-# On the VM — verify all containers are running
-docker ps
-
-# Verify API responds
-curl -s https://api.yourdomain.com/health
-# Expected: HTTP 200
-
-# Verify Worker logs
-docker compose logs worker --tail 30
-# Expected: Worker service started, Redis lease acquired
-
-# Check observability
-# Visit New Relic → APM → Services → find SignalStack.Api / SignalStack.Worker
-```
+- [ ] VM or PaaS provisioned for API + Worker
+- [ ] Docker installed (if using VM)
+- [ ] Domain DNS pointing to compute host
+- [ ] Caddy or equivalent reverse proxy configured with HTTPS
+- [ ] Google OAuth created with correct redirect URI
+- [ ] FYERS app updated with correct redirect URI
+- [ ] `.env` populated on the host with all secrets
+- [ ] OTLP endpoint and API key configured for New Relic
+- [ ] API responds to health check
+- [ ] Worker acquires lease and starts processing
+- [ ] Vercel project connected to repo and builds successfully
+- [ ] Telemetry flowing to New Relic
 
 ---
 
-## Appendix A: Dockerfiles
+## Summary: Before vs After
 
-> **These Dockerfiles already exist in the repo** at `apps/api/Dockerfile` and `apps/worker/Dockerfile`.  The full contents are shown below for reference.
+| Area | Old (Oracle VM) | New (Managed Services) |
+|------|----------------|----------------------|
+| **Compute** | Oracle VM (4 ARM, 24 GB) | **TBD** (Hetzner, Railway, or equivalent) |
+| **PostgreSQL** | Docker on Oracle VM | **Supabase Free** — managed, auto-backups |
+| **MongoDB** | Docker on Oracle VM | **Atlas M0 Free** — managed, auto-backups |
+| **Redis** | Docker on Oracle VM | **Redis Cloud Free** — managed, 50 MB |
+| **Web hosting** | Vercel Free | **Vercel Free** (unchanged) |
+| **Observability** | New Relic Free | **New Relic Free** (unchanged) |
+| **CI/CD** | GitHub Actions | **GitHub Actions** (unchanged) |
+| **Setup pain** | **High** (Oracle console, networking, account blocks) | **Low** (Supabase + Atlas = 5 minutes each) |
+| **Total cost** | ~$0.80/month | **~$0.80/month** (current) or **~$5-10/month** (+ compute) |
+| **Backups** | DIY cron scripts | **Built-in** (managed databases) |
 
-**The Dockerfiles MUST include the `bootstrap/` directory.** On startup, the code calls `AddSignalStackBootstrapConfiguration()` which loads `bootstrap/appconfig.local.json` and `bootstrap/keyvault.local.json`. If either file is missing, the app crashes with a `FileNotFoundException`.
-
-These files exist in your repo at `apps/api/bootstrap/` and `apps/worker/bootstrap/` — they're already set up with localhost defaults.
-
-**`apps/api/Dockerfile`:**
-
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-COPY SignalStack.sln .
-COPY Directory.Build.props .
-COPY NuGet.Config .
-COPY apps/api/ apps/api/
-COPY packages/ packages/
-RUN dotnet restore apps/api/SignalStack.Api.csproj
-RUN dotnet publish apps/api/SignalStack.Api.csproj -c Release -o /app
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-WORKDIR /app
-COPY --from=build /app .
-
-# ⚠ CRITICAL: Bootstrap config files MUST be present at startup
-# The AddSignalStackBootstrapConfiguration() method throws FileNotFoundException
-# if bootstrap/appconfig.local.json is missing.  Copy the whole directory.
-COPY apps/api/bootstrap/ bootstrap/
-
-EXPOSE 8080
-ENTRYPOINT ["dotnet", "SignalStack.Api.dll"]
-```
-
-**`apps/worker/Dockerfile`:**
-
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-COPY SignalStack.sln .
-COPY Directory.Build.props .
-COPY NuGet.Config .
-COPY apps/worker/ apps/worker/
-COPY apps/api/ apps/api/
-COPY packages/ packages/
-RUN dotnet restore apps/worker/SignalStack.Worker.csproj
-RUN dotnet publish apps/worker/SignalStack.Worker.csproj -c Release -o /app
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-WORKDIR /app
-COPY --from=build /app .
-
-# ⚠ CRITICAL: Same bootstrap config requirement as API
-COPY apps/worker/bootstrap/ bootstrap/
-
-ENTRYPOINT ["dotnet", "SignalStack.Worker.dll"]
-```
-
----
-
-## Appendix B: Emergency Recovery
-
-**VM reboot after power outage:**
-
-```bash
-ssh -i ~/.ssh/oracle_key ubuntu@<IP>
-cd ~/signalstack
-docker compose up -d
-```
-
-**Redeploy from scratch (VM re-created):**
-
-```bash
-# Install Docker + Caddy (Step 2.2)
-# Clone repo
-git clone https://github.com/YOUR_USER/signalstack.git ~/signalstack/repo
-
-# Copy .env and docker-compose.yml
-cd ~/signalstack
-docker compose up -d
-```
-
-**Rollback a bad deploy:**
-
-```bash
-cd ~/signalstack/repo
-git revert HEAD
-git push origin main
-# CI/CD will re-deploy previous version
-```
-
----
-
-## Summary: $28/Month Azure vs $0/Month Oracle+Vercel
-
-| Area | Azure (B1 Plan) | Oracle VM + Vercel |
-|------|----------------|-------------------|
-| **Monthly cost** | ~$28-33 | **~$0.80** |
-| **Setup time** | 1-2 hours | 2-3 hours |
-| **Managed databases** | Yes | No (cron backups) |
-| **Next.js hosting** | Shared B1 | **Vercel global CDN** (better!) |
-| **Worker uptime** | Always-on (B1) | Always-on (VM) |
-| **Backups** | Automatic | Cron + 14-day retention |
-| **OS patching** | Azure handles | You handle `apt update` |
-| **Scalability** | Click to upgrade | Redeploy to bigger VM |
-| **Migration path** | None needed | ~1 day to move to Azure later |
-
-**Bottom line:** For a solo POC that hasn't proved its worth, the Oracle + Vercel approach saves you ~$340/year with ~1 extra hour of setup effort. When you're ready for production, migrate to Azure managed services — the architecture is cloud-agnostic by design.
+**Bottom line:** For ~$5-6/month total (adding a Hetzner VM when compute is needed), you get a fully managed database layer that requires zero maintenance, and a single Docker box for the app layer that takes minutes to set up. No Oracle Cloud headaches.

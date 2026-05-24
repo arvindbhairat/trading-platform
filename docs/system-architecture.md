@@ -66,8 +66,8 @@ ASP.NET Core application responsible for:
 
 - .NET services log through `ILogger` with Serilog as the provider
 - all applications emit telemetry through OpenTelemetry and OTLP
-- applications send telemetry to a stable OTLP collector or gateway endpoint rather than binding directly to one vendor
-- vendor-specific routing belongs in collector or gateway configuration, not application code
+- applications export OTLP/HTTP directly to the configured vendor endpoint, passing the API key as a header
+- no intermediate collector or gateway is deployed (accepted trade-off for solo-POC scope; can be reintroduced later)
 
 ### Universe and Reference Data Boundary
 
@@ -312,8 +312,8 @@ The initial deployment uses a single Redis node.  Single-node Redlock degrades t
 - Next.js uses OpenTelemetry instrumentation directly
 - ASP.NET Core and .NET worker services use `ILogger` with Serilog plus OpenTelemetry for traces and metrics
 - logs, traces, and metrics are exported using OTLP
-- a collector or gateway fans telemetry out to Better Stack, Axiom, Grafana Cloud, or another vendor
-- changing observability vendors should require collector or config changes rather than code changes
+- logs, traces, and metrics are exported using OTLP/HTTP directly to the configured vendor endpoint
+- changing observability vendors requires updating the endpoint URL and API key in configuration
 
 ## Key Flows
 

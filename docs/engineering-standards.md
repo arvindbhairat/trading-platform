@@ -48,9 +48,9 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 ## Observability Standards
 
 - use OpenTelemetry as the cross-system observability model
-- export logs, traces, and metrics over OTLP
-- prefer a stable collector or gateway endpoint between applications and vendors
-- keep vendor routing out of application code where practical
+- export logs, traces, and metrics over OTLP/HTTP
+- export OTLP/HTTP directly to the configured vendor endpoint, passing the API key in the `api-key` header
+- no intermediate collector or gateway is deployed (accepted trade-off for solo-POC scope; a collector sidecar can be reintroduced later if needed)
 - in .NET services, use Serilog for structured logging and enrich logs with service, environment, trace, job, and domain identifiers
 - correlate logs with traces using standard OpenTelemetry trace context
 
