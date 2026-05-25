@@ -194,7 +194,7 @@ export default function AdminCalendarPage() {
         if (coverageRes.ok) coverage = await coverageRes.json() as CoverageData;
 
         const data = await entriesRes.json();
-        return { coverage, entries: (data.entries ?? []).map(mapDocument) as ApiDocument[] };
+        return { coverage, entries: (data.entries ?? []).map(mapDocument) as CalendarEntry[] };
       })
       .then(result => {
         if (cancelled || !result) return;
