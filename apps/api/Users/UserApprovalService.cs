@@ -1,4 +1,5 @@
-using SignalStack.Api.SysConfig;
+using SignalStack.Domain.Users;
+using SignalStack.Storage.SysConfig;
 
 namespace SignalStack.Api.Users;
 

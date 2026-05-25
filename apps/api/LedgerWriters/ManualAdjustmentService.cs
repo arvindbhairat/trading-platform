@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SignalStack.Configuration.Ledger;
+using SignalStack.Storage.LedgerWriters;
 
 namespace SignalStack.Api.LedgerWriters;
 

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.Universe;
+using SignalStack.Storage.Universe;
 
 namespace SignalStack.Worker.Jobs.HistoricDataSeed;
 

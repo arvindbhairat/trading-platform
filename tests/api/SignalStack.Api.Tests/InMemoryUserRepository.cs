@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using MongoDB.Bson;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.Tests;
 

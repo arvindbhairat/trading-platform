@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using SignalStack.Api.Historical;
+using SignalStack.Historical;
+using SignalStack.Storage.Historical;
 using SignalStack.MarketData;
 
 namespace SignalStack.Worker.Jobs.HistoricDataSeed;

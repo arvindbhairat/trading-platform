@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SignalStack.Api.Admin;
+using SignalStack.Domain.Admin;
+using SignalStack.Storage.Admin;
 using SignalStack.Worker.Integrations.Fyers;
 
 namespace SignalStack.Worker.Jobs.LiveMarketScan;

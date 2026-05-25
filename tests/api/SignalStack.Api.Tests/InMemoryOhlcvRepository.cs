@@ -1,4 +1,5 @@
 using SignalStack.Api.Historical;
+using SignalStack.Storage.Historical;
 
 namespace SignalStack.Api.Tests;
 

@@ -1,3 +1,5 @@
+using SignalStack.Domain.Audit;
+
 namespace SignalStack.Api.Audit;
 
 public static class AuditExtensions

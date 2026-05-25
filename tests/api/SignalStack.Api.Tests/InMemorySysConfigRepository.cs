@@ -1,5 +1,5 @@
 using MongoDB.Bson;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.SysConfig;
 
 namespace SignalStack.Api.Tests;
 

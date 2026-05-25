@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
-using SignalStack.Api.Notifications;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
 using SignalStack.Worker.Jobs.SloBreachMonitor;
 using Xunit;
 

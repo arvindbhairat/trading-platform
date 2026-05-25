@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Moq;
-using SignalStack.Api.Notifications;
+using SignalStack.Storage.Notifications;
 using SignalStack.Worker.Rme;
 using Xunit;
 

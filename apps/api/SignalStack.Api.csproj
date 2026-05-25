@@ -24,18 +24,17 @@
   <ItemGroup>
     <ProjectReference Include="..\..\packages\config\SignalStack.Configuration\SignalStack.Configuration.csproj" />
     <ProjectReference Include="..\..\packages\migrations\SignalStack.Migrations\SignalStack.Migrations.csproj" />
+    <ProjectReference Include="..\..\packages\domain\SignalStack.Domain\SignalStack.Domain.csproj" />
+    <ProjectReference Include="..\..\packages\storage\SignalStack.Storage\SignalStack.Storage.csproj" />
+    <ProjectReference Include="..\..\packages\historical\SignalStack.Historical\SignalStack.Historical.csproj" />
+    <ProjectReference Include="..\..\packages\signals\SignalStack.Signals\SignalStack.Signals.csproj" />
+    <ProjectReference Include="..\..\packages\notifications\SignalStack.Notifications\SignalStack.Notifications.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-  </ItemGroup>
-
-  <!-- Transitive dependency overrides: pinned to resolve known vulnerabilities -->
-  <ItemGroup>
-    <!-- SharpCompress: transitive from MongoDB.Driver; pinned to fix CVE-2026-44788 (directory traversal) -->
-    <PackageReference Include="SharpCompress" Version="0.47.4" />
   </ItemGroup>
 
   <ItemGroup>

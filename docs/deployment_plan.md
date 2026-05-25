@@ -59,11 +59,20 @@ apps/web (Next.js 15)
 
 apps/api (ASP.NET Core)
   ├── packages/config/SignalStack.Configuration
+  ├── packages/domain/SignalStack.Domain
+  ├── packages/storage/SignalStack.Storage
+  ├── packages/historical/SignalStack.Historical
+  ├── packages/signals/SignalStack.Signals
+  ├── packages/notifications/SignalStack.Notifications
   └── packages/migrations/SignalStack.Migrations
 
 apps/worker (.NET Worker Service)
-  ├── apps/api  (shared domain models)
   ├── packages/config/SignalStack.Configuration
+  ├── packages/domain/SignalStack.Domain
+  ├── packages/storage/SignalStack.Storage
+  ├── packages/historical/SignalStack.Historical
+  ├── packages/signals/SignalStack.Signals
+  ├── packages/notifications/SignalStack.Notifications
   ├── packages/market-data/SignalStack.MarketData
   ├── packages/migrations/SignalStack.Migrations
   └── packages/migrations/SignalStack.SqlMigrations

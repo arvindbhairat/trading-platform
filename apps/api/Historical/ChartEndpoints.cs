@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using SignalStack.Historical;
+using SignalStack.Storage.Historical;
 
 namespace SignalStack.Api.Historical;
 

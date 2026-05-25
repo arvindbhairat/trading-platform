@@ -4,17 +4,19 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
-using SignalStack.Api.SysConfig;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Observability;
 using SignalStack.Api.PhaseEnforcement;
 using SignalStack.Api.Pld;
+using SignalStack.Storage.Fyers;
 using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.DataBreach;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Universe;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 using SignalStack.Api.Historical;
 using SignalStack.Api.Backtesting;
 using SignalStack.Api.Signals;
@@ -25,6 +27,13 @@ using SignalStack.Api.LedgerWriters;
 using SignalStack.Api.Portfolio;
 using SignalStack.Api.Risk;
 using SignalStack.Api.Execution;
+using SignalStack.Storage.Admin;
+using SignalStack.Storage.SysConfig;
+using SignalStack.Storage.LedgerWriters;
+using SignalStack.Storage.Notifications;
+using SignalStack.Storage.Signals;
+using SignalStack.Storage.Universe;
+using SignalStack.Notifications.TelegramBot;
 using SignalStack.Configuration.Bootstrap;
 using SignalStack.Configuration.Ledger;
 using SignalStack.Migrations;
@@ -79,6 +88,7 @@ builder.Services.AddAuditEventManagement();
 // FYERS credential management + token lifecycle — REQ-AUTH-003..010, 014, REQ-SESSION-009
 // Also registers HttpClient for FYERS REST API fallback (REQ-MARKET-002b).
 builder.Services.AddFyersTokenManagement();
+builder.Services.AddSingleton<FyersAuthService>();
 builder.Services.AddHttpClient("FyersApi", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -112,7 +122,7 @@ builder.Services.AddTradingCalendarManagement();
 
 // Time Stop recompute service — P6-T18 / REQ-STOP-003a
 // Triggered by calendar CRUD endpoints; debounced, fire-and-forget.
-builder.Services.AddTimeStopRecomputeService();
+builder.Services.AddSingleton<TimeStopRecomputeService>();
 
 // Signal Subscription management — P4-T1 / REQ-STRAT-007a/007b, REQ-STRAT-017b
 builder.Services.AddSignalSubscriptionManagement();

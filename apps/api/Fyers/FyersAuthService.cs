@@ -1,4 +1,6 @@
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
+using SignalStack.Storage.Fyers;
 
 namespace SignalStack.Api.Fyers;
 

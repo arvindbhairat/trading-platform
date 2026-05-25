@@ -1,5 +1,6 @@
 using SignalStack.Api.Audit;
-using SignalStack.Api.SysConfig;
+using SignalStack.Domain.Audit;
+using SignalStack.Storage.SysConfig;
 
 namespace SignalStack.Api.Admin;
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.SysConfig;
 
 namespace SignalStack.Api.Portfolio;
 

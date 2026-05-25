@@ -2,8 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using SignalStack.Api.Sessions;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

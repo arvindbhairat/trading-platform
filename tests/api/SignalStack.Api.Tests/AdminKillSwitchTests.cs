@@ -4,9 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Sessions;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

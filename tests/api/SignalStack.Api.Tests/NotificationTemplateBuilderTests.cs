@@ -1,4 +1,6 @@
 using SignalStack.Api.Notifications;
+using SignalStack.Domain.Notifications;
+using SignalStack.Notifications;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

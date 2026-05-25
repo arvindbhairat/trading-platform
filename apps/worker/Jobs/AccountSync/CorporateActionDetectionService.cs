@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.Portfolio;
+using SignalStack.Domain.Portfolio;
+using SignalStack.Storage.Portfolio;
 
 namespace SignalStack.Worker.Jobs.AccountSync;
 

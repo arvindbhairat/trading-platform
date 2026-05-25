@@ -2,6 +2,8 @@ using System.Security.Claims;
 using MongoDB.Bson;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
+using SignalStack.Notifications.TelegramBot;
 
 namespace SignalStack.Api.TelegramBot;
 

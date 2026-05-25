@@ -1,6 +1,6 @@
 # ADR-0004: Extract Shared Libraries From API Project
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-05-25  
 **Deciders:** Architecture Team  
 **References:** Worker crash (logs.1779699920582.log), API crash (logs.1779699261124.log)
@@ -48,24 +48,21 @@ There is no compile-time enforcement of this boundary, so the pattern will repea
 ## Current Dependency Graph
 
 ```
-packages/config ──────────────────────────────────────────────────┐
-    ↑                                                             │
-    │                                                             │
-packages/market-data                     packages/migrations ─────┤
-                                              ↑         ↑        │
-                                              │         │        │
-    ┌────────────────────────────────── apps/api ────────┘        │
-    │                                         ↑                   │
-    │                                         │                   │
-    │   ┌─────────────────────────────────────┘                   │
-    ▼   ▼                                                         │
-apps/worker (references api directly) ────────────────────────────┘
-    ↑
-    │
-apps/seed (clean — no app references)
-```
+packages/config ────────────────────────────────────────────────┐
+    ↑          ↑           ↑           ↑           ↑           ↑
+    │          │           │           │           │           │
+packages/   packages/   packages/   packages/   packages/   packages/
+market-data migrations  domain      storage     signals     notifications
+    ↑          ↑           ↑           ↑           ↑           ↑
+    │          │           │           │           │           │
+    └──────────┼───────────┼───────────┴───────────┴───────────┘
+               │           │
+          apps/api     apps/worker
+               │           
+          packages/historical
 
-**Problematic edge:** `apps/worker → apps/api` creates transitive dependencies and framework pollution.
+**Key improvement:** apps/worker no longer references apps/api. All shared dependencies flow through packages.
+```
 
 ---
 
@@ -73,40 +70,38 @@ apps/seed (clean — no app references)
 
 | Project | References | Issue? |
 |---|---|---|
-| `apps/api` | `packages/configuration`, `packages/migrations` | Clean |
-| `apps/worker` | `packages/configuration`, `packages/market-data`, `packages/migrations`, `packages/sql-migrations`, **`apps/api`** | **YES** |
+| `apps/api` | `packages/configuration`, `packages/migrations`, `packages/domain`, `packages/storage`, `packages/signals`, `packages/notifications`, `packages/historical` | Clean |
+| `apps/worker` | `packages/configuration`, `packages/market-data`, `packages/migrations`, `packages/sql-migrations`, `packages/domain`, `packages/storage`, `packages/signals`, `packages/notifications`, `packages/historical` | Clean (no API ref) |
 | `apps/seed` | *(none)* | Clean |
 | `packages/market-data` | `packages/configuration` | Clean |
+| `packages/domain` | *(none)* | Clean |
+| `packages/storage` | `packages/domain`, `packages/configuration` | Clean |
+| `packages/historical` | `packages/domain`, `packages/storage` | Clean |
+| `packages/signals` | `packages/domain`, `packages/storage`, `packages/historical` | Clean |
+| `packages/notifications` | `packages/domain`, `packages/storage` | Clean |
 | `tests/api` | `apps/api`, `packages/configuration` | Expected |
 | `tests/worker` | `apps/worker`, `packages/configuration` | Expected |
 | `tests/migrations` | `packages/migrations` | Clean |
 
-**Only one violation:** `apps/worker → apps/api`. No other application project references another application project.
+**All violations resolved:** `apps/worker` no longer references `apps/api`. No other application project references another application project.
 
 ---
 
-## Worker's API Dependencies (16 namespaces)
+## Worker's Package Dependencies (After Refactor)
 
-The Worker imports the following `SignalStack.Api.*` namespaces:
+The Worker now imports the following package namespaces instead of `SignalStack.Api.*`:
 
-| Namespace | Files Referenced by Worker | Nature |
+| Package | Namespaces | Nature |
 |---|---|---|
-| `Admin` | JobRunDocument, TradingCalendar*, ITradingCalendarRepository, IstTimeZone | Domain/Data |
-| `Audit` | AuditEventDocument | Domain |
-| `Backtesting` | IEntrySignalEvaluator, ExecutionModel, IBacktestRepository | Domain/Data |
-| `Execution` | *(execution domain types)* | Domain |
-| `Fyers` | IFyersTokenRepository, MongoFyersTokenRepository, FyersTokenDocument | Domain/Data |
-| `Historical` | IOhlcvRepository, ISymbolTableMapping, ITimeframeService, SymbolTableMappingService | Domain/Data |
-| `LedgerWriters` | ITradeLedgerRepository, TradeIngestionService | Domain/Data |
-| `Notifications` | NotificationDocument, INotificationWriter, NotificationWriter, DeliveryStatus, etc. | Domain/Data |
-| `Portfolio` | Holding, ManualAdjustmentDocument | Domain |
-| `Signals` | ISignalSubscriptionRepository, SignalSubscriptionDocument | Domain/Data |
-| `SysConfig` | ISysConfigRepository | Domain/Data |
-| `Universe` | SymbolMasterDocument, ISymbolMasterRepository, etc. | Domain/Data |
-| `Users` | *(user domain types)* | Domain |
-| *(endpoints, middleware, auth)* | *(not used by Worker)* | API-only |
+| `SignalStack.Domain` | `SignalStack.Domain.Audit`, `SignalStack.Domain.Users`, `SignalStack.Domain.Backtesting`, `SignalStack.Domain.Signals`, `SignalStack.Domain.Universe`, etc. | Domain models + interfaces |
+| `SignalStack.Storage` | `SignalStack.Storage.Historical`, `SignalStack.Storage.LedgerWriters`, `SignalStack.Storage.Notifications`, `SignalStack.Storage.Signals`, `SignalStack.Storage.SysConfig`, `SignalStack.Storage.Universe`, `SignalStack.Storage.Admin`, `SignalStack.Storage.Backtesting`, `SignalStack.Storage.Portfolio` | Storage implementations |
+| `SignalStack.Signals` | `SignalStack.Signals.Backtesting` | Signal evaluation + backtest engine |
+| `SignalStack.Notifications` | `SignalStack.Notifications`, `SignalStack.Notifications.TelegramBot` | Notification services |
+| `SignalStack.Historical` | `SignalStack.Historical` | Historical OHLCV services |
+| `SignalStack.MarketData` | `SignalStack.MarketData` | MDP interface + DTOs |
+| `SignalStack.Configuration` | `SignalStack.Configuration.Bootstrap`, `SignalStack.Configuration.Ledger`, etc. | Config loaders |
 
-**All ~16 namespaces are domain/data concerns.** The Worker does not use a single endpoint, middleware, or auth class from the API project.
+**All Worker dependencies are now clean package references.** No reference to `apps/api` remains.
 
 ---
 

@@ -5,12 +5,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Historical;
 using SignalStack.Api.PrivacyRequest;
 using SignalStack.Api.Sessions;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.Admin;
+using SignalStack.Storage.Fyers;
+using SignalStack.Storage.Historical;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.Tests;
 

@@ -1,8 +1,9 @@
 using System.Data;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using SignalStack.Api.Historical;
-using SignalStack.Api.Universe;
+using SignalStack.Historical;
+using SignalStack.Storage.Historical;
+using SignalStack.Storage.Universe;
 using SignalStack.Migrations;
 
 namespace SignalStack.Worker.Jobs.Migrations;

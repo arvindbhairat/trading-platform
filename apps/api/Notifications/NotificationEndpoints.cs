@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using MongoDB.Bson;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
 
 namespace SignalStack.Api.Notifications;
 

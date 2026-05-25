@@ -1,3 +1,6 @@
+using SignalStack.Signals.Backtesting;
+using SignalStack.Storage.Backtesting;
+
 namespace SignalStack.Api.Backtesting;
 
 /// <summary>

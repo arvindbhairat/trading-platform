@@ -1,6 +1,9 @@
 using System.Security.Claims;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
+using SignalStack.Storage.Fyers;
 
 namespace SignalStack.Api.Fyers;
 

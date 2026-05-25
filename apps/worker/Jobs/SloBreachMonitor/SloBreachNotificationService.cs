@@ -3,7 +3,10 @@ using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
-using SignalStack.Api.Notifications;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
+using SignalStack.Notifications;
+using SignalStack.Notifications.TelegramBot;
 using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.SloBreachMonitor;

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Portfolio;
+using SignalStack.Storage.Portfolio;
 
 namespace Microsoft.AspNetCore.Routing;
 

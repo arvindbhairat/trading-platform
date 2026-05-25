@@ -1,4 +1,4 @@
-using SignalStack.Api.Portfolio;
+using SignalStack.Storage.Portfolio;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -7,7 +7,7 @@ namespace Microsoft.Extensions.DependencyInjection;
 ///
 /// Registers:
 /// - <see cref="IManualAdjustmentRepository"/> → <see cref="MongoManualAdjustmentRepository"/>
-/// - <see cref="HoldingsService"/> — FIFO-based holdings and PnL computation
+/// - <see cref="SignalStack.Api.Portfolio.HoldingsService"/> — FIFO-based holdings and PnL computation
 ///
 /// Call from API <c>Program.cs</c>.
 /// </summary>
@@ -16,8 +16,8 @@ public static class PortfolioExtensions
     public static IServiceCollection AddPortfolioServices(this IServiceCollection services)
     {
         services.AddSingleton<IManualAdjustmentRepository, MongoManualAdjustmentRepository>();
-        services.AddSingleton<HoldingsService>();
-        services.AddSingleton<PortfolioImpactService>();
+        services.AddSingleton<SignalStack.Storage.Portfolio.HoldingsService>();
+        services.AddSingleton<SignalStack.Api.Portfolio.PortfolioImpactService>();
         return services;
     }
 }

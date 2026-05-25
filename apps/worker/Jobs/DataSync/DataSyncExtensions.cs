@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using SignalStack.Api.Admin;
-using SignalStack.Api.Historical;
-using SignalStack.Api.Universe;
+using SignalStack.Domain.Admin;
+using SignalStack.Storage.Admin;
+using SignalStack.Historical;
+using SignalStack.Storage.Historical;
+using SignalStack.Storage.Universe;
 using SignalStack.MarketData;
 
 namespace SignalStack.Worker.Jobs.DataSync;

@@ -272,6 +272,23 @@ packages/
 ├── config/
 │   └── SignalStack.Configuration/   ← Shared config loaders, Azure App Configuration, env validation,
 │                                        LKG cache, bootstrap, logging/redaction, ledger write-lock
+├── domain/
+│   └── SignalStack.Domain/          ← Shared domain model types (UserDocument, AuditEventDocument,
+│                                        BacktestModels, Signal/Portfolio models, etc.)
+│                                        and repository interfaces (IUserRepository, IAuditEventRepository)
+├── storage/
+│   └── SignalStack.Storage/         ← Shared storage implementations (MongoDB/PostgreSQL repositories,
+│                                        DI registration extensions for all storage concerns)
+├── historical/
+│   └── SignalStack.Historical/      ← Shared historical OHLCV services (SymbolTableMappingService,
+│                                        TimeframeService, WeeklyCandleBoundary)
+├── signals/
+│   └── SignalStack.Signals/         ← Shared signal evaluation and backtesting engine
+│                                        (BacktestEngine, ProfileOptimisationEngine, BteRmeParityService,
+│                                        IEntrySignalEvaluator implementations)
+├── notifications/
+│   └── SignalStack.Notifications/   ← Shared notification services (TelegramBotService,
+│                                        NotificationTemplateBuilder)
 ├── market-data/
 │   └── SignalStack.MarketData/      ← Market Data Provider (MDP) interface contract, DTOs
 │                                        (OhlcvRecord, QuoteRecord), provider type enum, and

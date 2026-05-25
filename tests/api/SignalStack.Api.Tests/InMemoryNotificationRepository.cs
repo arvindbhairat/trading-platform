@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using MongoDB.Bson;
 using SignalStack.Api.Notifications;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
 
 namespace SignalStack.Api.Tests;
 

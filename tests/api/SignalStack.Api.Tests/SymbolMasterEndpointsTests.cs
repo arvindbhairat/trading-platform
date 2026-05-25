@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using SignalStack.Api.Universe;
+using SignalStack.Storage.Universe;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

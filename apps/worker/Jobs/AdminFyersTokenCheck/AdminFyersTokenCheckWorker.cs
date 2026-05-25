@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SignalStack.Api.Admin;
+using SignalStack.Domain.Admin;
+using SignalStack.Storage.Admin;
 
 namespace SignalStack.Worker.Jobs.AdminFyersTokenCheck;
 

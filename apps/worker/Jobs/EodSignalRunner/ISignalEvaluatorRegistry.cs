@@ -1,4 +1,6 @@
-using SignalStack.Api.Backtesting;
+using SignalStack.Signals.Backtesting;
+using SignalStack.Storage.Backtesting;
+using SignalStack.Domain.Backtesting;
 
 namespace SignalStack.Worker.Jobs.EodSignalRunner;
 

@@ -19,6 +19,16 @@ This file defines preferred implementation structure; product behavior still bel
   - shared portal components, design tokens, and admin/user layout primitives
 - `packages/config`
   - shared config loaders, Azure App Configuration integration, environment validation, and constants
+- `packages/domain`
+  - shared domain model types (UserDocument, AuditEventDocument, BacktestModels, Signal models, etc.) and repository interfaces
+- `packages/storage`
+  - shared storage implementations (MongoDB repositories, PostgreSQL repositories, DI registration extensions)
+- `packages/historical`
+  - shared historical OHLCV services (SymbolTableMappingService, TimeframeService)
+- `packages/signals`
+  - shared signal evaluation and backtesting engine used by both API and Worker
+- `packages/notifications`
+  - shared notification services (Telegram bot, template builder, notification writer)
 - `packages/testing`
   - test helpers, fixtures, mocks, and integration utilities
 - `infra/docker`

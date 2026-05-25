@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
 using MongoDB.Bson;
+using SignalStack.Domain.Signals;
+using SignalStack.Storage.Signals;
 
 namespace SignalStack.Api.Signals;
 

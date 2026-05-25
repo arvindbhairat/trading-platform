@@ -1,4 +1,5 @@
 using SignalStack.Api.Historical;
+using SignalStack.Historical;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

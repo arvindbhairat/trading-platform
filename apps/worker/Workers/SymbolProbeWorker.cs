@@ -3,9 +3,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.Admin;
-using SignalStack.Api.SysConfig;
-using SignalStack.Api.Universe;
+using SignalStack.Domain.Admin;
+using SignalStack.Storage.Admin;
+using SignalStack.Storage.SysConfig;
+using SignalStack.Storage.Universe;
 
 namespace SignalStack.Worker.Workers;
 

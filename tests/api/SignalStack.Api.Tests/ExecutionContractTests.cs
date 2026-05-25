@@ -3,8 +3,12 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Moq;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Execution;
+using SignalStack.Domain.Execution;
+using SignalStack.Storage.Execution;
 using SignalStack.Api.Notifications;
+using SignalStack.Domain.Notifications;
 using Xunit;
 using Xunit.Abstractions;
 

@@ -1,8 +1,14 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SignalStack.Storage.Universe;
 
-namespace SignalStack.Api.Universe;
+namespace Microsoft.Extensions.Hosting;
 
-public static class UniverseExtensions
+/// <summary>
+/// DI registration extensions for Universe Management services used by the Worker.
+/// Registers symbol master, upload, sync health, and symbol probe services.
+/// </summary>
+public static class UniverseWorkerExtensions
 {
     public static IServiceCollection AddUniverseManagement(
         this IServiceCollection services,
@@ -10,7 +16,6 @@ public static class UniverseExtensions
     {
         services.AddSingleton<ISymbolMasterRepository, MongoSymbolMasterRepository>();
         services.AddSingleton<IUniverseUploadRepository, MongoUniverseUploadRepository>();
-        services.AddSingleton<UniverseSyncService>();
 
         if (!string.IsNullOrWhiteSpace(sqlConnectionString))
         {
@@ -22,12 +27,10 @@ public static class UniverseExtensions
         }
         else
         {
-            // Fallback: register a no-op implementation that marks all symbols as out of sync.
             services.AddSingleton<ISyncHealthRepository>(_ =>
                 new NoopSyncHealthRepository());
         }
 
-        // Symbol Validity Probe services (REQ-UNIV-021/021a/021b).
         services.AddSingleton<ISymbolProbeClient, StubSymbolProbeClient>();
         services.AddSingleton<SymbolProbeService>();
 

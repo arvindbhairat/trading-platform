@@ -1,4 +1,5 @@
 using SignalStack.Api.Backtesting;
+using SignalStack.Signals.Backtesting;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

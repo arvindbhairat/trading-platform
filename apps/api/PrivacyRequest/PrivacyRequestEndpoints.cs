@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.PrivacyRequest;
 

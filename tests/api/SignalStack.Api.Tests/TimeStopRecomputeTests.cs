@@ -4,6 +4,8 @@ using MongoDB.Driver;
 using Moq;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Notifications;
+using SignalStack.Domain.Admin;
+using SignalStack.Storage.Notifications;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Domain.Audit;
 
 namespace SignalStack.Api.Audit;
 

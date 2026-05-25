@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.Notifications;
-using SignalStack.Api.Users;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
+using SignalStack.Notifications.TelegramBot;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Worker.Jobs.NotificationDelivery;
 

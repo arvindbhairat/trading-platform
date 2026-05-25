@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using SignalStack.Api.Signals;
+using SignalStack.Storage.Signals;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

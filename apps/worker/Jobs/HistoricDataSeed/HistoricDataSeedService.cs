@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
-using SignalStack.Api.Historical;
-using SignalStack.Api.Universe;
+using SignalStack.Historical;
+using SignalStack.Storage.Historical;
+using SignalStack.Storage.Universe;
 using SignalStack.MarketData;
 using SignalStack.SqlMigrations;
 

@@ -2,8 +2,9 @@ using System.Security.Claims;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Auth;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.Admin;
 

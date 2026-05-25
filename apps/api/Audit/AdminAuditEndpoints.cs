@@ -2,6 +2,8 @@ using System.Security.Claims;
 using MongoDB.Bson;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Audit;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.Audit;
 

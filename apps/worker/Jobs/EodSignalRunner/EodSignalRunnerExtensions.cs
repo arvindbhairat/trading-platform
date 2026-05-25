@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SignalStack.Api.Backtesting;
+using SignalStack.Signals.Backtesting;
+using SignalStack.Storage.Backtesting;
+using SignalStack.Domain.Backtesting;
 using SignalStack.Worker.Jobs.EodSignalRunner;
 
 namespace Microsoft.Extensions.Hosting;

@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using MongoDB.Bson;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Fyers;
 using SignalStack.Api.Sessions;
-using SignalStack.Api.SysConfig;
+using SignalStack.Storage.Fyers;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 
 namespace SignalStack.Api.Auth;
 

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using SignalStack.Api.LedgerWriters;
+using SignalStack.Storage.LedgerWriters;
 using SignalStack.Configuration.Ledger;
 
 namespace SignalStack.Worker.Jobs.EodTradeSync;

@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using SignalStack.Api.Fyers;
-using SignalStack.Api.Notifications;
+using SignalStack.Storage.Fyers;
+using SignalStack.Domain.Notifications;
+using SignalStack.Storage.Notifications;
 
 namespace SignalStack.Worker.Integrations.Fyers;
 

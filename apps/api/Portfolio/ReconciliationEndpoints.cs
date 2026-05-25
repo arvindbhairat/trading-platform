@@ -2,8 +2,11 @@ using System.Security.Claims;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.LedgerWriters;
 using SignalStack.Configuration.Ledger;
+using SignalStack.Domain.Portfolio;
+using SignalStack.Storage.Portfolio;
 
 namespace SignalStack.Api.Portfolio;
 

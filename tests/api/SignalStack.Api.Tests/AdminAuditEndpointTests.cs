@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
+using SignalStack.Domain.Users;
 using Xunit;
 
 namespace SignalStack.Api.Tests;

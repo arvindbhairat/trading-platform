@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using SignalStack.Api.Audit;
+using SignalStack.Domain.Audit;
 using SignalStack.Api.Notifications;
-using SignalStack.Api.SysConfig;
+using SignalStack.Signals.Backtesting;
+using SignalStack.Storage.SysConfig;
 
 namespace SignalStack.Api.Backtesting;
 
