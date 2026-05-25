@@ -21,6 +21,6 @@
     "dotnet:test": "dotnet test SignalStack.sln -c Release"
   },
   "devDependencies": {
-    "next": "^15.5.15"
+    "next": "15.5.18"
   }
 }
