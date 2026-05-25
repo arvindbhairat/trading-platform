@@ -99,7 +99,10 @@ static Dictionary<string, List<string>> ParseArgs(string[] cliArgs)
                 i++;
             }
             i--;
-            parsed[key] = values;
+            if (parsed.TryGetValue(key, out var existingValues))
+                existingValues.AddRange(values);
+            else
+                parsed[key] = values;
         }
     }
 
