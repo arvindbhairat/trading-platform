@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SignalStack.Domain.Execution;
 using SignalStack.Storage.Execution;
+using SignalStack.Storage.Portfolio;
 using SignalStack.Worker.Jobs.AccountSync;
 
 namespace Microsoft.Extensions.Hosting;
@@ -44,7 +45,13 @@ public static class LiveAccountDataSyncExtensions
         // for the LADS intent-reconciliation safety net.
         services.AddSingleton<IIntentLedgerRepository, MongoIntentLedgerRepository>();
 
-        // ── Step 2b: Register the intent-reconciliation safety net ─────────
+        // ── Step 2b: Register corporate action detection (REQ-PORT-016) ───
+        // Detects discontinuities between FYERS-reported holdings and
+        // FIFO-derived state. HoldingsService is in the storage package.
+        services.AddSingleton<HoldingsService>();
+        services.AddSingleton<CorporateActionDetectionService>();
+
+        // ── Step 2c: Register the intent-reconciliation safety net ─────────
         // P7-T8 / REQ-ORDER-015c: LADS intent-reconciliation per LADS cycle.
         services.AddSingleton<IntentReconciliationService>();
 
