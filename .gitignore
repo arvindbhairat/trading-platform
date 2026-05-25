@@ -234,6 +234,31 @@ packages/migrations/SignalStack.SqlMigrations/obj/
 packages/market-data/SignalStack.MarketData/bin/
 packages/market-data/SignalStack.MarketData/obj/
 !packages/testing/
+!packages/domain/
+!packages/domain/SignalStack.Domain/
+!packages/domain/SignalStack.Domain/**
+packages/domain/SignalStack.Domain/bin/
+packages/domain/SignalStack.Domain/obj/
+!packages/storage/
+!packages/storage/SignalStack.Storage/
+!packages/storage/SignalStack.Storage/**
+packages/storage/SignalStack.Storage/bin/
+packages/storage/SignalStack.Storage/obj/
+!packages/historical/
+!packages/historical/SignalStack.Historical/
+!packages/historical/SignalStack.Historical/**
+packages/historical/SignalStack.Historical/bin/
+packages/historical/SignalStack.Historical/obj/
+!packages/signals/
+!packages/signals/SignalStack.Signals/
+!packages/signals/SignalStack.Signals/**
+packages/signals/SignalStack.Signals/bin/
+packages/signals/SignalStack.Signals/obj/
+!packages/notifications/
+!packages/notifications/SignalStack.Notifications/
+!packages/notifications/SignalStack.Notifications/**
+packages/notifications/SignalStack.Notifications/bin/
+packages/notifications/SignalStack.Notifications/obj/
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
 # Uncomment if necessary however generally it will be regenerated when needed

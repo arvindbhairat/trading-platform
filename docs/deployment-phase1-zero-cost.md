@@ -363,9 +363,14 @@ Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
    | Setting | Value |
    |---------|-------|
    | **Service name** | `api` |
-   | **Root directory** | `apps/api` |
-   | **Build type** | Dockerfile (Railway auto-detects it) |
+   | **Root directory** | `.` (repo root) |
+   | **Dockerfile path** | `apps/api/Dockerfile` |
    | **Start command** | (leave empty — Dockerfile has ENTRYPOINT) |
+
+   > **Important:** Root directory must be `.` (repo root), not `apps/api`. The Dockerfile
+   > `COPY packages/ packages/` step needs access to the `packages/` directory at the repo root.
+   > Setting root directory to `apps/api` limits the build context to that subdirectory, causing
+   > "project not found" errors for all shared library references.
 
 4. Add Environment Variables (click on the service → **Variables**):
 
@@ -388,9 +393,11 @@ Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
    | Setting | Value |
    |---------|-------|
    | **Service name** | `worker` |
-   | **Root directory** | `apps/worker` |
-   | **Build type** | Dockerfile |
+   | **Root directory** | `.` (repo root) |
+   | **Dockerfile path** | `apps/worker/Dockerfile` |
    | **Start command** | (leave empty — Dockerfile has ENTRYPOINT) |
+
+   > **Important:** Same as API — root directory must be `.` for the `COPY packages/` step to work.
 
 3. Add the same environment variables as the API service (Railway supports sharing variables across services if set at the project level, or you can add per-service)
 

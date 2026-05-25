@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>SignalStack.Notifications</AssemblyName>
+    <RootNamespace>SignalStack.Notifications</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\domain\SignalStack.Domain\SignalStack.Domain.csproj" />
+    <ProjectReference Include="..\..\storage\SignalStack.Storage\SignalStack.Storage.csproj" />
+  </ItemGroup>
+
+  <!-- Transitive dependency overrides: pinned to resolve known vulnerabilities -->
+  <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.47.4" />
+  </ItemGroup>
+</Project>
