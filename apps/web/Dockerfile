@@ -9,6 +9,10 @@ RUN npm ci
 # Copy source
 COPY apps/web/ apps/web/
 
+# Build-time args for NEXT_PUBLIC_* env vars (inlined by next build)
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+
 # Build Next.js app
 RUN npm run web:build
 
