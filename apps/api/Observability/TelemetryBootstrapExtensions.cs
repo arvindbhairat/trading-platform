@@ -78,7 +78,7 @@ internal static class TelemetryBootstrapExtensions
         .WithLogging(
           logging => logging
             .AddProcessor(new SensitiveDataRedactionLogProcessor())
-            .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)),
+            .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions, "v1/logs")),
           options =>
           {
             options.IncludeFormattedMessage = true;
@@ -88,14 +88,14 @@ internal static class TelemetryBootstrapExtensions
         .WithTracing(tracing => tracing
           .AddAspNetCoreInstrumentation()
           .AddHttpClientInstrumentation()
-          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)))
+          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions, "v1/traces")))
         .WithMetrics(metrics => metrics
           .AddAspNetCoreInstrumentation()
           .AddHttpClientInstrumentation()
           .AddRuntimeInstrumentation()
           .AddMeter(serviceName)
           .AddMeter(ConfigurationBootstrapTelemetry.MeterName)
-          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions)));
+          .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions, "v1/metrics")));
     }
     else
     {
@@ -113,9 +113,12 @@ internal static class TelemetryBootstrapExtensions
     }
   }
 
-  private static void ConfigureExporter(OtlpExporterOptions exporter, OtlpTelemetryOptions options)
+  private static void ConfigureExporter(OtlpExporterOptions exporter, OtlpTelemetryOptions options, string signalPath)
   {
-    exporter.Endpoint = new Uri(options.Endpoint);
+    // Append the signal path (/v1/logs, /v1/traces, /v1/metrics) to the base
+    // endpoint. The OTel .NET SDK does not append signal paths when Endpoint is
+    // explicitly set — without this, requests go to the root URL and return 404.
+    exporter.Endpoint = new Uri(new Uri(options.Endpoint), signalPath);
     exporter.Protocol = OtlpExportProtocol.HttpProtobuf;
     exporter.TimeoutMilliseconds = options.ExportTimeoutMilliseconds;
 
