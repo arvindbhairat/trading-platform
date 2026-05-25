@@ -8,8 +8,9 @@
 // REQ-DASH-013: data freshness timestamp.
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/primitives";
-import { apiFetch } from "@/lib/auth";
+import { apiFetch, getToken } from "@/lib/auth";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
@@ -70,6 +71,8 @@ interface ReconciliationStatusDto {
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [holdings, setHoldings] = useState<HoldingDto[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryDto | null>(null);
   const [reconStatus, setReconStatus] = useState<ReconciliationStatusDto | null>(null);
@@ -78,6 +81,16 @@ export default function DashboardPage() {
   const [reconLoading, setReconLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataFreshness, setDataFreshness] = useState<string | null>(null);
+
+  // ── Auth guard: redirect to login if no JWT token ─────────────────────
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    setAuthChecked(true);
+  }, [router]);
 
   // ── Exit modal state (P7-T11 / T-8) ──────────────────────────────────
   const [exitSymbol, setExitSymbol] = useState<string | null>(null);
@@ -221,6 +234,11 @@ export default function DashboardPage() {
       default: return <Pill tone="neutral">Never synced</Pill>;
     }
   };
+
+  // ── Auth guard: show nothing until token check completes ─────────────────
+  if (!authChecked) {
+    return null;
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────
 
