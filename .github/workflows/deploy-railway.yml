@@ -53,7 +53,7 @@ jobs:
 
       - name: Check API health endpoint
         run: |
-          URL="${{ vars.API_URL || 'https://api-production.up.railway.app' }}/api/v1/healthz"
+          URL="${{ vars.API_URL || 'https://api-production-b8b8f.up.railway.app' }}/api/v1/healthz"
           echo "Checking: $URL"
           for i in {1..6}; do
             STATUS=$(curl -sS -o /dev/null -w "%{http_code}" "$URL" || echo "000")
