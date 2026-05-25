@@ -59,14 +59,14 @@ export default function AdminIncidentsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchIncidents() {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
+    setLoading(true);
+
     apiFetch(`/api/v1/admin/incidents?status=${activeTab}&limit=100`)
       .then(res => {
-        if (cancelled) return null;
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) router.replace("/login");
           return null;
@@ -74,14 +74,16 @@ export default function AdminIncidentsPage() {
         return res.json() as Promise<IncidentsResponse>;
       })
       .then(data => {
-        if (cancelled || !data) { if (!cancelled) setLoading(false); return; }
+        if (!data) { setLoading(false); return; }
         setIncidents(data.incidents);
         setTotalCount(data.total_count);
         setLoading(false);
       })
-      .catch(() => { if (!cancelled) setLoading(false); });
+      .catch(() => setLoading(false));
+  }
 
-    return () => { cancelled = true; };
+  useEffect(() => {
+    fetchIncidents();
   }, [activeTab, router]);
 
   // ── Action handlers ──────────────────────────────────────────────────
@@ -111,7 +113,7 @@ export default function AdminIncidentsPage() {
       });
 
       // Refresh the current view.
-      fetchIncidents(activeTab);
+      fetchIncidents();
     } catch (err) {
       setNotification({
         type: "error",
@@ -148,7 +150,7 @@ export default function AdminIncidentsPage() {
       });
 
       // Refresh the current view.
-      fetchIncidents(activeTab);
+      fetchIncidents();
     } catch (err) {
       setNotification({
         type: "error",
@@ -224,7 +226,7 @@ export default function AdminIncidentsPage() {
             variant="ghost"
             icon="refresh"
             size="sm"
-            onClick={() => fetchIncidents(activeTab)}
+            onClick={fetchIncidents}
             disabled={loading}
           >
             Refresh

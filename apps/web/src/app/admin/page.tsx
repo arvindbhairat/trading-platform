@@ -172,10 +172,11 @@ export default function AdminHomePage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchData() {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
+
+    setLoading(true);
 
     Promise.all([
       apiFetch("/api/v1/admin/transfer-recovery-summary"),
@@ -185,7 +186,6 @@ export default function AdminHomePage() {
       apiFetch("/api/v1/admin/legal-posture"),
     ])
       .then(async ([summaryRes, coverageRes, healthRes, svpRes, legalRes]) => {
-        if (cancelled) return null;
         if (!summaryRes.ok) {
           if (summaryRes.status === 401 || summaryRes.status === 403) router.replace("/login");
           return null;
@@ -200,18 +200,19 @@ export default function AdminHomePage() {
         return results;
       })
       .then(results => {
-        if (cancelled || !results) { if (!cancelled) setLoading(false); return; }
+        if (!results) { setLoading(false); return; }
         if (results.coverage) setCoverage(results.coverage as CoverageData);
         if (results.health) setHealth(results.health as SystemHealthData);
         if (results.svpSummary) setSvpSummary(results.svpSummary as SymbolProbeSummary);
         if (results.legalPosture) setLegalPosture(results.legalPosture as LegalPostureData);
         setSummary(results.summary as TransferRecoverySummary);
         setLoading(false);
-        setError(null);
       })
-      .catch(() => { if (!cancelled) setLoading(false); });
+      .catch(() => setLoading(false));
+  }
 
-    return () => { cancelled = true; };
+  useEffect(() => {
+    fetchData();
   }, [router]);
 
   // ── Action handlers ──────────────────────────────────────────────────
@@ -422,7 +423,7 @@ export default function AdminHomePage() {
             variant="ghost"
             icon="refresh"
             size="sm"
-            onClick={fetchSummary}
+            onClick={fetchData}
             disabled={loading}
           >
             Refresh

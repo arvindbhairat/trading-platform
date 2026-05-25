@@ -98,12 +98,13 @@ export default function AdminConfigPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchData() {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
     const url = `/api/v1/admin/config${selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : ""}`;
+
+    setLoading(true);
 
     Promise.all([
       apiFetch(url),
@@ -111,7 +112,6 @@ export default function AdminConfigPage() {
       fetchSessionStatus(),
     ])
       .then(async ([configRes, catRes, status]) => {
-        if (cancelled) return null;
         if (!configRes.ok) throw new Error(`Failed to load config: ${configRes.status}`);
 
         const configData = await configRes.json();
@@ -120,7 +120,6 @@ export default function AdminConfigPage() {
         return { entries: configData.entries ?? [], categories: catData.categories ?? [], status };
       })
       .then(result => {
-        if (cancelled || !result) return;
         setError(null);
         setEntries(result.entries);
         setCategories(result.categories);
@@ -128,13 +127,13 @@ export default function AdminConfigPage() {
         setLoading(false);
       })
       .catch(err => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load config");
-          setLoading(false);
-        }
+        setError(err instanceof Error ? err.message : "Failed to load config");
+        setLoading(false);
       });
+  }
 
-    return () => { cancelled = true; };
+  useEffect(() => {
+    fetchData();
   }, [selectedCategory, router]);
 
   // ── Step-up check ────────────────────────────────────────────────────

@@ -104,14 +104,14 @@ export default function AdminPrivacyRequestsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchTickets() {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
+    setLoading(true);
+
     apiFetch("/api/v1/admin/privacy/requests")
       .then(res => {
-        if (cancelled) return null;
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) router.replace("/login");
           return null;
@@ -119,17 +119,18 @@ export default function AdminPrivacyRequestsPage() {
         return res.json();
       })
       .then(data => {
-        if (cancelled || !data) { if (!cancelled) setLoading(false); return; }
+        if (!data) { setLoading(false); return; }
         setTickets(data.tickets ?? []);
         setPendingCount((data.tickets ?? []).filter(
           (t: PrivacyRequestEntry) => t.status === "open"
         ).length);
         setLoading(false);
-        setError(null);
       })
-      .catch(() => { if (!cancelled) setLoading(false); });
+      .catch(() => setLoading(false));
+  }
 
-    return () => { cancelled = true; };
+  useEffect(() => {
+    fetchTickets();
   }, [router]);
 
   // ── Action handlers ──────────────────────────────────────────────────

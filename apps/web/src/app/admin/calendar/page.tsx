@@ -172,8 +172,7 @@ export default function AdminCalendarPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchData() {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
@@ -182,12 +181,13 @@ export default function AdminCalendarPage() {
     if (filterTo) params.set("to", filterTo);
     if (filterType) params.set("sessionType", filterType);
 
+    setLoading(true);
+
     Promise.all([
       apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
       apiFetch("/api/v1/admin/calendar/coverage"),
     ])
       .then(async ([entriesRes, coverageRes]) => {
-        if (cancelled) return null;
         if (!entriesRes.ok) throw new Error(`Failed to load calendar entries: ${entriesRes.status}`);
 
         let coverage: CoverageData | undefined;
@@ -197,20 +197,19 @@ export default function AdminCalendarPage() {
         return { coverage, entries: (data.entries ?? []).map(mapDocument) as CalendarEntry[] };
       })
       .then(result => {
-        if (cancelled || !result) return;
         if (result.coverage) setCoverage(result.coverage);
         setError(null);
         setEntries(result.entries);
         setLoading(false);
       })
       .catch(err => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load calendar");
-          setLoading(false);
-        }
+        setError(err instanceof Error ? err.message : "Failed to load calendar");
+        setLoading(false);
       });
+  }
 
-    return () => { cancelled = true; };
+  useEffect(() => {
+    fetchData();
   }, [filterFrom, filterTo, filterType, router]);
 
   // ── Form handlers ────────────────────────────────────────────────────
