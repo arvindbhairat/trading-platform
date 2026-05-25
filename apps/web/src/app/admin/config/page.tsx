@@ -4,7 +4,7 @@
 // Displays all runtime config entries, allows editing and resetting values,
 // with category filtering and step-up gating for sensitive categories.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -98,13 +98,11 @@ export default function AdminConfigPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  function fetchData() {
+  const fetchData = useCallback(() => {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
     const url = `/api/v1/admin/config${selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : ""}`;
-
-    setLoading(true);
 
     Promise.all([
       apiFetch(url),
@@ -130,11 +128,11 @@ export default function AdminConfigPage() {
         setError(err instanceof Error ? err.message : "Failed to load config");
         setLoading(false);
       });
-  }
+  }, [selectedCategory, router]);
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, router]);
+  }, [fetchData]);
 
   // ── Step-up check ────────────────────────────────────────────────────
 

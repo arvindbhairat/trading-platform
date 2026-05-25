@@ -10,7 +10,7 @@
 // 7-day daily breakdown, per-job retry, Symbol Validity Probe banner, and
 // maintenance window display (A-14).
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -172,11 +172,9 @@ export default function AdminHomePage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  function fetchData() {
+  const fetchData = useCallback(() => {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
-
-    setLoading(true);
 
     Promise.all([
       apiFetch("/api/v1/admin/transfer-recovery-summary"),
@@ -209,11 +207,11 @@ export default function AdminHomePage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }
+  }, [router]);
 
   useEffect(() => {
     fetchData();
-  }, [router]);
+  }, [fetchData]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 

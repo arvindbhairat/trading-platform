@@ -4,7 +4,7 @@
 // Displays all calendar entries with CRUD operations for session records
 // (normal, special, muhurat) and non-trading-day markers.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -172,7 +172,7 @@ export default function AdminCalendarPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  function fetchData() {
+  const fetchData = useCallback(() => {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
 
@@ -180,8 +180,6 @@ export default function AdminCalendarPage() {
     if (filterFrom) params.set("from", filterFrom);
     if (filterTo) params.set("to", filterTo);
     if (filterType) params.set("sessionType", filterType);
-
-    setLoading(true);
 
     Promise.all([
       apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
@@ -206,11 +204,11 @@ export default function AdminCalendarPage() {
         setError(err instanceof Error ? err.message : "Failed to load calendar");
         setLoading(false);
       });
-  }
+  }, [filterFrom, filterTo, filterType, router]);
 
   useEffect(() => {
     fetchData();
-  }, [filterFrom, filterTo, filterType, router]);
+  }, [fetchData]);
 
   // ── Form handlers ────────────────────────────────────────────────────
 

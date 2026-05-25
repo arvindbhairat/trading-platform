@@ -4,7 +4,7 @@
 // Data subject rights workflow: access, correction, erasure, and grievance redressal.
 // Acknowledgment within 7 days, completion within 30 days.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -104,11 +104,9 @@ export default function AdminPrivacyRequestsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  function fetchTickets() {
+  const fetchTickets = useCallback(() => {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
-
-    setLoading(true);
 
     apiFetch("/api/v1/admin/privacy/requests")
       .then(res => {
@@ -127,11 +125,11 @@ export default function AdminPrivacyRequestsPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }
+  }, [router]);
 
   useEffect(() => {
     fetchTickets();
-  }, [router]);
+  }, [fetchTickets]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 

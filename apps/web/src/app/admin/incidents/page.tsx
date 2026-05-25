@@ -5,7 +5,7 @@
 // Resolution of concurrency_conflict_unresolved incidents performs a
 // frozen-with-visibility transition on the associated position.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -59,11 +59,9 @@ export default function AdminIncidentsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  function fetchIncidents() {
+  const fetchIncidents = useCallback(() => {
     const token = getToken();
     if (!token) { router.replace("/login"); return; }
-
-    setLoading(true);
 
     apiFetch(`/api/v1/admin/incidents?status=${activeTab}&limit=100`)
       .then(res => {
@@ -80,11 +78,11 @@ export default function AdminIncidentsPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }
+  }, [activeTab, router]);
 
   useEffect(() => {
     fetchIncidents();
-  }, [activeTab, router]);
+  }, [fetchIncidents]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 
