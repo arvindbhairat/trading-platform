@@ -23,6 +23,22 @@ vi.mock('next/font/google', () => ({
   JetBrains_Mono: () => ({ variable: '--font-mono', className: 'mock-font-jetbrains' }),
 }));
 
+// DashboardPage uses useRouter for auth guard redirects.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}));
+
+// DashboardPage checks getToken() to decide whether to render or redirect.
+vi.mock('@/lib/auth', () => ({
+  getToken: () => 'mock-token',
+  apiFetch: vi.fn().mockResolvedValue({ ok: false }),
+}));
+
+// RootLayout is async and calls headers() to read the CSP nonce.
+vi.mock('next/headers', () => ({
+  headers: () => ({ get: vi.fn().mockReturnValue(null) }),
+}));
+
 // The Shell component renders browser UI (div with CSS variables). For static
 // render tests, we just verify the component renders without throwing.
 describe('Home page', () => {
@@ -35,16 +51,16 @@ describe('Home page', () => {
 });
 
 describe('RootLayout', () => {
-  it('returns an html element with lang="en"', () => {
-    const element = RootLayout({ children: createElement('div') });
+  it('returns an html element with lang="en"', async () => {
+    const element = await RootLayout({ children: createElement('div') });
     expect(element).toBeTruthy();
     expect(element.type).toBe('html');
     expect(element.props.lang).toBe('en');
   });
 
-  it('wraps children in body', () => {
+  it('wraps children in body', async () => {
     const child = createElement('span', null, 'test-child');
-    const element = RootLayout({ children: child });
+    const element = await RootLayout({ children: child });
     const body = element.props.children as React.ReactElement<{ children: React.ReactNode }>;
     expect(body?.type).toBe('body');
     // RootLayout wraps children in AppProviders, so they appear one level deeper.
