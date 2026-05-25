@@ -60,6 +60,18 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
+  deploy-web:
+    name: "Deploy Web"
+    runs-on: ubuntu-latest
+    needs: [deploy-api]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Web to Railway
+        run: npx @railway/cli@latest up --service web --project ${{ vars.RAILWAY_PROJECT_ID }} --environment production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
   deploy-worker:
     name: "Deploy Worker"
     runs-on: ubuntu-latest
