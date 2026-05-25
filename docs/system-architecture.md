@@ -25,13 +25,14 @@ Unified Next.js portal for:
 
 ### `apps/api`
 
-ASP.NET Core application responsible for:
+ASP.NET Core application (thin presentation layer) responsible for:
 
 - auth and session handling
-- domain logic
-- orchestration across MongoDB and PostgreSQL
-- provider adapters
-- audit and permission checks
+- API endpoints and middleware
+- orchestration across MongoDB and PostgreSQL (API-specific flows)
+- audit and permission checks at the endpoint layer
+
+Domain logic, storage implementations, shared services (OHLCV, signal evaluation, notifications, market data) live in `packages/` and are shared with the Worker.
 
 ### `apps/worker`
 

@@ -35,7 +35,7 @@ The code is not adjusted between phases — only the infrastructure and configur
 
 ### 1.1 Projects in the Solution
 
-The repo (`SignalStack.sln`) contains 11 projects across 3 deployable application boundaries:
+The repo (`SignalStack.sln`) contains 16 projects across 3 deployable application boundaries:
 
 | Project | Path | Runtime | Stack | Deployable |
 |---------|------|---------|-------|-----------|
@@ -44,6 +44,11 @@ The repo (`SignalStack.sln`) contains 11 projects across 3 deployable applicatio
 | **@signalstack/web** | `apps/web/` | Node.js 24 | Next.js 15 + TypeScript | Yes |
 | **SignalStack.Seed** | `apps/seed/` | .NET 10.0 | Console app (sys_config seeder) | Migration-time only |
 | **SignalStack.Configuration** | `packages/config/` | .NET 10.0 | Class library (shared config) | Library — not standalone |
+| **SignalStack.Domain** | `packages/domain/` | .NET 10.0 | Class library (domain models + interfaces) | Library — not standalone |
+| **SignalStack.Storage** | `packages/storage/` | .NET 10.0 | Class library (storage implementations) | Library — not standalone |
+| **SignalStack.Historical** | `packages/historical/` | .NET 10.0 | Class library (OHLCV services) | Library — not standalone |
+| **SignalStack.Signals** | `packages/signals/` | .NET 10.0 | Class library (signal evaluation + backtesting) | Library — not standalone |
+| **SignalStack.Notifications** | `packages/notifications/` | .NET 10.0 | Class library (notification services) | Library — not standalone |
 | **SignalStack.MarketData** | `packages/market-data/` | .NET 10.0 | Class library (MDP abstraction) | Library — not standalone |
 | **SignalStack.Migrations** | `packages/migrations/` | .NET 10.0 | Class library (MongoDB migrations) | Migration-time only |
 | **SignalStack.SqlMigrations** | `packages/migrations/` | .NET 10.0 | Class library (PostgreSQL migrations) | Migration-time only |

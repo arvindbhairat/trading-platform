@@ -25,19 +25,19 @@ Both move to PostgreSQL. The data model, schema, and query patterns remain the s
 
 | File | Action |
 |---|---|
-| `apps/api/SignalStack.Api.csproj` | `Microsoft.Data.SqlClient` 6.0.1 → `Npgsql` |
-| `packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj` | `Microsoft.Data.SqlClient` 6.0.1 → `Npgsql` |
-| `apps/worker/SignalStack.Worker.csproj` | No direct change (gets Npgsql transitively through project refs) |
+| `apps/api/SignalStack.Api.csproj` | `Microsoft.Data.SqlClient` 6.0.1 → `Npgsql` (completed) |
+| `packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj` | `Microsoft.Data.SqlClient` 6.0.1 → `Npgsql` (completed) |
+| `apps/worker/SignalStack.Worker.csproj` | Gets Npgsql transitively through SqlMigrations + other package refs |
 
-The worker project references both `SignalStack.Api.csproj` and `SignalStack.SqlMigrations.csproj`, so `Npgsql` becomes available transitively. No direct package reference needed.
+The worker project references `SignalStack.SqlMigrations.csproj` and other shared packages, so `Npgsql` becomes available transitively. No direct package reference needed.
 
 ### 2.2 Service / repository files (6 files)
 
 | # | File | Owner | Key changes |
 |---|---|---|---|
-| 1 | `apps/api/Historical/SqlOhlcvRepository.cs` | API | `Sql*` → `Npgsql*`, `[` → `"`, `TOP(N)` → `LIMIT N`, `dbo` → `public` |
-| 2 | `apps/api/Backtesting/SqlBacktestRepository.cs` | API | `Sql*` → `Npgsql*`, `[` → `"`, `TOP(N)` → `LIMIT N` + offset rewrite |
-| 3 | `apps/api/Universe/SqlSyncHealthRepository.cs` | API | `Sql*` → `Npgsql*`, `[` → `"`, `TABLE_SCHEMA = 'dbo'` → `'public'` |
+| 1 | `packages/storage/SignalStack.Storage/Historical/SqlOhlcvRepository.cs` | Storage | `Sql*` → `Npgsql*`, `[` → `"`, `TOP(N)` → `LIMIT N`, `dbo` → `public` |
+| 2 | `packages/storage/SignalStack.Storage/Backtesting/SqlBacktestRepository.cs` | Storage | `Sql*` → `Npgsql*`, `[` → `"`, `TOP(N)` → `LIMIT N` + offset rewrite |
+| 3 | `packages/storage/SignalStack.Storage/Universe/SqlSyncHealthRepository.cs` | Storage | `Sql*` → `Npgsql*`, `[` → `"`, `TABLE_SCHEMA = 'dbo'` → `'public'` |
 | 4 | `apps/worker/Jobs/DataSync/DataSyncService.cs` | Worker | `Sql*` → `Npgsql*`, `DATEADD/DATEDIFF` → `date_trunc`, `MERGE` → `ON CONFLICT`, temp table prefix |
 | 5 | `apps/worker/Jobs/HistoricDataSeed/HistoricDataSeedService.cs` | Worker | `Sql*` → `Npgsql*`, `SqlBulkCopy` → `NpgsqlBinaryImporter`, `MERGE` → `ON CONFLICT`, `DATEADD/DATEDIFF` → `date_trunc`, temp table prefix, `SqlTransaction` → `NpgsqlTransaction` |
 | 6 | `apps/worker/Jobs/Migrations/BatchedSchemaMigrationJob.cs` | Worker | `Sql*` → `Npgsql*`, `const string schema = "dbo"` → `"public"` |

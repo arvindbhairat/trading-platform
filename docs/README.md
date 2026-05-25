@@ -38,8 +38,16 @@ Business and product requirements must live in one canonical reference file so t
   - per-position Channel-based event serialisation for RME correctness under concurrent LMDS/LADS events
 - [adr/0004-corporate-action-detection-threshold.md](./adr/0004-corporate-action-detection-threshold.md)
   - corporate-action detection calibration threshold governing SuspendedForCorporateAction state
+- [adr/0004-calibration-note-20260501.md](./adr/0004-calibration-note-20260501.md)
+  - calibration note for corporate-action detection parameters
+- [adr/0004-extract-shared-libraries.md](./adr/0004-extract-shared-libraries.md)
+  - extraction of shared domain libraries from the API project to resolve Worker runtime dependency
 - [adr/0005-mdp-server-side-websocket-migration-path.md](./adr/0005-mdp-server-side-websocket-migration-path.md)
   - migration path for server-side MDP WebSocket consumption and the conditions that trigger it
+- [adr/0006-cnc-sandbox-verification.md](./adr/0006-cnc-sandbox-verification.md)
+  - CNC sandbox verification procedure and acceptance criteria
+- [adr/0007-v1-release-readiness.md](./adr/0007-v1-release-readiness.md)
+  - v1 release readiness criteria and sign-off checklist
 - [legal/](./legal/README.md)
   - versioned user-facing legal content: tester acknowledgement, short and long disclaimers, Terms of Service, and Privacy Policy. Referenced by the `REQ-LEGAL-*` and `REQ-PRIVACY-*` requirements
 - [privacy/ropa.md](./privacy/ropa.md)

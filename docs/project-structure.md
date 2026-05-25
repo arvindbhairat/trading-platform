@@ -80,7 +80,7 @@ signalstack/                  ← repo root
 │
 ├── apps/                     ← Three deployable applications (see below)
 ├── tests/                    ← Automated test projects, mirroring apps/ structure
-├── packages/                 ← Shared packages (PLANNED — not yet scaffolded)
+├── packages/                 ← Shared packages (domain, storage, historical, signals, notifications, config, market-data, migrations)
 ├── infra/                    ← Infrastructure as code and local dev tooling
 ├── design_system/            ← Brand tokens, CSS variables, UI kit reference components
 ├── docs/                     ← All canonical documentation (architecture, requirements, ADRs)
@@ -110,31 +110,46 @@ apps/api/
 └── README.md                      ← App-level developer notes
 ```
 
-**Planned internal layout (add new code here):**
+**Internal layout (thin presentation layer — domain logic lives in packages):**
 ```
 apps/api/
 ├── Api/                    ← Route handlers and transport (request/response) models
-├── Domain/                 ← Core business entities, value objects, domain rules
-├── Services/               ← Orchestration and application services
-├── Repositories/
-│   ├── Mongo/              ← MongoDB access (users, signals, portfolio, notifications…)
-│   └── Sql/                ← PostgreSQL access (historical OHLCV only)
-├── Integrations/
-│   ├── Fyers/              ← FYERS adapter (token, quotes, account data, widget signing)
-│   ├── Telegram/           ← Telegram bot integration
-│   └── OAuth/              ← Google / Microsoft / Meta OAuth adapters
-├── Config/                 ← Config loading, sys_config readers, App Configuration
-├── Admin/
+├── Auth/                   ← OAuth endpoints, JWT service, CSRF middleware
+├── Sessions/               ← Session middleware
+├── Pld/                    ← WebSocket connection manager, endpoints
+├── PhaseEnforcement/       ← Phase middleware
+├── PrivacyRequest/         ← Privacy endpoints + repository
+├── DataBreach/             ← Data breach endpoints
+├── Push/                   ← Push event types
+├── TelegramBot/            ← Telegram bot endpoints
+├── Admin/                  ← Admin endpoints + middleware (Impersonation, PhaseGate)
 │   └── Imports/            ← CSV parsing, Nifty 500 universe sync reconciliation
-├── Risk/                   ← Portfolio risk rules, sizing models, validation
-└── Jobs/                   ← Background workflow definitions shared with worker
+├── Audit/                  ← Audit endpoints + repository
+├── Backtesting/            ← Backtest endpoints
+├── Execution/              ← Execution endpoints + orchestration
+├── Fyers/                  ← FYERS auth service + endpoints
+├── Historical/             ← Chart endpoints + historical init (depends on WebApplication)
+├── Notifications/          ← Notification endpoints
+├── Portfolio/              ← Portfolio endpoints
+├── Risk/                   ← Risk endpoints
+├── Signals/                ← Signal subscription endpoints
+├── Universe/               ← Universe endpoints
+├── Users/                  ← User endpoints
+├── SysConfig/              ← SysConfig endpoints
+├── LedgerWriters/          ← Ledger writer endpoints
+├── Observability/          ← OpenTelemetry + Serilog bootstrap
+├── Config/                 ← Config loading (API-specific)
+├── Properties/             ← launchSettings.json
+└── Program.cs              ← Entry point, DI wiring (calls package extension methods)
 ```
 
 **Key rules for `apps/api/`:**
-- PostgreSQL historical access and MongoDB operational access must live in separate repository classes.
-- Provider adapters (FYERS, Telegram, OAuth) must not leak into domain models.
+- The API is a thin presentation layer only. Domain logic, storage implementations, and shared services live in `packages/`.
+- New domain entities, value objects, or repository interfaces belong in `packages/domain/SignalStack.Domain/`.
+- New MongoDB/PostgreSQL repository implementations belong in `packages/storage/SignalStack.Storage/`.
+- New provider adapters belong in the appropriate `packages/` project, not directly in the API.
 - The backend must never call the FYERS order-placement REST API directly.
-- All business logic, validation, and permission checks belong here, not in `apps/web/`.
+- All business logic, validation, and permission checks belong in the backend layer, not in `apps/web/`.
 
 ---
 
@@ -298,7 +313,7 @@ packages/
 │   └── SignalStack.SqlMigrations/    ← FluentMigrator migrations for PostgreSQL historical schema
 ├── shared-types/    ← PLANNED: Cross-app DTOs, request/response contracts, domain enums
 ├── ui/              ← PLANNED: Shared React components, design tokens, layout primitives
-└── testing/         ← PLANNED: Shared test helpers, fixtures, mocks, integration utilities
+└── testing/         ← Shared test helpers, fixtures, mocks, integration utilities
 ```
 
 Do not put application business logic in packages. Packages are for types, utilities, and shared infrastructure that have no domain opinions.
@@ -410,7 +425,11 @@ docs/
 │   ├── 0002-observability-and-configuration.md
 │   ├── 0003-rme-per-position-event-serialisation.md
 │   ├── 0004-corporate-action-detection-threshold.md
-│   └── 0005-mdp-server-side-websocket-migration-path.md
+│   ├── 0004-calibration-note-20260501.md
+│   ├── 0004-extract-shared-libraries.md
+│   ├── 0005-mdp-server-side-websocket-migration-path.md
+│   ├── 0006-cnc-sandbox-verification.md
+│   └── 0007-v1-release-readiness.md
 ├── build_docs_reviews/              ← Accumulated review notes on documentation quality
 │   ├── prompt.md                    ← Full review prompt used for doc-quality passes
 │   └── review_*.md                  ← Review output reports
@@ -512,16 +531,18 @@ All three enforce the same non-negotiable guardrails. When in doubt, read `CLAUD
 
 | What you are building | Where it goes |
 |---|---|
+| Domain entity, value object, or repository interface | `packages/domain/SignalStack.Domain/` |
+| MongoDB/PostgreSQL repository implementation | `packages/storage/SignalStack.Storage/` |
+| OHLCV service, timeframe logic, or symbol mapping | `packages/historical/SignalStack.Historical/` |
+| Signal evaluator or backtesting engine | `packages/signals/SignalStack.Signals/` |
+| Notification service or Telegram bot logic | `packages/notifications/SignalStack.Notifications/` |
+| Market Data Provider interface / DTO | `packages/market-data/SignalStack.MarketData/` |
+| Config loader or env validation | `packages/config/SignalStack.Configuration/` |
 | API endpoint or controller | `apps/api/Api/` |
-| Domain entity or value object | `apps/api/Domain/` |
-| Orchestration / application service | `apps/api/Services/` |
-| MongoDB repository | `apps/api/Repositories/Mongo/` |
-| PostgreSQL repository (OHLCV only) | `apps/api/Repositories/Sql/` |
-| FYERS / Telegram / OAuth adapter | `apps/api/Integrations/{Provider}/` |
-| Risk rule or sizing model | `apps/api/Risk/` |
-| Admin workflow (universe, jobs) | `apps/api/Admin/` |
+| API middleware, auth, or session handler | `apps/api/Auth/` or `apps/api/Sessions/` |
+| Admin endpoint or workflow (universe, jobs) | `apps/api/Admin/` |
 | CSV parsing / Nifty 500 sync | `apps/api/Admin/Imports/` |
-| Config loading / sys_config reader | `apps/api/Config/` |
+| Orchestration / application service | `apps/api/` (API-specific) or `packages/` (shared) |
 | Next.js page or layout | `apps/web/src/app/` |
 | Feature module (bounded UI area) | `apps/web/src/features/{feature}/` |
 | Shared UI component | `apps/web/src/components/` |

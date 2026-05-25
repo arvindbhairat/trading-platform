@@ -42,28 +42,28 @@ This file defines preferred implementation structure; product behavior still bel
 
 ## API Internal Layout
 
+The API is a thin presentation layer. Domain models, storage implementations, and shared services live in `packages/`.
+
 Inside `apps/api`, prefer:
 
-- `app/api`
+- `Api/`
   - route handlers and transport models
-- `app/domain`
-  - core business entities and rules
-- `app/services`
-  - orchestration and application services
-- `app/repositories`
-  - MongoDB and PostgreSQL access layers
-- `app/integrations`
-  - Fyers, Telegram, OAuth, and other provider adapters
-- `app/config`
-  - configuration loading, `sys_config` readers, and App Configuration integration
-- `app/admin`
-  - admin approval, universe sync, and operational actions
-- `app/admin/imports`
-  - CSV parsing, upload summary generation, and sync reconciliation logic
-- `app/risk`
-  - portfolio risk rules, sizing, and validation
-- `app/jobs`
-  - background workflows and schedulers
+- `Auth/`
+  - OAuth endpoints, JWT service, CSRF middleware
+- `Sessions/`
+  - session middleware
+- `Pld/`
+  - WebSocket connection manager, endpoints
+- `PhaseEnforcement/`
+  - phase middleware
+- `Admin/`
+  - admin endpoints, imports, impersonation middleware, phase gate
+- `Notifications/`, `Backtesting/`, `Historical/`, `Universe/`, `Execution/`, `Portfolio/`, `Risk/`, `Signals/`, `Users/`, `Fyers/`, `Audit/`, `TelegramBot/`, `PrivacyRequest/`, `DataBreach/`, `Push/`, `LedgerWriters/`, `SysConfig/`
+  - endpoint-only folders
+- `Observability/`
+  - OpenTelemetry bootstrap
+
+For domain entities, repository implementations, and shared services, prefer placing code in the appropriate `packages/` project instead.
 
 ## Web Internal Layout
 

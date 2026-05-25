@@ -1,4 +1,4 @@
-# ADR-0004: Extract Shared Libraries From API Project
+# 0004: Extract Shared Libraries From API Project
 
 **Status:** Accepted  
 **Date:** 2026-05-25  
