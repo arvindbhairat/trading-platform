@@ -48,6 +48,30 @@ internal static class TelemetryBootstrapExtensions
       !string.IsNullOrWhiteSpace(telemetryOptions.ApiKey),
       telemetryOptions.ExportTimeoutMilliseconds);
 
+    // Connection strings (presence only — values masked)
+    serilogLogger.Information(
+      "Connection strings — MongoDb: {HasMongoDb}, SqlServer: {HasSqlServer}, Redis: {HasRedis}, Database: {DatabaseName}",
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("MongoDb")),
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("SqlServer")),
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"]),
+      builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack");
+
+    // Auth providers
+    serilogLogger.Information(
+      "Auth config — JWT secret: {HasJwtSecret}, Google: {HasGoogle}, Microsoft: {HasMicrosoft}, Facebook: {HasFacebook}",
+      !string.IsNullOrWhiteSpace(builder.Configuration["Auth:Jwt:Secret"]),
+      !string.IsNullOrWhiteSpace(builder.Configuration["Auth:Google:ClientId"]),
+      !string.IsNullOrWhiteSpace(builder.Configuration["Auth:Microsoft:ClientId"]),
+      !string.IsNullOrWhiteSpace(builder.Configuration["Auth:Facebook:AppId"]));
+
+    // Bootstrap snapshot paths
+    serilogLogger.Information(
+      "Bootstrap config — AppConfig: {AppConfigPath}, KeyVault: {KeyVaultPath}, LKG: {LkgPath}",
+      builder.Configuration["SignalStack:Bootstrap:AppConfiguration:SnapshotPath"] ?? "(not set)",
+      builder.Configuration["SignalStack:Bootstrap:KeyVault:SnapshotPath"] ?? "(not set)",
+      builder.Configuration["SignalStack:Bootstrap:LastKnownGood:CachePath"] ?? "(not set)");
+
     if (hasOtlpEndpoint)
     {
       otelBuilder

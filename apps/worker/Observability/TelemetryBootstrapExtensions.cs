@@ -48,6 +48,41 @@ internal static class TelemetryBootstrapExtensions
       !string.IsNullOrWhiteSpace(telemetryOptions.ApiKey),
       telemetryOptions.ExportTimeoutMilliseconds);
 
+    // Connection strings (presence only — values masked)
+    serilogLogger.Information(
+      "Connection strings — MongoDb: {HasMongoDb}, SqlServer: {HasSqlServer}, Redis: {HasRedis}, Database: {DatabaseName}",
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("MongoDb")),
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("SqlServer")),
+      !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"]),
+      builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack");
+
+    // Bootstrap snapshot paths
+    serilogLogger.Information(
+      "Bootstrap config — AppConfig: {AppConfigPath}, KeyVault: {KeyVaultPath}, LKG: {LkgPath}",
+      builder.Configuration["SignalStack:Bootstrap:AppConfiguration:SnapshotPath"] ?? "(not set)",
+      builder.Configuration["SignalStack:Bootstrap:KeyVault:SnapshotPath"] ?? "(not set)",
+      builder.Configuration["SignalStack:Bootstrap:LastKnownGood:CachePath"] ?? "(not set)");
+
+    // Worker singleton lease
+    serilogLogger.Information(
+      "Worker singleton — LeaseKey: {LeaseKey}, TTL: {LeaseTtl}s, RefreshInterval: {RefreshInterval}s, HeartbeatInterval: {HeartbeatInterval}s",
+      builder.Configuration["WorkerSingleton:LeaseKey"] ?? "rme:worker:singleton",
+      builder.Configuration.GetValue<int>("WorkerSingleton:LeaseTtlSeconds", 60),
+      builder.Configuration.GetValue<int>("WorkerSingleton:RefreshIntervalSeconds", 20),
+      builder.Configuration.GetValue<int>("WorkerSingleton:HeartbeatIntervalSeconds", 10));
+
+    // Job poll intervals
+    serilogLogger.Information(
+      "Job poll intervals (s) — DataSync: {DataSync}, HistoricDataSeed: {Hds}, LiveMarketScan: {Lms}, NotificationDelivery: {Nd}, AccountSync: {Acct}, EodSignalRunner: {Eod}, AdminFyersTokenCheck: {FyersCheck}",
+      builder.Configuration.GetValue<int>("DataSync:PollIntervalSeconds", 120),
+      builder.Configuration.GetValue<int>("HistoricDataSeed:PollIntervalSeconds", 30),
+      builder.Configuration.GetValue<int>("LiveMarketScan:PollIntervalSeconds", 90),
+      builder.Configuration.GetValue<int>("NotificationDelivery:PollIntervalSeconds", 10),
+      builder.Configuration.GetValue<int>("AccountSync:PollIntervalSeconds", 60),
+      builder.Configuration.GetValue<int>("EodSignalRunner:PollIntervalSeconds", 300),
+      builder.Configuration.GetValue<int>("AdminFyersTokenCheck:PollIntervalSeconds", 60));
+
     if (hasOtlpEndpoint)
     {
       otelBuilder
