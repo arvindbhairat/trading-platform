@@ -32,3 +32,13 @@ Token NEW - 78b5de0e-fdec-473d-909c-1cfb1959f16e
 ssh -i "ssh-key-2026-05-23.key" ubuntu@80.225.232.198
 
 
+Google OAuth
+
+Client ID:
+783246443100-4ksu22ihche7gs49p86261s78802u584.apps.googleusercontent.com
+
+Client secret:
+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
+
+Authorised Redirect URI:
+https://api-production-b8b8f.up.railway.app/api/v1/auth/callback/google
