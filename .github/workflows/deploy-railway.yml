@@ -20,9 +20,41 @@ permissions:
   contents: read
 
 jobs:
+  seeder:
+    name: "Run sys_config seeder"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore seed project
+        run: dotnet restore apps/seed/SignalStack.Seed.csproj
+
+      - name: Run seeder via Railway environment
+        run: >
+          npx @railway/cli@latest run --service api
+          --project ${{ vars.RAILWAY_PROJECT_ID }}
+          --environment production
+          --
+          dotnet run --project apps/seed/SignalStack.Seed.csproj --
+          --seed-version v0.3
+          --override "legal.disclaimer.short_text=Disclaimer - Arvind"
+          --override "legal.disclaimer.long_url=www.disclaimer.arvind.com"
+          --override "orders.execution_assistance_mode_updated_at=2026-05-25T00:00:00Z"
+          --override "notifications.email.sender_domain=railway.app"
+          --override "notifications.email.sender_address=noreply@railway.app"
+          --override "integrations.fyers.api_connect_sdk_expected_hash=30c38c3f785a11d9e5e3dd9864379d383830dd4be0462bce1a132a23c76aef4b"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
   deploy-api:
     name: "Deploy API"
     runs-on: ubuntu-latest
+    needs: [seeder]
     steps:
       - uses: actions/checkout@v4
 

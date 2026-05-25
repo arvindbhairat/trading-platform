@@ -20,6 +20,8 @@ Redis:
 Free redis database
 redis-cli -u redis://default:HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW@petunia-leather-cool-75695.db.redis.io:14772
 
+petunia-leather-cool-75695.db.redis.io:14772,password=HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW,ssl=True,abortConnect=false
+
 
 Railway
 Token - 0845df3b-5e6c-4d01-98a4-d380daae3630
