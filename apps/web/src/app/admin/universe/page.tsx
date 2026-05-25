@@ -701,7 +701,7 @@ export default function AdminUniversePage() {
   const archivedCount = symbols.filter((s) => s.is_archived).length;
 
   return (
-    <Shell current="universe" navItems={adminNavItems}>
+    <Shell current="universe" navItems={adminNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Header */}
         <div

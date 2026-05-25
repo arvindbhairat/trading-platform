@@ -219,7 +219,7 @@ export default function AdminIncidentsPage() {
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="incidents" navItems={adminNavItems}>
+    <Shell current="incidents" navItems={adminNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Header */}
         <div

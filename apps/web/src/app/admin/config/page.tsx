@@ -299,7 +299,7 @@ export default function AdminConfigPage() {
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="config" navItems={adminNavItems}>
+    <Shell current="config" navItems={adminNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         <div
           style={{

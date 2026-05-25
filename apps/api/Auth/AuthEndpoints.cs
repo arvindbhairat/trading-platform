@@ -404,6 +404,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "pending_approval",
+                    role = user?.Role ?? UserRole.User,
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -414,6 +415,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "deactivated",
+                    role = user?.Role ?? UserRole.User,
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -435,6 +437,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "pending_acknowledgement",
+                    role = user.Role,
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -456,6 +459,7 @@ public static class AuthEndpoints
                     return Results.Ok(new
                     {
                         state = "active",
+                        role = user.Role,
                         expires_at = session.ExpiresAt.ToString("o"),
                         step_up = new
                         {
@@ -475,6 +479,7 @@ public static class AuthEndpoints
                     return Results.Ok(new
                     {
                         state = "fyers_dirty_admin",
+                        role = user.Role,
                         expires_at = session.ExpiresAt.ToString("o"),
                         step_up = new
                         {
@@ -491,6 +496,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "fyers_required",
+                    role = user.Role,
                     expires_at = session.ExpiresAt.ToString("o"),
                     step_up = new
                     {
@@ -510,6 +516,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "active",
+                    role = user.Role,
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -521,6 +528,7 @@ public static class AuthEndpoints
                 return Results.Ok(new
                 {
                     state = "fyers_dirty",
+                    role = user.Role,
                     expires_at = session.ExpiresAt.ToString("o")
                 });
             }
@@ -529,6 +537,7 @@ public static class AuthEndpoints
             return Results.Ok(new
             {
                 state = "fyers_required",
+                role = user.Role,
                 expires_at = session.ExpiresAt.ToString("o")
             });
         }).RequireAuthorization();

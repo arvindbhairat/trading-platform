@@ -6,17 +6,20 @@
  */
 
 import { type ReactNode } from "react";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { PushAlertProvider } from "./PushAlertProvider";
 import { PushDegradationBanner } from "./PushDegradationBanner";
 import { FyersSdkProvider } from "./FyersSdkProvider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <FyersSdkProvider>
-      <PushAlertProvider>
-        <PushDegradationBanner />
-        {children}
-      </PushAlertProvider>
-    </FyersSdkProvider>
+    <AuthProvider>
+      <FyersSdkProvider>
+        <PushAlertProvider>
+          <PushDegradationBanner />
+          {children}
+        </PushAlertProvider>
+      </FyersSdkProvider>
+    </AuthProvider>
   );
 }

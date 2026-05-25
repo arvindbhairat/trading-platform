@@ -791,7 +791,7 @@ export default function AdminPrivacyRequestsPage() {
   const currentNavItems = adminNavItemsWithApprovals(0);
 
   return (
-    <Shell current="privacy-requests" navItems={currentNavItems}>
+    <Shell current="privacy-requests" navItems={currentNavItems} admin={true}>
       {view === "list" && renderList()}
       {view === "create" && renderCreate()}
       {view === "detail" && renderDetail()}

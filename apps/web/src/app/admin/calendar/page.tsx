@@ -359,7 +359,7 @@ export default function AdminCalendarPage() {
   const isNonTradingDay = form.sessionType === "non_trading_day";
 
   return (
-    <Shell current="calendar" navItems={adminNavItems}>
+    <Shell current="calendar" navItems={adminNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         <div
           style={{

@@ -15,6 +15,7 @@ export type SessionState =
 
 export interface SessionStatus {
   state: SessionState;
+  role: "user" | "admin";
   expires_at: string; // ISO-8601
   step_up?: {
     valid: boolean;

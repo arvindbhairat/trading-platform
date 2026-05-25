@@ -421,7 +421,7 @@ export default function AdminHomePage() {
   const needsRecovery = summary?.needsReview && !summary.dismissed;
 
   return (
-    <Shell current="home" navItems={adminNavItems}>
+    <Shell current="home" navItems={adminNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Impersonation banner (P8-T5 / REQ-ADMIN-015) */}
         <ImpersonationBanner />

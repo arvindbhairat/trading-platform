@@ -234,7 +234,7 @@ export default function AdminApprovalsPage() {
   const currentNavItems = adminNavItemsWithApprovals(pendingCount);
 
   return (
-    <Shell current="approvals" navItems={currentNavItems}>
+    <Shell current="approvals" navItems={currentNavItems} admin={true}>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         {/* Header */}
         <div

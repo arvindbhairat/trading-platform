@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/primitives";
 import { apiFetch, getToken } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
@@ -72,6 +73,7 @@ interface ReconciliationStatusDto {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { role } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
   const [holdings, setHoldings] = useState<HoldingDto[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryDto | null>(null);
@@ -244,7 +246,7 @@ export default function DashboardPage() {
 
   return (
     <>
-    <Shell current="dashboard" navItems={userNavItems}>
+    <Shell current="dashboard" navItems={userNavItems} admin={role === "admin"}>
       <div style={{ padding: "var(--s-8) var(--s-10)", display: "flex", flexDirection: "column", gap: "var(--s-6)" }}>
         <SessionExpiryBanner />
 
