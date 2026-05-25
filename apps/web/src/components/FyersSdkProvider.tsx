@@ -20,7 +20,7 @@ export function FyersSdkProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check if script is already loaded
     if (document.querySelector(`script[src="${FYERS_SDK_URL}"]`)) {
-      setStatus("loaded");
+      Promise.resolve().then(() => setStatus("loaded"));
       return;
     }
 

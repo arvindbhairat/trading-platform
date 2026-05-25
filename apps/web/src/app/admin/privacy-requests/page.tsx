@@ -4,7 +4,7 @@
 // Data subject rights workflow: access, correction, erasure, and grievance redressal.
 // Acknowledgment within 7 days, completion within 30 days.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -104,35 +104,33 @@ export default function AdminPrivacyRequestsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = getToken();
-      if (!token) { router.replace("/login"); return; }
-
-      const res = await apiFetch("/api/v1/admin/privacy/requests");
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) { router.replace("/login"); return; }
-        setLoading(false); return;
-      }
-
-      const data = await res.json();
-      setTickets(data.tickets ?? []);
-
-      const openCount = (data.tickets ?? []).filter(
-        (t: PrivacyRequestEntry) => t.status === "open"
-      ).length;
-      setPendingCount(openCount);
-    } catch {
-      // Ignore fetch errors.
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
   useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    apiFetch("/api/v1/admin/privacy/requests")
+      .then(res => {
+        if (cancelled) return null;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) router.replace("/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (cancelled || !data) { if (!cancelled) setLoading(false); return; }
+        setTickets(data.tickets ?? []);
+        setPendingCount((data.tickets ?? []).filter(
+          (t: PrivacyRequestEntry) => t.status === "open"
+        ).length);
+        setLoading(false);
+        setError(null);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [router]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 

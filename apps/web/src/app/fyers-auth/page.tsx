@@ -66,12 +66,12 @@ function FyersAuthContent() {
     const errorParam = params.get("error");
 
     if (errorParam) {
-      setStatus(`error:${decodeURIComponent(errorParam)}`);
+      Promise.resolve().then(() => setStatus(`error:${decodeURIComponent(errorParam)}`));
       return;
     }
 
     if (statusParam === "success") {
-      setStatus("success");
+      Promise.resolve().then(() => setStatus("success"));
       fetchSessionStatus().then((session: SessionStatus | null) => {
         if (!session) {
           router.replace("/login?error=session_check_failed");
@@ -85,7 +85,7 @@ function FyersAuthContent() {
             router.replace("/");
             break;
           case "fyers_dirty":
-            setStatus("error:token_still_dirty");
+            Promise.resolve().then(() => setStatus("error:token_still_dirty"));
             break;
           default:
             router.replace("/");
@@ -96,11 +96,11 @@ function FyersAuthContent() {
     }
 
     if (statusParam === "dirty") {
-      setStatus("dirty");
+      Promise.resolve().then(() => setStatus("dirty"));
       return;
     }
 
-    setStatus("awaiting");
+    Promise.resolve().then(() => setStatus("awaiting"));
   }, [params, router]);
 
   if (status === "success") {

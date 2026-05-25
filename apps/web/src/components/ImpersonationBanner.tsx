@@ -4,7 +4,7 @@
 // Shows a prominent banner when the admin is viewing the portal as another user.
 // Provides stop-impersonation controls. Idle timeout is enforced server-side.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Card, Btn, Icon } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 
@@ -24,39 +24,30 @@ export default function ImpersonationBanner() {
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      const res = await apiFetch("/api/v1/admin/impersonation/status");
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
-
-      const data: ImpersonationStatus = await res.json();
-      setStatus(data);
-    } catch {
-      // Ignore fetch errors.
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchStatus();
+    const token = getToken();
+    if (token) {
+      apiFetch("/api/v1/admin/impersonation/status")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => { if (data) setStatus(data as ImpersonationStatus); })
+        .catch(() => {})
+        .finally(() => { setLoading(false); });
+    } else {
+      Promise.resolve().then(() => setLoading(false));
+    }
 
-    // Poll for idle timeout every 30 seconds while impersonating.
     const interval = setInterval(() => {
-      fetchStatus();
+      const t = getToken();
+      if (t) {
+        apiFetch("/api/v1/admin/impersonation/status")
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => { if (data) setStatus(data as ImpersonationStatus); })
+          .catch(() => {});
+      }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, []);
 
   async function handleStop() {
     setStopping(true);

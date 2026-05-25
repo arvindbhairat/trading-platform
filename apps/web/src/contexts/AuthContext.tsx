@@ -44,8 +44,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const token = getToken();
+    if (!token) {
+      Promise.resolve().then(() => { setRole(null); setLoading(false); });
+      return;
+    }
+    fetchSessionStatus().then((status) => {
+      if (status?.role) {
+        setRole(status.role);
+      } else {
+        setRole(null);
+      }
+      setLoading(false);
+    });
+  }, []);
 
   return (
     <AuthContext.Provider value={{ role, loading, refresh }}>

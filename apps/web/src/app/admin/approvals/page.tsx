@@ -5,7 +5,7 @@
 // suspension (REQ-ADMIN-010), and signals_suspended display.
 // Audit events are recorded for each action.
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -70,17 +70,13 @@ export default function AdminApprovalsPage() {
   // ── Data fetching ────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    const statusParam =
+      activeTab === "all" ? "" : `?status=${encodeURIComponent(activeTab)}`;
+
     try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const statusParam =
-        activeTab === "all" ? "" : `?status=${encodeURIComponent(activeTab)}`;
-
       const [usersRes, countRes] = await Promise.all([
         apiFetch(`/api/v1/admin/users${statusParam}`),
         apiFetch("/api/v1/admin/users/pending/count"),
@@ -91,31 +87,32 @@ export default function AdminApprovalsPage() {
           router.replace("/login");
           return;
         }
-        setLoading(false);
         return;
       }
 
-      const usersData = await usersRes.json();
-      const countData = countRes.ok ? await countRes.json() : { count: 0 };
+      const [usersData, countData] = await Promise.all([
+        usersRes.json(),
+        countRes.ok ? countRes.json() : { count: 0 },
+      ]);
 
       setUsers(usersData.users ?? []);
       setPendingCount(countData.count ?? 0);
     } catch {
-      // Ignore fetch errors — retry on next action.
+      // Data fetch failed; component shows empty state.
     } finally {
       setLoading(false);
     }
   }, [activeTab, router]);
 
   useEffect(() => {
-    fetchData();
+    Promise.resolve().then(() => fetchData());
   }, [fetchData]);
 
   // ── Action helpers ───────────────────────────────────────────────────
 
   async function handleStepUp(stepUpUrl?: string) {
     if (stepUpUrl) {
-      window.location.href = stepUpUrl;
+      window.location.assign(stepUpUrl);
       return true;
     }
     // If no step-up URL, try to initiate one.
@@ -124,7 +121,7 @@ export default function AdminApprovalsPage() {
     });
     if (stepUpRes.ok) {
       const { step_up_url } = await stepUpRes.json();
-      window.location.href = step_up_url;
+      window.location.assign(step_up_url);
       return true;
     }
     return false;

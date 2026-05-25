@@ -10,7 +10,7 @@
 // 7-day daily breakdown, per-job retry, Symbol Validity Probe banner, and
 // maintenance window display (A-14).
 
-import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -19,7 +19,6 @@ import {
   Pill,
   Icon,
   StatusDot,
-  Label,
   adminNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
@@ -173,64 +172,47 @@ export default function AdminHomePage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  const fetchSummary = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const [summaryRes, coverageRes, healthRes, svpRes, legalRes] = await Promise.all([
-        apiFetch("/api/v1/admin/transfer-recovery-summary"),
-        apiFetch("/api/v1/admin/calendar/coverage"),
-        apiFetch("/api/v1/admin/system-health"),
-        apiFetch("/api/v1/admin/symbol-probe/summary"),
-        apiFetch("/api/v1/admin/legal-posture"),
-      ]);
-
-      if (!summaryRes.ok) {
-        if (summaryRes.status === 401 || summaryRes.status === 403) {
-          router.replace("/login");
-          return;
-        }
-        setLoading(false);
-        return;
-      }
-
-      if (coverageRes.ok) {
-        const covData: CoverageData = await coverageRes.json();
-        setCoverage(covData);
-      }
-
-      if (healthRes.ok) {
-        const healthData: SystemHealthData = await healthRes.json();
-        setHealth(healthData);
-      }
-
-      if (svpRes.ok) {
-        const svpData: SymbolProbeSummary = await svpRes.json();
-        setSvpSummary(svpData);
-      }
-
-      if (legalRes.ok) {
-        const legalData: LegalPostureData = await legalRes.json();
-        setLegalPosture(legalData);
-      }
-
-      const data: TransferRecoverySummary = await summaryRes.json();
-      setSummary(data);
-    } catch {
-      // Ignore fetch errors — retry on next action.
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
   useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    Promise.all([
+      apiFetch("/api/v1/admin/transfer-recovery-summary"),
+      apiFetch("/api/v1/admin/calendar/coverage"),
+      apiFetch("/api/v1/admin/system-health"),
+      apiFetch("/api/v1/admin/symbol-probe/summary"),
+      apiFetch("/api/v1/admin/legal-posture"),
+    ])
+      .then(async ([summaryRes, coverageRes, healthRes, svpRes, legalRes]) => {
+        if (cancelled) return null;
+        if (!summaryRes.ok) {
+          if (summaryRes.status === 401 || summaryRes.status === 403) router.replace("/login");
+          return null;
+        }
+
+        const results: Record<string, unknown> = {};
+        if (coverageRes.ok) results.coverage = await coverageRes.json();
+        if (healthRes.ok) results.health = await healthRes.json();
+        if (svpRes.ok) results.svpSummary = await svpRes.json();
+        if (legalRes.ok) results.legalPosture = await legalRes.json();
+        results.summary = await summaryRes.json();
+        return results;
+      })
+      .then(results => {
+        if (cancelled || !results) { if (!cancelled) setLoading(false); return; }
+        if (results.coverage) setCoverage(results.coverage as CoverageData);
+        if (results.health) setHealth(results.health as SystemHealthData);
+        if (results.svpSummary) setSvpSummary(results.svpSummary as SymbolProbeSummary);
+        if (results.legalPosture) setLegalPosture(results.legalPosture as LegalPostureData);
+        setSummary(results.summary as TransferRecoverySummary);
+        setLoading(false);
+        setError(null);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [router]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 
@@ -651,7 +633,6 @@ export default function AdminHomePage() {
                               {comp.daily_breakdown.slice(-7).map((day) => {
                                 const total = day.runs || 1;
                                 const successPct = Math.round((day.success / total) * 100);
-                                const warnPct = Math.round((day.warnings / total) * 100);
                                 return (
                                   <div
                                     key={day.date}

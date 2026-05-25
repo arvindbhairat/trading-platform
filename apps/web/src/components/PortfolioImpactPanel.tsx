@@ -43,14 +43,6 @@ function heatColor(heat: number, max: number): string {
   return "var(--up-500)";
 }
 
-function heatBg(heat: number, max: number): string {
-  if (max <= 0) return "var(--neutral-bg)";
-  const ratio = heat / max;
-  if (ratio >= 1) return "var(--down-bg)";
-  if (ratio >= 0.8) return "var(--warn-bg)";
-  return "var(--up-bg)";
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PortfolioImpactPanel() {

@@ -5,7 +5,7 @@
 // Resolution of concurrency_conflict_unresolved incidents performs a
 // frozen-with-visibility transition on the associated position.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -59,41 +59,30 @@ export default function AdminIncidentsPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  const fetchIncidents = useCallback(async (status: FilterTab) => {
-    setLoading(true);
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const res = await apiFetch(
-        `/api/v1/admin/incidents?status=${status}&limit=100`
-      );
-
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          router.replace("/login");
-          return;
-        }
-        setLoading(false);
-        return;
-      }
-
-      const data: IncidentsResponse = await res.json();
-      setIncidents(data.incidents);
-      setTotalCount(data.total_count);
-    } catch {
-      // Ignore fetch errors
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
   useEffect(() => {
-    fetchIncidents(activeTab);
-  }, [fetchIncidents, activeTab]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    apiFetch(`/api/v1/admin/incidents?status=${activeTab}&limit=100`)
+      .then(res => {
+        if (cancelled) return null;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) router.replace("/login");
+          return null;
+        }
+        return res.json() as Promise<IncidentsResponse>;
+      })
+      .then(data => {
+        if (cancelled || !data) { if (!cancelled) setLoading(false); return; }
+        setIncidents(data.incidents);
+        setTotalCount(data.total_count);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [activeTab, router]);
 
   // ── Action handlers ──────────────────────────────────────────────────
 

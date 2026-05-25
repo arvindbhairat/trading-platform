@@ -118,24 +118,6 @@ export default function NotificationsPage() {
     }
   }, []);
 
-  const fetchNotificationTypes = useCallback(async () => {
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const res = await apiFetch("/api/v1/notifications/types");
-      if (res.ok) {
-        const data = await res.json();
-        setNotificationTypes(data ?? []);
-      }
-    } catch {
-      // Non-critical.
-    }
-  }, [router]);
-
   const buildQueryString = useCallback(
     (pageSkip: number): string => {
       const params = new URLSearchParams();
@@ -198,10 +180,31 @@ export default function NotificationsPage() {
 
   // Initial load.
   useEffect(() => {
-    fetchNotificationTypes();
-    fetchUnreadCount();
-    fetchNotifications(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    apiFetch("/api/v1/notifications/types")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setNotificationTypes(data ?? []); })
+      .catch(() => {});
+
+    apiFetch("/api/v1/notifications/unread-count")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setUnreadCount(data); })
+      .catch(() => {});
+
+    const params = new URLSearchParams();
+    params.set("limit", String(pageSize));
+    params.set("skip", "0");
+    apiFetch(`/api/v1/notifications?${params.toString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+        return res.json() as Promise<NotificationDto[]>;
+      })
+      .then((data) => { setNotifications(data); setHasMore(data.length === pageSize); setSkip(data.length); })
+      .catch((err) => { setError(err instanceof Error ? err.message : "Failed to load notifications"); })
+      .finally(() => { setLoading(false); });
+  }, [router]);
 
   // Subscribe to real-time push events (REQ-NFR-013) — auto-refresh when
   // a new notification arrives via WebSocket fan-out.
@@ -219,9 +222,29 @@ export default function NotificationsPage() {
 
   // Re-fetch when filters change.
   useEffect(() => {
-    fetchNotifications(true);
-    fetchUnreadCount();
-  }, [filterType, filterSymbol, filterDateFrom, filterDateTo, filterDeliveryStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    Promise.resolve().then(() => setLoading(true));
+    const params = new URLSearchParams();
+    params.set("limit", String(pageSize));
+    params.set("skip", "0");
+    if (filterType) params.set("type", filterType);
+    if (filterSymbol) params.set("symbol", filterSymbol);
+    if (filterDateFrom) params.set("dateFrom", filterDateFrom);
+    if (filterDateTo) params.set("dateTo", filterDateTo);
+    if (filterDeliveryStatus) params.set("deliveryStatus", filterDeliveryStatus);
+    apiFetch(`/api/v1/notifications?${params.toString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+        return res.json() as Promise<NotificationDto[]>;
+      })
+      .then((data) => { setNotifications(data); setHasMore(data.length === pageSize); setSkip(data.length); })
+      .catch((err) => { setError(err instanceof Error ? err.message : "Failed to load notifications"); })
+      .finally(() => { setLoading(false); });
+
+    apiFetch("/api/v1/notifications/unread-count")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setUnreadCount(data); })
+      .catch(() => {});
+  }, [filterType, filterSymbol, filterDateFrom, filterDateTo, filterDeliveryStatus]);
 
   // ── Actions ──────────────────────────────────────────────────────────
 

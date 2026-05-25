@@ -4,7 +4,7 @@
 // Displays all runtime config entries, allows editing and resetting values,
 // with category filtering and step-up gating for sensitive categories.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -98,47 +98,44 @@ export default function AdminConfigPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const [configRes, catRes, status] = await Promise.all([
-        apiFetch(
-          `/api/v1/admin/config${selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : ""}`,
-        ),
-        apiFetch("/api/v1/admin/config/categories"),
-        fetchSessionStatus(),
-      ]);
-
-      if (!configRes.ok) {
-        setError(`Failed to load config: ${configRes.status}`);
-        setLoading(false);
-        return;
-      }
-
-      const configData = await configRes.json();
-      const catData = catRes.ok ? await catRes.json() : { categories: [] };
-
-      setEntries(configData.entries ?? []);
-      setCategories(catData.categories ?? []);
-      setSessionStatus(status);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load config");
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedCategory, router]);
-
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    const url = `/api/v1/admin/config${selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : ""}`;
+
+    Promise.all([
+      apiFetch(url),
+      apiFetch("/api/v1/admin/config/categories"),
+      fetchSessionStatus(),
+    ])
+      .then(async ([configRes, catRes, status]) => {
+        if (cancelled) return null;
+        if (!configRes.ok) throw new Error(`Failed to load config: ${configRes.status}`);
+
+        const configData = await configRes.json();
+        const catData = catRes.ok ? await catRes.json() : { categories: [] };
+
+        return { entries: configData.entries ?? [], categories: catData.categories ?? [], status };
+      })
+      .then(result => {
+        if (cancelled || !result) return;
+        setError(null);
+        setEntries(result.entries);
+        setCategories(result.categories);
+        setSessionStatus(result.status);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load config");
+          setLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedCategory, router]);
 
   // ── Step-up check ────────────────────────────────────────────────────
 

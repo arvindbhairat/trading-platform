@@ -4,7 +4,7 @@
 // Displays all calendar entries with CRUD operations for session records
 // (normal, special, muhurat) and non-trading-day markers.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -172,51 +172,46 @@ export default function AdminCalendarPage() {
 
   // ── Data fetching ────────────────────────────────────────────────────
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const params = new URLSearchParams();
-      if (filterFrom) params.set("from", filterFrom);
-      if (filterTo) params.set("to", filterTo);
-      if (filterType) params.set("sessionType", filterType);
-
-      const [entriesRes, coverageRes] = await Promise.all([
-        apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
-        apiFetch("/api/v1/admin/calendar/coverage"),
-      ]);
-
-      if (!entriesRes.ok) {
-        setError(`Failed to load calendar entries: ${entriesRes.status}`);
-        setLoading(false);
-        return;
-      }
-
-      if (coverageRes.ok) {
-        const covData: CoverageData = await coverageRes.json();
-        setCoverage(covData);
-      }
-
-      const data = await entriesRes.json();
-      const docs: ApiDocument[] = data.entries ?? [];
-      setEntries(docs.map(mapDocument));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load calendar");
-    } finally {
-      setLoading(false);
-    }
-  }, [filterFrom, filterTo, filterType, router]);
-
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    const params = new URLSearchParams();
+    if (filterFrom) params.set("from", filterFrom);
+    if (filterTo) params.set("to", filterTo);
+    if (filterType) params.set("sessionType", filterType);
+
+    Promise.all([
+      apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
+      apiFetch("/api/v1/admin/calendar/coverage"),
+    ])
+      .then(async ([entriesRes, coverageRes]) => {
+        if (cancelled) return null;
+        if (!entriesRes.ok) throw new Error(`Failed to load calendar entries: ${entriesRes.status}`);
+
+        let coverage: CoverageData | undefined;
+        if (coverageRes.ok) coverage = await coverageRes.json() as CoverageData;
+
+        const data = await entriesRes.json();
+        return { coverage, entries: (data.entries ?? []).map(mapDocument) as ApiDocument[] };
+      })
+      .then(result => {
+        if (cancelled || !result) return;
+        if (result.coverage) setCoverage(result.coverage);
+        setError(null);
+        setEntries(result.entries);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load calendar");
+          setLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [filterFrom, filterTo, filterType, router]);
 
   // ── Form handlers ────────────────────────────────────────────────────
 

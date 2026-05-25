@@ -59,8 +59,10 @@ export function PushAlertProvider({ children }: { children: ReactNode }) {
     });
 
     // Sync initial state.
-    setPushStatus(client.status);
-    setUnreadCount({ ...client.unreadCount });
+    Promise.resolve().then(() => {
+      setPushStatus(client.status);
+      setUnreadCount({ ...client.unreadCount });
+    });
 
     // Start if not already started.
     if (client.status === "disconnected") {

@@ -74,7 +74,7 @@ interface ReconciliationStatusDto {
 export default function DashboardPage() {
   const router = useRouter();
   const { role } = useAuth();
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked] = useState(() => !!getToken());
   const [holdings, setHoldings] = useState<HoldingDto[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryDto | null>(null);
   const [reconStatus, setReconStatus] = useState<ReconciliationStatusDto | null>(null);
@@ -86,13 +86,10 @@ export default function DashboardPage() {
 
   // ── Auth guard: redirect to login if no JWT token ─────────────────────
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!authChecked) {
       router.replace("/login");
-      return;
     }
-    setAuthChecked(true);
-  }, [router]);
+  }, [authChecked, router]);
 
   // ── Exit modal state (P7-T11 / T-8) ──────────────────────────────────
   const [exitSymbol, setExitSymbol] = useState<string | null>(null);
@@ -145,7 +142,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    Promise.resolve().then(() => loadData());
   }, [loadData]);
 
   const handleRefresh = useCallback(async () => {
@@ -191,7 +188,7 @@ export default function DashboardPage() {
     loadData();
   };
 
-  const handleFyersComplete = (_nonce: string, _status: string) => {
+  const handleFyersComplete = () => {
     // Intent record updated. Holdings will refresh on dismiss.
   };
 

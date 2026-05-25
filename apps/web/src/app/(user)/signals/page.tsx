@@ -3,7 +3,7 @@
 // Signal Builder page — P4-T1 / REQ-STRAT-007a/007b, REQ-STRAT-017b.
 // Manage Signal Subscriptions: create, edit, pause/resume, versioned RME config.
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shell,
@@ -112,23 +112,12 @@ export default function SignalsPage() {
   // ── Data fetching ────────────────────────────────────────────────────
 
   const fetchSubscriptions = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
 
     try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
       const res = await apiFetch("/api/v1/signals/subscriptions/");
-      if (!res.ok) {
-        setError(`Failed to load: ${res.status}`);
-        setLoading(false);
-        return;
-      }
-
+      if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
       const data = await res.json();
       setSubscriptions(data ?? []);
     } catch (err) {
@@ -139,8 +128,18 @@ export default function SignalsPage() {
   }, [router]);
 
   useEffect(() => {
-    fetchSubscriptions();
-  }, [fetchSubscriptions]);
+    const token = getToken();
+    if (!token) { router.replace("/login"); return; }
+
+    apiFetch("/api/v1/signals/subscriptions/")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => { setSubscriptions(data ?? []); })
+      .catch((err) => { setError(err instanceof Error ? err.message : "Failed to load subscriptions"); })
+      .finally(() => { setLoading(false); });
+  }, [router]);
 
   // ── Create ───────────────────────────────────────────────────────────
 

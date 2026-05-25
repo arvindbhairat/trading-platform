@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Roboto, JetBrains_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { AppProviders } from "@/components/AppProviders";
 
@@ -24,9 +25,10 @@ export const metadata: Metadata = {
     "A browser-based decision-support platform for NSE Nifty 500 equities.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const nonce = (await headers()).get("x-nonce") ?? "";
   return (
-    <html lang="en" className={`${roboto.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" nonce={nonce} className={`${roboto.variable} ${jetbrainsMono.variable}`}>
       <body>
         <AppProviders>{children}</AppProviders>
       </body>

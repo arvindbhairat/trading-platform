@@ -100,8 +100,10 @@ export default function FyersButtonWidget({
   useEffect(() => {
     const appId = getFyersAppId();
     if (!appId) {
-      setPhase("error");
-      setErrorMessage("FYERS App ID is not available. Please reload the page.");
+      Promise.resolve().then(() => {
+        setPhase("error");
+        setErrorMessage("FYERS App ID is not available. Please reload the page.");
+      });
       return;
     }
 
@@ -121,14 +123,16 @@ export default function FyersButtonWidget({
     // Render the <fyers-button> element
     const btn = createFyersButton(container, appId, signedPayload.data_attributes);
     if (!btn) {
-      setPhase("error");
-      setErrorMessage(
-        "The FYERS order widget could not be loaded. The SDK may still be initialising."
-      );
+      Promise.resolve().then(() => {
+        setPhase("error");
+        setErrorMessage(
+          "The FYERS order widget could not be loaded. The SDK may still be initialising."
+        );
+      });
       return;
     }
 
-    setPhase("awaiting_click");
+    Promise.resolve().then(() => setPhase("awaiting_click"));
 
     // Cleanup: remove the fyers-button element and callback reference
     return () => {

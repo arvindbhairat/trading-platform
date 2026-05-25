@@ -9,7 +9,7 @@
 // Design system: uses tokens from globals.css and primitives.
 // Layout matches design_system/mock_screens/auth-screens.jsx.
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Logo, Icon, LegalFooter } from "@/components/primitives";
 import { getToken } from "@/lib/auth";
@@ -22,26 +22,9 @@ export default function PendingApprovalPage() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const checkStatus = useCallback(async () => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    const status = await fetchSessionStatus();
-    if (!status) {
-      router.replace("/login?error=session_check_failed");
-      return;
-    }
-
-    // If no longer pending_approval, route to the appropriate screen.
-    if (status.state !== "pending_approval") {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-
-      switch (status.state) {
+  useEffect(() => {
+    function routeByState(state: string) {
+      switch (state) {
         case "fyers_required":
           router.replace("/fyers-required");
           break;
@@ -58,25 +41,34 @@ export default function PendingApprovalPage() {
           router.replace("/login");
           break;
       }
-      return;
     }
 
-    setLastChecked(new Date());
-  }, [router]);
+    function check() {
+      const token = getToken();
+      if (!token) { router.replace("/login"); return; }
+      fetchSessionStatus().then((status) => {
+        if (!status) { router.replace("/login?error=session_check_failed"); return; }
+        if (status.state !== "pending_approval") {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          routeByState(status.state);
+          return;
+        }
+        setLastChecked(new Date());
+      });
+    }
 
-  useEffect(() => {
     // Check immediately on mount.
-    checkStatus();
+    check();
 
     // Then poll every POLL_INTERVAL_MS.
-    intervalRef.current = setInterval(checkStatus, POLL_INTERVAL_MS);
+    intervalRef.current = setInterval(check, POLL_INTERVAL_MS);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [checkStatus]);
+  }, [router]);
 
   return (
     <div

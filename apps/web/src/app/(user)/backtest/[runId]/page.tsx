@@ -5,7 +5,7 @@
 //
 // Design reference: design_system/mock_screens/user-screens.jsx — BacktestResults
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Shell,
@@ -166,36 +166,28 @@ export default function BacktestRunPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRun = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = getToken();
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const res = await apiFetch(`/api/v1/backtest/runs/${runId}`);
-      if (!res.ok) {
-        setError(res.status === 404 ? "Backtest run not found." : `Failed to load: ${res.status}`);
-        setLoading(false);
-        return;
-      }
-
-      const data: BacktestRunDto = await res.json();
-      setRun(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load backtest run");
-    } finally {
-      setLoading(false);
-    }
-  }, [runId, router]);
-
   useEffect(() => {
-    fetchRun();
-  }, [fetchRun]);
+    let cancelled = false;
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    apiFetch(`/api/v1/backtest/runs/${runId}`)
+      .then(res => {
+        if (!res.ok) throw new Error(res.status === 404 ? "Backtest run not found." : `Failed to load: ${res.status}`);
+        return res.json() as Promise<BacktestRunDto>;
+      })
+      .then(data => {
+        if (!cancelled) { setError(null); setRun(data); setLoading(false); }
+      })
+      .catch(err => {
+        if (!cancelled) { setError(err instanceof Error ? err.message : "Failed to load backtest run"); setLoading(false); }
+      });
+
+    return () => { cancelled = true; };
+  }, [runId, router]);
 
   // ── Render ───────────────────────────────────────────────────────────
 

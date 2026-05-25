@@ -156,6 +156,17 @@ interface WorkQueueItem {
 type Step = "idle" | "preview" | "commit";
 type Notification = { type: "success" | "error"; message: string };
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function formatAge(dateStr: string): string {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (days < 1) return "Today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return `${months} month${months > 1 ? "s" : ""} ago`;
+}
+
 // ── Page Component ─────────────────────────────────────────────────────
 
 export default function AdminUniversePage() {
@@ -256,9 +267,52 @@ export default function AdminUniversePage() {
   }, []);
 
   useEffect(() => {
-    fetchSymbols();
-    fetchUploads();
-  }, [fetchSymbols, fetchUploads]);
+    const token = getToken();
+    if (token) {
+      apiFetch("/api/v1/universe/symbols?archived=false")
+        .then((res) => {
+          if (!res.ok) {
+            if (res.status === 401 || res.status === 403) router.replace("/login");
+            return null;
+          }
+          return res.json() as Promise<SymbolEntry[]>;
+        })
+        .then((data) => { if (data) setSymbols(data); })
+        .catch(() => {})
+        .finally(() => { setLoadingSymbols(false); });
+    } else {
+      Promise.resolve().then(() => setLoadingSymbols(false));
+    }
+
+    Promise.resolve().then(() => setLoadingUploads(true));
+    const token2 = getToken();
+    if (token2) {
+      apiFetch("/api/v1/admin/universe/uploads")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            setUploads(data.uploads ?? []);
+            if (data.uploads && data.uploads.length > 0) {
+              const latest = data.uploads[0] as UploadHistoryEntry;
+              const ageDays = (Date.now() - new Date(latest.uploaded_at).getTime()) / 86400000;
+              if (ageDays > 180) {
+                setStaleWarning(
+                  `Last universe upload was ${Math.floor(ageDays)} days ago (${new Date(latest.uploaded_at).toLocaleDateString("en-IN")}). Consider refreshing against the latest NSE Nifty 500 composition.`
+                );
+              } else {
+                setStaleWarning(null);
+              }
+            } else {
+              setStaleWarning("No universe uploads recorded. Upload a Nifty 500 CSV to initialise the universe.");
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => { setLoadingUploads(false); });
+    } else {
+      Promise.resolve().then(() => setLoadingUploads(false));
+    }
+  }, [router]);
 
   // ── Sync health (REQ-UNIV-015a) ──────────────────────────────────────
 
@@ -302,7 +356,7 @@ export default function AdminUniversePage() {
     } catch {
       // ignore
     }
-  }, [hdsStatus?.is_running, hdsPollInterval, fetchSyncHealth]);
+  }, [hdsStatus, hdsPollInterval, fetchSyncHealth]);
 
   // Start HDS polling when a reseed is triggered or commit creates new symbols.
   const startHdsPolling = useCallback(() => {
@@ -387,10 +441,30 @@ export default function AdminUniversePage() {
 
   // Also fetch sync health, HDS status, and work queue on initial load.
   useEffect(() => {
-    fetchSyncHealth();
-    fetchHdsStatus();
-    fetchWorkQueue();
-  }, [fetchSyncHealth, fetchHdsStatus, fetchWorkQueue]);
+    const token = getToken();
+    if (!token) return;
+
+    Promise.resolve().then(() => setLoadingHealth(true));
+    apiFetch("/api/v1/admin/universe/sync-health")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setSyncHealth(data as SyncHealthData); })
+      .catch(() => {})
+      .finally(() => { setLoadingHealth(false); });
+
+    apiFetch("/api/v1/admin/universe/hds-status")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setHdsStatus(data as HdsStatusData); })
+      .catch(() => {});
+
+    Promise.resolve().then(() => setLoadingWorkQueue(true));
+    apiFetch("/api/v1/admin/universe/work-queue")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) { setWorkQueue(data.items ?? []); setProbeEnabled(data.probe_enabled ?? true); }
+      })
+      .catch(() => {})
+      .finally(() => { setLoadingWorkQueue(false); });
+  }, [router]);
 
   // ── Reseed (REQ-UNIV-015b) ───────────────────────────────────────────
 
@@ -683,15 +757,6 @@ export default function AdminUniversePage() {
       minute: "2-digit",
       timeZone: "Asia/Kolkata",
     });
-  }
-
-  function formatAge(dateStr: string): string {
-    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-    if (days < 1) return "Today";
-    if (days === 1) return "1 day ago";
-    if (days < 30) return `${days} days ago`;
-    const months = Math.floor(days / 30);
-    return `${months} month${months > 1 ? "s" : ""} ago`;
   }
 
   // ── Render ──────────────────────────────────────────────────────────

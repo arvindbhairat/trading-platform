@@ -139,13 +139,12 @@ export default function Phase1Modal({
   const [showPriceWarning, setShowPriceWarning] = useState(false);
   const [showHaltWarning, setShowHaltWarning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(new Set());
   const [deviationDismissed, setDeviationDismissed] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Signed-payload state (P7-T5 / REQ-ORDER-009b) ─────────────────────────
   const [signedPayload, setSignedPayload] = useState<SignedPayloadResponse | null>(null);
-  const [signedPayloadLoading, setSignedPayloadLoading] = useState(false);
+  const [, setSignedPayloadLoading] = useState(false);
   const [signedPayloadError, setSignedPayloadError] = useState<string | null>(null);
   const signedPayloadCounterRef = useRef(0); // track freshness across renders
 
@@ -255,7 +254,7 @@ export default function Phase1Modal({
   // ── Record price at modal open time for deviation tracking (CG-7) ───────
   useEffect(() => {
     if (currentPrice !== null && currentPrice > 0) {
-      setPriceAtOpen(currentPrice);
+      Promise.resolve().then(() => setPriceAtOpen(currentPrice));
     }
   }, [currentPrice]);
 
@@ -357,15 +356,6 @@ export default function Phase1Modal({
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [quantity, loading, error, fetchSignedPayload]);
-
-  // ── Warning acknowledgement ────────────────────────────────────────────
-  const acknowledgeWarning = useCallback((warning: string) => {
-    setAcknowledgedWarnings((prev) => {
-      const next = new Set(prev);
-      next.add(warning);
-      return next;
-    });
-  }, []);
 
   // ── Quantity handlers ──────────────────────────────────────────────────
   const handleQuantityChange = (delta: number) => {

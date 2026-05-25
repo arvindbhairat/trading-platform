@@ -9,16 +9,13 @@ import { getToken } from "@/lib/auth";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked] = useState(() => !!getToken());
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!authChecked) {
       router.replace("/login");
-      return;
     }
-    setAuthChecked(true);
-  }, [router]);
+  }, [authChecked, router]);
 
   if (!authChecked) {
     return null;
