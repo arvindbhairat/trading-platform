@@ -7,6 +7,11 @@ COPY apps/worker/ apps/worker/
 COPY apps/api/ apps/api/
 COPY packages/ packages/
 RUN dotnet restore apps/worker/SignalStack.Worker.csproj
+
+# Remove API config files before publish to avoid NETSDK1152 duplicates
+# Worker references API project, but only needs its assemblies — not its content
+RUN rm -f apps/api/appsettings.json apps/api/appsettings.Development.json \
+    && rm -rf apps/api/bootstrap
 RUN dotnet publish apps/worker/SignalStack.Worker.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
