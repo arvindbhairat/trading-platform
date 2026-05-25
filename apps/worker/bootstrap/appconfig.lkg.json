@@ -1,8 +1,5 @@
 {
   "LastSuccessfulReadUtc": "2026-05-09T06:05:42.6530712+00:00",
   "Values": {
-    "Telemetry:Otlp:Endpoint": "",
-    "Telemetry:Otlp:ApiKey": "",
-    "Telemetry:Otlp:ExportTimeoutMilliseconds": "5000"
   }
 }

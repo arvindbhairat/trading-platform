@@ -1,7 +1,4 @@
 {
   "Values": {
-    "Telemetry:Otlp:Endpoint": "",
-    "Telemetry:Otlp:ApiKey": "",
-    "Telemetry:Otlp:ExportTimeoutMilliseconds": "5000"
   }
 }

@@ -42,6 +42,12 @@ internal static class TelemetryBootstrapExtensions
 
     bool hasOtlpEndpoint = !string.IsNullOrWhiteSpace(telemetryOptions.Endpoint);
 
+    serilogLogger.Information(
+      "Telemetry config — Endpoint: {Endpoint}, ApiKey configured: {HasKey}, Timeout: {Timeout}ms",
+      hasOtlpEndpoint ? telemetryOptions.Endpoint : "(not set)",
+      !string.IsNullOrWhiteSpace(telemetryOptions.ApiKey),
+      telemetryOptions.ExportTimeoutMilliseconds);
+
     if (hasOtlpEndpoint)
     {
       otelBuilder
