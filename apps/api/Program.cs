@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using StackExchange.Redis;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
@@ -52,6 +54,19 @@ builder.AddSignalStackTelemetry(ApiServiceName);
 var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
 var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
 builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
+
+// Persist ASP.NET Core Data Protection keys in Redis so they survive container
+// restarts (the warning about ephemeral keys is resolved). Without this, auth
+// cookies, CSRF tokens, and antiforgery tokens are invalidated on every deploy.
+// REQ-SEC-001: Data Protection key ring must survive container restarts.
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+    ?? builder.Configuration["Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+    builder.Services.AddDataProtection()
+        .PersistKeysToStackExchangeRedis(() => redis.GetDatabase(), "DataProtection-Keys");
+}
 
 // Trade-ledger write lock primitives (REQ-PORT-031/031a/031b)
 builder.Services.AddLedgerWriteLock();
