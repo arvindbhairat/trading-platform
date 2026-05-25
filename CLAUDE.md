@@ -1,5 +1,12 @@
 # NSE Trading Platform Build Guide for Claude
 
+## Memory Persistence
+
+This project has a workspace memory system at `.memory/`. Future sessions MUST:
+1. **Read** `.memory/MEMORY.md` at session start to restore context
+2. **Persist** new learnings (decisions, configs, architecture insights) to `.memory/` automatically — no need for the user to ask
+3. Keep the index in `.memory/MEMORY.md` concise and up-to-date
+
 ## Mission
 
 Build a secure, testable web-based trading platform focused on the Nifty 500 universe listed on NSE.
@@ -59,7 +66,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Secrets: environment variables and Azure Key Vault
 - Admin-managed runtime settings: MongoDB `sys_config`
 - Source control and CI/CD: GitHub + GitHub Actions
-- Hosting: Azure
+- Hosting: Railway (Phase 1 zero-cost; API, Worker, and Web all in same Railway project)
 
 ## Non-Negotiable Guardrails
 

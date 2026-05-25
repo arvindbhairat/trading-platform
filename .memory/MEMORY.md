@@ -1,0 +1,2 @@
+- [Hosting: Railway](hosting.md) — All three services (API, Worker, Web) deployed to same Railway project
+- [Web App Architecture](web-app.md) — Client-rendered Next.js SPA, no SSR/API routes
