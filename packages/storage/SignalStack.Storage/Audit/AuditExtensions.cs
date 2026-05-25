@@ -1,6 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
 using SignalStack.Domain.Audit;
 
-namespace SignalStack.Api.Audit;
+namespace SignalStack.Storage.Audit;
 
 public static class AuditExtensions
 {

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using StackExchange.Redis;
 using SignalStack.Api.Admin;
 using SignalStack.Api.Audit;
+using SignalStack.Storage.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Fyers;
@@ -98,7 +99,7 @@ builder.Services.AddSessionManagement();
 builder.Services.AddUserManagement();
 
 // Immutable audit event collection — REQ-SEC-011, REQ-CONFIG-005a
-builder.Services.AddAuditEventManagement();
+builder.Services.AddAuditEventManagement(); // registered via SignalStack.Storage.Audit
 
 // FYERS credential management + token lifecycle — REQ-AUTH-003..010, 014, REQ-SESSION-009
 // Also registers HttpClient for FYERS REST API fallback (REQ-MARKET-002b).

@@ -273,10 +273,15 @@ public sealed class LiveAccountDataSyncService
             return _options.Value.DefaultIntradayIntervalMinutes;
 
         var value = doc.GetValue("value", BsonNull.Value);
-        if (value.IsBsonNull || !int.TryParse(value.AsString, out var parsed))
-            return _options.Value.DefaultIntradayIntervalMinutes;
+        if (value.IsBsonNull) return _options.Value.DefaultIntradayIntervalMinutes;
 
-        return parsed;
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsInt64) return (int)value.AsInt64;
+        if (value.IsDouble) return (int)value.AsDouble;
+
+        return int.TryParse(value.AsString, out var parsed)
+            ? parsed
+            : _options.Value.DefaultIntradayIntervalMinutes;
     }
 
     /// <summary>
@@ -293,10 +298,16 @@ public sealed class LiveAccountDataSyncService
             return 10;
 
         var value = doc.GetValue("value", BsonNull.Value);
-        if (value.IsBsonNull || !int.TryParse(value.AsString, out var parsed))
-            return 10;
+        if (value.IsBsonNull) return 10;
 
-        return parsed;
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsInt64) return (int)value.AsInt64;
+        if (value.IsDouble) return (int)value.AsDouble;
+
+        if (int.TryParse(value.AsString, out var parsed))
+            return parsed;
+
+        return 10;
     }
 
     /// <summary>

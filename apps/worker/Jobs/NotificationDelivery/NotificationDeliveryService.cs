@@ -346,6 +346,7 @@ public sealed class NotificationDeliveryService
         var value = doc.GetValue("value", BsonNull.Value);
         if (value.IsBsonNull) return false;
 
+        if (value.IsBoolean) return value.AsBoolean;
         return string.Equals(value.AsString, "true", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -362,6 +363,10 @@ public sealed class NotificationDeliveryService
 
         var value = doc.GetValue("value", BsonNull.Value);
         if (value.IsBsonNull) return defaultValue;
+
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsInt64) return (int)value.AsInt64;
+        if (value.IsDouble) return (int)value.AsDouble;
 
         if (int.TryParse(value.AsString, out var parsed))
             return parsed;

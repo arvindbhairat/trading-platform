@@ -2,7 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Domain.Audit;
 
-namespace SignalStack.Api.Audit;
+namespace SignalStack.Storage.Audit;
 
 public sealed class MongoAuditEventRepository : IAuditEventRepository
 {

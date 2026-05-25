@@ -525,9 +525,15 @@ public sealed class IntentReconciliationService
             return 0.10;
 
         var value = doc.GetValue("value", BsonNull.Value);
-        if (value.IsBsonNull || !double.TryParse(value.AsString, out var parsed))
-            return 0.10;
+        if (value.IsBsonNull) return 0.10;
 
-        return parsed;
+        if (value.IsDouble) return value.AsDouble;
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsInt64) return value.AsInt64;
+
+        if (double.TryParse(value.AsString, out var parsed))
+            return parsed;
+
+        return 0.10;
     }
 }

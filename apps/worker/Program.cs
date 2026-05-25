@@ -13,6 +13,8 @@ using SignalStack.Storage.Backtesting;
 using SignalStack.Storage.Historical;
 using SignalStack.Storage.Notifications;
 using SignalStack.Storage.Signals;
+using SignalStack.Storage.Audit;
+using SignalStack.Storage.SysConfig;
 using SignalStack.Storage.Universe;
 using SignalStack.Worker.Configuration;
 using SignalStack.Worker.Hosting;
@@ -81,6 +83,14 @@ builder.Services.AddRmeModule(builder.Configuration);
 
 // Sentinel startup check (REQ-CONFIG-010): fails fast if seeder was skipped.
 builder.Services.AddSingleton<SeedVersionStartupGuard>();
+
+// Audit event repository (REQ-SEC-011) — used by IntentReconciliationService
+// in the LADS intent-reconciliation safety net (P7-T8 / REQ-ORDER-015c).
+builder.Services.AddAuditEventManagement();
+
+// SysConfig repository — used by SymbolProbeWorker for symbol probe gating
+// (REQ-UNIV-021/021a) and other worker services that read sys_config.
+builder.Services.AddSingleton<ISysConfigRepository, MongoSysConfigRepository>();
 
 // Symbol master suffix collision check (REQ-HIST-008a): fails fast if duplicate
 // sql_table_name_suffix values exist in the symbol master.
