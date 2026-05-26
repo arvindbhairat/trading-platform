@@ -66,6 +66,7 @@ if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
     var redis = ConnectionMultiplexer.Connect(redisConnectionString);
     builder.Services.AddDataProtection()
+        .SetApplicationName("SignalStack.Api")
         .PersistKeysToStackExchangeRedis(() => redis.GetDatabase(), "DataProtection-Keys");
 }
 
@@ -205,13 +206,18 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// Railway terminates TLS at the edge and forwards plain HTTP to the container with
-// X-Forwarded-Proto: https. This middleware reads that header so the app knows the
-// original scheme — critical for OAuth redirect URIs and other scheme-sensitive code.
+// Railway terminates TLS at the edge and forwards plain HTTP to the container.
+// This middleware ensures Request.Scheme reflects the original protocol.
+// X-Forwarded-Proto is read when available; in production we also apply a hard
+// default since Railway always terminates TLS.
 app.Use((context, next) =>
 {
   if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto)
       && proto.ToString().Equals("https", StringComparison.OrdinalIgnoreCase))
+  {
+    context.Request.Scheme = "https";
+  }
+  else if (!app.Environment.IsDevelopment())
   {
     context.Request.Scheme = "https";
   }
@@ -253,6 +259,26 @@ app.UseWebSockets(new WebSocketOptions
 });
 
 app.UseRateLimiter();
+
+// Diagnostic logging for OAuth callback requests to debug state validation.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Value?.Contains("/api/v1/auth/callback") == true)
+    {
+        var logger = context.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("SignalStack.Api.Auth");
+        var state = context.Request.Query["state"].FirstOrDefault() ?? "";
+        var code = context.Request.Query["code"].FirstOrDefault() ?? "";
+        var err = context.Request.Query["error"].FirstOrDefault() ?? "";
+        logger.LogWarning(
+            "OAuth callback: Scheme={Scheme} Host={Host} Path={Path} State={SLen} Code={CLen} Error={Error} XFP={XFP}",
+            context.Request.Scheme, context.Request.Host, context.Request.Path,
+            state.Length, code.Length, err,
+            context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault());
+    }
+    await next(context);
+});
 
 // Auth middleware — must precede CsrfMiddleware so context.User is populated.
 app.UseAuthentication();
