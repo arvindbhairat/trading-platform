@@ -42,6 +42,19 @@ public static class AuthExtensions
                 };
             });
 
+        // Short-lived cookie scheme for OAuth temp sign-in between the callback and the
+        // JWT issuance. The RemoteAuthenticationHandler internally calls SignInAsync after
+        // exchanging the authorization code — JwtBearerHandler can't sign in, so we need a
+        // dedicated cookie scheme as the SignInScheme.
+        authBuilder.AddCookie("OAuthTemp", options =>
+        {
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            options.SlidingExpiration = false;
+        });
+
         // OAuth providers are conditionally registered when credentials are configured.
         // REQ-AUTH-011: the login page always shows all three providers regardless of whether
         // their server-side credentials are present; the provider list endpoint returns all three
@@ -56,6 +69,7 @@ public static class AuthExtensions
                 options.ClientId = googleClientId;
                 options.ClientSecret = googleSecret;
                 options.CallbackPath = "/api/v1/auth/callback/google";
+                options.SignInScheme = "OAuthTemp";
                 options.SaveTokens = false;
             });
         }
@@ -70,6 +84,7 @@ public static class AuthExtensions
                 options.ClientId = msClientId;
                 options.ClientSecret = msSecret;
                 options.CallbackPath = "/api/v1/auth/callback/microsoft";
+                options.SignInScheme = "OAuthTemp";
                 options.SaveTokens = false;
             });
         }
@@ -83,6 +98,7 @@ public static class AuthExtensions
                 options.AppId = fbAppId;
                 options.AppSecret = fbSecret;
                 options.CallbackPath = "/api/v1/auth/callback/facebook";
+                options.SignInScheme = "OAuthTemp";
                 options.SaveTokens = false;
             });
         }
