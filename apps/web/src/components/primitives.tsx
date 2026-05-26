@@ -10,6 +10,7 @@
 
 import React, { useState, type ReactNode, type CSSProperties } from "react";
 import Link from "next/link";
+import { logout } from "@/lib/auth";
 
 // ---------------------------------------------------------------------------
 // Icon — Lucide-style SVG icons, 24x24 viewBox
@@ -622,6 +623,26 @@ export function SideNav({
       >
         <Icon name="settings" size={16} />
         Settings
+      </button>
+      <button
+        onClick={() => logout()}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "9px 12px",
+          background: "transparent",
+          border: "none",
+          color: "var(--fg-2)",
+          cursor: "pointer",
+          fontFamily: "var(--font-sans)",
+          fontSize: "13px",
+          fontWeight: 500,
+          textAlign: "left",
+        }}
+      >
+        <Icon name="x" size={16} />
+        Sign out
       </button>
     </nav>
   );

@@ -18,6 +18,28 @@ export function clearToken(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+/**
+ * Logs the user out:
+ * 1. Calls POST /api/v1/auth/logout to invalidate the server-side session
+ * 2. Clears the JWT from sessionStorage
+ * 3. Redirects to /login
+ *
+ * Safe to call even if the server is unreachable — the local token is always cleared.
+ * REQ-SESSION-004.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await apiFetch("/api/v1/auth/logout", { method: "POST" });
+  } catch {
+    // Server unreachable — clear locally anyway.
+  } finally {
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+  }
+}
+
 // Returns the value of the XSRF-TOKEN cookie set by the API's /auth/csrf endpoint.
 // The API antiforgery middleware reads this back from the X-XSRF-TOKEN request header.
 function getCsrfCookie(): string | null {

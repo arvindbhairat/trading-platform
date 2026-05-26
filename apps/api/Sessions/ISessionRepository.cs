@@ -70,4 +70,12 @@ public interface ISessionRepository
         string sessionToken,
         DateTime activityAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Invalidates (deletes) the session identified by <paramref name="sessionToken"/>.
+    /// Called during user logout so the JWT can no longer be used. REQ-SESSION-004.
+    /// </summary>
+    Task InvalidateSessionAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default);
 }

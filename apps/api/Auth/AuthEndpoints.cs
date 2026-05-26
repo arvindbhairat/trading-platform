@@ -545,6 +545,22 @@ public static class AuthEndpoints
             });
         }).RequireAuthorization();
 
+        // POST /api/v1/auth/logout
+        // REQ-SESSION-004: invalidates the current server-side session and clears
+        // the JWT so the user must re-authenticate via OAuth to obtain a new token.
+        auth.MapPost("/logout", async (
+            HttpContext context,
+            ISessionRepository sessionRepo) =>
+        {
+            var jti = context.User.FindFirst("jti")?.Value ?? "";
+            if (!string.IsNullOrEmpty(jti))
+            {
+                await sessionRepo.InvalidateSessionAsync(jti, context.RequestAborted);
+            }
+
+            return Results.Ok(new { logged_out = true });
+        }).RequireAuthorization();
+
         // POST /api/v1/auth/step-up/init
         // REQ-SEC-011: admin-only endpoint that returns the login URL for step-up.
         // The frontend redirects the browser to this URL to initiate a fresh OAuth

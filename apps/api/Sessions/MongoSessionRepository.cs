@@ -123,6 +123,16 @@ public sealed class MongoSessionRepository : ISessionRepository
         await _sessions.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
     }
 
+    // REQ-SESSION-004: delete the session document to invalidate the JWT.
+    public async Task InvalidateSessionAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default)
+    {
+        await _sessions.DeleteOneAsync(
+            Builders<SessionDocument>.Filter.Eq(s => s.SessionToken, sessionToken),
+            cancellationToken);
+    }
+
     // REQ-ADMIN-015: update the last-activity timestamp during impersonation.
     public async Task UpdateImpersonationActivityAsync(
         string sessionToken,

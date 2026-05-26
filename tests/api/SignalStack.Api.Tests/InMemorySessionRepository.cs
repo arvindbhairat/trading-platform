@@ -174,4 +174,17 @@ public sealed class InMemorySessionRepository : ISessionRepository
         }
         return Task.CompletedTask;
     }
+
+    // REQ-SESSION-004: remove the session from both dictionaries.
+    public Task InvalidateSessionAsync(
+        string sessionToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (_byToken.TryRemove(sessionToken, out var removed))
+        {
+            // Also clean up the user→token mapping so the user has no active session.
+            _userToToken.TryRemove(removed.UserId, out _);
+        }
+        return Task.CompletedTask;
+    }
 }
