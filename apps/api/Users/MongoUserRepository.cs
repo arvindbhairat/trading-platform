@@ -183,13 +183,12 @@ public sealed class MongoUserRepository : IUserRepository
             .SetOnInsert(u => u.UserId, userId)
             .SetOnInsert(u => u.Email, email)
             .SetOnInsert(u => u.Provider, provider)
-            .SetOnInsert(u => u.Role, UserRole.Admin)
-            .SetOnInsert(u => u.Status, UserApprovalState.Approved)
             .SetOnInsert(u => u.LedgerSnapshotVersion, 1L)
             .SetOnInsert(u => u.CreatedAt, now);
 
-        // Always elevate role and status on every admin sign-in so the bootstrap is
-        // idempotent — subsequent sign-ins keep the admin role and approved status.
+        // Always set role and status on every admin sign-in so the bootstrap is
+        // idempotent — $set handles both insert and update during upsert, avoiding
+        // a conflict with $setOnInsert on the same fields.
         var setAlways = Builders<UserDocument>.Update
             .Set(u => u.DisplayName, displayName)
             .Set(u => u.Role, UserRole.Admin)
