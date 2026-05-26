@@ -112,9 +112,9 @@ public static class AuthExtensions
         {
             options.HeaderName = "X-XSRF-TOKEN";
             options.Cookie.Name = "XSRF-TOKEN";
-            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.SameSite = SameSiteMode.None;
             options.Cookie.HttpOnly = false;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         });
 
         return services;
