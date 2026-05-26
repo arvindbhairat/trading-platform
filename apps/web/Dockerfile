@@ -22,9 +22,12 @@ COPY --from=build /app/apps/web/package.json .
 COPY --from=build /app/apps/web/next.config.ts .
 COPY --from=build /app/node_modules node_modules
 
+COPY apps/web/docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 3000
 
 ENV NODE_ENV=production
 ENV PORT=3000
 
-CMD ["npx", "next", "start"]
+CMD ["/app/docker-entrypoint.sh"]
