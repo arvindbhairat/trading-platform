@@ -260,10 +260,11 @@ app.UseWebSockets(new WebSocketOptions
 
 app.UseRateLimiter();
 
-// Diagnostic logging for OAuth callback requests to debug state validation.
+// Diagnostic logging for OAuth callback/complete requests.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.Value?.Contains("/api/v1/auth/callback") == true)
+    var path = context.Request.Path.Value ?? "";
+    if (path.Contains("/api/v1/auth/callback") || path.Contains("/api/v1/auth/complete"))
     {
         var logger = context.RequestServices
             .GetRequiredService<ILoggerFactory>()

@@ -77,7 +77,7 @@ public static class AuthEndpoints
 
             var props = new AuthenticationProperties
             {
-                RedirectUri = $"/api/v1/auth/callback/{provider.ToLowerInvariant()}"
+                RedirectUri = $"/api/v1/auth/complete/{provider.ToLowerInvariant()}"
             };
 
             if (context.Request.Query.ContainsKey("step_up"))
@@ -97,13 +97,14 @@ public static class AuthEndpoints
             return Results.Empty;
         });
 
-        // GET /api/v1/auth/callback/{provider}
-        // OAuth provider redirects here after user consent.
-        // Issues a JWT, upserts the user record (REQ-ROLE-001/004/005), and creates a
-        // server-side session (REQ-SESSION-002/002a), then redirects to the frontend.
-        // When initiated with ?step_up=true, updates the existing session's step-up
-        // timestamp instead of creating a new session (REQ-SEC-011).
-        auth.MapGet("/callback/{provider}", async (
+        // GET /api/v1/auth/complete/{provider}
+        // After the OAuth handler processes the provider callback at CallbackPath,
+        // it redirects the browser here (per the RedirectUri in AuthenticationProperties).
+        // This endpoint reads the principal from the OAuthTemp cookie, issues a JWT,
+        // creates a server-side session, and redirects to the frontend.
+        // Note: this path must NOT match any RemoteAuthenticationHandler's CallbackPath
+        // to avoid the middleware re-intercepting and consuming the state twice.
+        auth.MapGet("/complete/{provider}", async (
             string provider,
             HttpContext context,
             JwtTokenService jwtService,
@@ -112,10 +113,12 @@ public static class AuthEndpoints
             IAuditEventRepository auditRepo,
             IConfiguration configuration) =>
         {
-            if (!ProviderSchemeMap.TryGetValue(provider, out var scheme))
+            if (!ProviderSchemeMap.ContainsKey(provider))
                 return Results.BadRequest(new { error = "unknown_provider" });
 
-            var result = await context.AuthenticateAsync(scheme);
+            // The OAuth handler already consumed the provider callback in the middleware
+            // and signed the principal into the OAuthTemp cookie (the SignInScheme).
+            var result = await context.AuthenticateAsync("OAuthTemp");
             if (!result.Succeeded)
             {
                 var frontendBase = configuration["Auth:FrontendBaseUrl"] ?? "";
