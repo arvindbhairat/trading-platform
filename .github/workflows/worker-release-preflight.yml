@@ -6,6 +6,9 @@ name: Worker Release Pre-flight
 
 on:
   workflow_call:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     inputs:
       resource_group:
         required: true

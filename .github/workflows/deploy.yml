@@ -54,6 +54,7 @@ permissions:
   id-token: write   # Required for Azure OIDC federated auth
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DOTNET_VERSION: "10.0.x"
   MIGRATION_PROJECT: packages/migrations/SignalStack.SqlMigrations/SignalStack.SqlMigrations.csproj
   SEEDER_PROJECT: apps/seed/SignalStack.Seed.csproj
