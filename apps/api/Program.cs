@@ -204,6 +204,23 @@ builder.Services.AddRateLimiter(options =>
   });
 });
 
+// CORS — allows the frontend origin(s) configured in Cors:AllowedOrigins.
+// Required on Railway since there is no platform-level CORS panel.
+var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (corsAllowedOrigins is { Length: > 0 })
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            policy.WithOrigins(corsAllowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+    });
+}
+
 var app = builder.Build();
 
 // Railway terminates TLS at the edge and forwards plain HTTP to the container.
@@ -280,6 +297,11 @@ app.Use(async (context, next) =>
     }
     await next(context);
 });
+
+// CORS — handles preflight (OPTIONS) requests before auth so the OAuth
+// login flow from the frontend origin is not rejected.
+if (corsAllowedOrigins is { Length: > 0 })
+    app.UseCors();
 
 // Auth middleware — must precede CsrfMiddleware so context.User is populated.
 app.UseAuthentication();

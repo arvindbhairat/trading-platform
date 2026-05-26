@@ -26,6 +26,7 @@ type: reference
 | `Auth__Facebook__AppSecret` | ❌ Not yet configured |
 | `Auth__SeedAdminEmail` | ✅ Configured — email of the platform admin; used by `AuthEndpoints.cs` to upsert admin role on sign-in |
 | `FYERS_ACCESS_TOKEN` | ❌ Not configured — expected to be generated per-user after Fyers OAuth authentication |
+| `Cors__AllowedOrigins__0` | ✅ Configured — `https://web-production-0c8143.up.railway.app` |
 
 ## Worker Service
 
