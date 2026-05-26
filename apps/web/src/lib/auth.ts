@@ -48,8 +48,7 @@ function getCsrfCookie(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
-let _apiBaseCache: string | null = API_BASE ?? null;
+let _apiBaseCache: string | null = null;
 let _apiBasePromise: Promise<string> | null = null;
 
 async function getApiBase(): Promise<string> {
