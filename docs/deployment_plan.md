@@ -140,7 +140,7 @@ A single-user deployment where you are the only user and also the admin. The goa
 | Security scanning | SAST, dependency scan, secret scan | **Basic CI only** |
 | Email notification channel | Azure Communication Services | **Not needed** — Telegram only |
 | Backup retention policies | Configurable LTR | **Default automated backups** |
-| Admin MFA enforcement | Required (REQ-BCP-009) | **Not enforced** |
+| Admin MFA enforcement | Required (REQ-BCP-009) | **Deferred — not enforced in Phase 1** |
 
 ### 3.3 What Stays (Code-Required, Both Phases)
 
@@ -437,7 +437,7 @@ Single Oracle Cloud VM (Ampere A1, 4 OCPU, 24 GB RAM)
 3. Configure OAuth redirect URIs
 4. Store App ID and App Secret in Key Vault
 
-**Note:** Per REQ-BCP-009, Facebook/Meta OAuth is **blocked for admin sign-in** (no MFA claim in standard OAuth response).
+**Note:** Facebook/Meta OAuth is **blocked for admin sign-in** (REQ-ROLE-007). Per REQ-BCP-009 (DEFERRED), admin MFA enforcement is skipped in Phase 1 and will be re-enabled in a future phase. When MFA is re-enabled, Google and Microsoft will be required for admin sign-in because Facebook does not reliably expose MFA state in its standard OAuth response.
 
 ### 6.5 Telegram Bot [P1]
 
@@ -883,7 +883,7 @@ Before moving to Phase 2, complete these additional items:
 - [ ] Full CI/CD pipeline deployed (separate deploy workflows per service)
 - [ ] Security scanning workflows added (dependency, SAST, secret scan)
 - [ ] Worker singleton preflight script configured in pipeline
-- [ ] Admin MFA enforced (Google/Microsoft only)
+- [ ] Admin MFA enforced — re-enable REQ-BCP-009 (Google/Microsoft only; deferred from Phase 1)
 - [ ] Penetration test scheduled (required before Phase C)
 
 ### 12.4 FYERS Admin Token Daily Procedure [P1+P2]

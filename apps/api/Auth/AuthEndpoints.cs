@@ -163,16 +163,8 @@ public static class AuthEndpoints
                         $"{frontend}/login?error=admin_provider_restricted");
                 }
 
-                // REQ-BCP-009: validate amr MFA claim on step-up too.
-                var amrClaims = principal.FindAll("amr")
-                    .Select(c => c.Value)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var hasMfa = amrClaims.Overlaps(MfaClaimValues);
-                if (!hasMfa)
-                {
-                    return Results.Redirect(
-                        $"{frontend}/login?error=admin_mfa_required");
-                }
+                // REQ-BCP-009 (DEFERRED): admin MFA amr claim validation on step-up
+                // is skipped in Phase 1. Re-enable when MFA is turned back on.
 
                 var user = await userRepo.FindByEmailAsync(email, context.RequestAborted);
                 if (user is null || user.Role != UserRole.Admin)
@@ -297,21 +289,12 @@ public static class AuthEndpoints
                     $"{frontend}/login?error=admin_provider_restricted");
             }
 
-            // REQ-BCP-009: validate amr MFA claim for admin sign-in.
+            // REQ-BCP-009 (DEFERRED): admin MFA amr claim validation is skipped in Phase 1.
+            // MFA enforcement will be re-enabled in a future phase when admin security
+            // story is mature enough to warrant it. The MfaClaimValues constant and
+            // supporting infrastructure are left in place so re-enabling is a one-line
+            // revert at each call site.
             DateTime? mfaVerifiedAt = null;
-            if (isSeedAdmin)
-            {
-                var amrClaims = principal.FindAll("amr")
-                    .Select(c => c.Value)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var hasMfa = amrClaims.Overlaps(MfaClaimValues);
-                if (!hasMfa)
-                {
-                    return Results.Redirect(
-                        $"{frontend}/login?error=admin_mfa_required");
-                }
-                mfaVerifiedAt = DateTime.UtcNow;
-            }
 
             // REQ-ROLE-005: bootstrap admin or create regular user.
             if (isSeedAdmin)
