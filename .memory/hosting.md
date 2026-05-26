@@ -3,7 +3,7 @@ name: Hosting — Railway
 description: How API, Worker, and Web services are deployed to Railway
 ---
 
-All three services (API, Worker, Web) are deployed to the **same Railway project** via `.github/workflows/deploy-railway.yml`.
+All three services (API, Worker, Web) are deployed to the **same Railway project**. Build and deployment is handled by **Railway's own GitHub integration** — Railway watches the repo and auto-deploys each service on push to main. No GitHub Actions deployment workflow is needed.
 
 ## Services
 
@@ -13,12 +13,9 @@ All three services (API, Worker, Web) are deployed to the **same Railway project
 | `worker` | `apps/worker/Dockerfile` | `.` | Dockerfile |
 | `web` | `apps/web/Dockerfile` | `.` | Dockerfile (path: `apps/web/Dockerfile`) |
 
-## Deploy Order (GitHub Actions)
+## Pre-deploy: sys_config seeder
 
-1. `seeder` — runs sys_config seed against MongoDB
-2. `deploy-api` — deploys API service
-3. `deploy-web` + `deploy-worker` — run in parallel after API is deployed
-4. `health-check` — verifies API health endpoint
+Before Railway deploys, the `sys_config` seeder runs via `.github/workflows/deploy-railway.yml` (manual trigger via `workflow_dispatch`). It seeds MongoDB with required configuration rows. The seeder is a separate .NET console app at `apps/seed/`.
 
 ## Web Service
 

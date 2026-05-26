@@ -6,58 +6,50 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Vercel (Free) — signalstack.vercel.app                 │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Web (Next.js) — no business logic               │   │
-│  └──────────────────────────────────────────────────┘   │
-│             │ HTTPS calls                                │
-│             ▼                                            │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Railway Project — signalstack                    │   │
-│  │                                                   │   │
-│  │  ┌──────────────────┐  ┌──────────────────┐      │   │
-│  │  │ API Service       │  │ Worker Service    │      │   │
-│  │  │ (.NET)            │  │ (.NET background) │      │   │
-│  │  │ *.railway.app    │  │ (no public port)   │      │   │
-│  │  │ auto HTTPS        │  │ always-on         │      │   │
-│  │  └───────┬──────────┘  └────────┬─────────┘      │   │
-│  │          │                      │                  │   │
-│  └──────────┼──────────────────────┼──────────────────┘   │
-└─────────────┼──────────────────────┼──────────────────────┘
-              │                      │
-              ▼                      ▼
-┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
-│  MongoDB Atlas M0    │  │  Supabase Free        │  │  Redis Cloud Free    │
-│  (Free Tier)         │  │  (PostgreSQL)         │  │  (redis.com)         │
-│  Nifty 500 data      │  │  OHLCV historical     │  │  Caching, sessions   │
-│  512MB storage       │  │  500MB database       │  │  50MB                │
-└──────────────────────┘  └──────────────────────┘  └──────────────────────┘
-
+│  Railway Project — signalstack                          │
+│                                                         │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
+│  │ Web (Next.js)    │  │ API Service       │  │ Worker Service    │  │
+│  │ *.railway.app    │  │ (.NET)            │  │ (.NET background) │  │
+│  │ auto HTTPS       │  │ *.railway.app    │  │ (no public port)  │  │
+│  │                  │  │ auto HTTPS        │  │ always-on         │  │
+│  └────────┬─────────┘  └───────┬──────────┘  └────────┬─────────┘  │
+│           │                    │                      │             │
+└───────────┼────────────────────┼──────────────────────┼─────────────┘
+            │ HTTPS calls        │                      │
+            │                    ▼                      ▼
+            │    ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+            │    │  MongoDB Atlas M0    │  │  Supabase Free        │  │  Redis Cloud Free    │
+            │    │  (Free Tier)         │  │  (PostgreSQL)         │  │  (redis.com)         │
+            │    │  Nifty 500 data      │  │  OHLCV historical     │  │  Caching, sessions   │
+            │    │  512MB storage       │  │  500MB database       │  │  50MB                │
+            │    └──────────────────────┘  └──────────────────────┘  └──────────────────────┘
+            │
+            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  New Relic Free (100 GB/mo logs, 100 GB/mo traces,      │
 │   10k metrics/month)                                     │
 │  Direct OTLP export from .NET SDK — no collector         │
 └─────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────┐
-│  GitHub Actions — CI/CD (2000-3000 min/month free)      │
-│  Auto-deploy to Railway and Vercel on push to main      │
-└─────────────────────────────────────────────────────────┘
+Build and deployment of all three services is handled by Railway's
+GitHub integration. Railway watches the repo and auto-deploys each
+service on push to main. No GitHub Actions deploy workflow needed.
 ```
 
 ## Cost Breakdown
 
 | Component | Service | Monthly Cost | Notes |
 |-----------|---------|-------------|-------|
-| **Web** (Next.js) | Vercel Hobby | **$0** | 100 GB bandwidth, 6000 build min/mo |
+| **Web** (Next.js) | Railway | **included** | Third service in same Railway project |
 | **API** (.NET) | Railway | **$5-10** | Docker service, always-on, auto-HTTPS |
 | **Worker** (.NET) | Railway | **included** | Second service in same Railway project |
 | **MongoDB** | MongoDB Atlas M0 | **$0** | 512 MB shared storage, free forever |
 | **PostgreSQL** | Supabase Free | **$0** | 500 MB database, 2 GB bandwidth |
 | **Redis** | Redis Cloud Free | **$0** | 50 MB, redis.com |
 | **Observability** | New Relic Free | **$0** | Direct OTLP — URL + license key only |
-| **CI/CD** | GitHub Actions | **$0** | 2000-3000 min/month free |
-| **Domain** | Not needed | **$0** | Railway provides `*.railway.app`, Vercel provides `*.vercel.app` |
+| **CI/CD** | Railway (auto-deploy) + GitHub Actions (seeder only) | **$0** | Railway builds and deploys; Actions runs seeder on demand |
+| **Domain** | Not needed | **$0** | Railway provides `*.railway.app` |
 | **Total** | | **~$5-10/month** | |
 
 ---
@@ -242,119 +234,70 @@ builder.Services.AddOpenTelemetry()
 
 ---
 
-## Step 4: CI/CD — GitHub Actions
+## Step 4: CI/CD
 
-### 4.1 Workflow
+### 4.1 CI Workflow
 
-The project already has workflows in `.github/workflows/`. The CI pipeline validates builds and tests on every PR and push:
+The project has a CI workflow in `.github/workflows/ci.yml` that validates builds and tests on every PR and push.
 
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+### 4.2 Build and Deploy (Railway Auto-Deploy)
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - run: dotnet restore
-      - run: dotnet build --no-restore -c Release
-      - run: dotnet test --no-build -c Release
-```
+Build and deployment of all three services (api, worker, web) is handled entirely by **Railway's own GitHub integration**:
 
-### 4.2 Deploy to Railway (Auto-deploy from GitHub)
+1. Connect your GitHub repo to Railway in the Railway dashboard
+2. Railway watches the repo and auto-deploys each service on every push to the linked branch
+3. No separate GitHub Actions deploy workflow is needed — Railway builds from the Dockerfiles and deploys internally
 
-Railway's GitHub integration handles deployment:
+### 4.3 sys_config Seeder (Pre-Deploy)
 
-1. Connect your GitHub repo to Railway
-2. Railway auto-deploys each service on every push to the linked branch
-3. No separate deploy workflow needed in GitHub Actions
+A separate GitHub Actions workflow (`.github/workflows/deploy-railway.yml`, manual trigger via `workflow_dispatch`) runs the `sys_config` seeder against MongoDB to ensure required configuration rows exist before the services start. This is a data seeding step, not a deployment step.
 
-**Alternative:** If you want the deploy step visible in Actions, add this deploy workflow:
+### 4.4 Web (Next.js)
 
-```yaml
-# .github/workflows/deploy-railway.yml
-name: Deploy to Railway
-on:
-  push:
-    branches: [main]
+The Web service is also deployed via Railway (same project, alongside API and Worker). No separate Vercel deployment needed.
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: railway/railway-action@v3
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-```
-
-The `RAILWAY_TOKEN` is generated from Railway dashboard → Account → Tokens.
-
-### 4.3 Deploy to Vercel
-
-Vercel auto-deploys from GitHub — just connect your repo in the Vercel dashboard. No workflow needed.
-
-### 4.4 Required GitHub Secrets
+### 4.5 Required GitHub Secrets
 
 | Secret | Value | Used By |
 |--------|-------|---------|
-| `RAILWAY_TOKEN` | Railway deploy token (optional — Railway auto-deploy works without it) | Deploy workflow |
-| `CONNECTIONSTRINGS__MONGODB` | MongoDB Atlas connection string | API/Worker |
-| `CONNECTIONSTRINGS__POSTGRES` | Supabase connection string | API/Worker |
-| `CONNECTIONSTRINGS__REDIS` | Redis Cloud connection string | API/Worker |
-| `NewRelic__Endpoint` | New Relic OTLP endpoint URL | API/Worker |
-| `NewRelic__LicenseKey` | New Relic license key | API/Worker |
+| `MONGO_CONNECTION_STRING` | MongoDB Atlas connection string | sys_config seeder |
+| `CONNECTIONSTRINGS__MONGODB` | MongoDB Atlas connection string | API/Worker (Railway env vars) |
+| `CONNECTIONSTRINGS__POSTGRES` | Supabase connection string | API/Worker (Railway env vars) |
+| `CONNECTIONSTRINGS__REDIS` | Redis Cloud connection string | API/Worker (Railway env vars) |
+| `NewRelic__Endpoint` | New Relic OTLP endpoint URL | API/Worker (Railway env vars) |
+| `NewRelic__LicenseKey` | New Relic license key | API/Worker (Railway env vars) |
 
 ---
 
-## Step 5: Vercel (Web — Next.js)
+## Step 5: Railway Setup (Web + API + Worker)
 
-### 5.1 Deploy
-
-1. Go to [https://vercel.com](https://vercel.com) — sign up with your GitHub account
-2. Click **Import Project** → Select your `signalstack` repo
-3. Configure:
-
-   | Setting | Value |
-   |---------|-------|
-   | Framework Preset | Next.js |
-   | Root Directory | `apps/web` |
-   | Build Command | `npm run build` (default) |
-   | Output Directory | `.next` (default) |
-
-4. Add Environment Variables:
-
-   | Name | Value |
-   |------|-------|
-   | `NEXT_PUBLIC_API_BASE_URL` | The Railway API service URL (e.g., `https://api-production-xxxx.up.railway.app`) |
-
-5. Click **Deploy**
-
-### 5.2 Custom Domain (Optional)
-
-Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
-
----
-
-## Step 6: Railway Setup (API + Worker)
-
-### 6.1 Sign Up and Create a Project
+### 5.1 Sign Up and Create a Project
 
 1. Go to [https://railway.app](https://railway.app) — sign up with your GitHub account
 2. Click **New Project** → **Deploy from GitHub repo**
 3. Select your `signalstack` repository
 4. Railway will scan the repo and detect services. For manual setup, continue below.
 
-### 6.2 Add API Service
+### 5.2 Add Web Service
+
+1. In your Railway project, click **New** → **Service**
+2. Select **Add a service** → **GitHub repo** → select `signalstack`
+3. Configure the service:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Service name** | `web` |
+   | **Root directory** | `.` (repo root) |
+   | **Dockerfile path** | `apps/web/Dockerfile` |
+   | **Start command** | (leave empty — Dockerfile has CMD) |
+
+4. Add Environment Variables:
+
+   | Variable | Value |
+   |----------|-------|
+   | `NEXT_PUBLIC_API_BASE_URL` | The Railway API service URL (e.g., `https://api-production-xxxx.up.railway.app`) |
+
+### 5.3 Add API Service
 
 1. In your Railway project, click **New** → **Service**
 2. Select **Add a service** → **GitHub repo** → select `signalstack`
@@ -385,7 +328,7 @@ Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
 
 5. Railway assigns a public URL like `https://api-production-xxxx.up.railway.app` — auto-HTTPS, no setup needed.
 
-### 6.3 Add Worker Service
+### 5.4 Add Worker Service
 
 1. Click **New** → **Service** → select the same repo
 2. Configure:
@@ -403,7 +346,7 @@ Vercel gives you `signalstack.vercel.app` for free. No custom domain needed.
 
 4. **Important:** The Worker doesn't need a public port. Railway doesn't expose worker services to the internet by default.
 
-### 6.4 Auto-deploy
+### 5.5 Auto-deploy
 
 By default, Railway deploys every push to the linked branch. To configure:
 
@@ -411,14 +354,15 @@ By default, Railway deploys every push to the linked branch. To configure:
 2. **Auto Deploy** should be **On** (default)
 3. **Deploy Branch** — set to `main` (or your default branch)
 
-### 6.5 Service URLs
+### 5.6 Service URLs
 
 | Service | URL |
 |---------|-----|
+| **Web** | `https://web-production-xxxx.up.railway.app` (auto-HTTPS) |
 | **API** | `https://api-production-xxxx.up.railway.app` (auto-HTTPS) |
 | **Worker** | No public URL (internal only) |
 
-### 6.6 Railway Dashboard
+### 5.7 Railway Dashboard
 
 - **Metrics** — CPU, memory, network per service
 - **Logs** — real-time and historical logs per service
@@ -449,14 +393,14 @@ By default, Railway deploys every push to the linked branch. To configure:
 ### Deployment steps:
 
 - [ ] Railway account connected to GitHub
+- [ ] Railway project created with Web service (`apps/web/Dockerfile`)
 - [ ] Railway project created with API service (`apps/api/Dockerfile`)
 - [ ] Railway project created with Worker service (`apps/worker/Dockerfile`)
-- [ ] Environment variables set on both Railway services
+- [ ] Environment variables set on all three Railway services
 - [ ] MongoDB Atlas network access allows `0.0.0.0/0` (Railway dynamic IPs)
+- [ ] Web env var `NEXT_PUBLIC_API_BASE_URL` set to Railway API URL
 - [ ] API responds to health check at `https://api-xxxx.up.railway.app/health`
 - [ ] Worker starts and shows "acquired lease" in Railway logs
-- [ ] Vercel project created and builds successfully
-- [ ] Vercel env var `NEXT_PUBLIC_API_BASE_URL` set to Railway API URL
 - [ ] Google OAuth redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/google/callback`
 - [ ] FYERS app redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/fyers/callback`
 - [ ] New Relic OTLP endpoint configured — telemetry flowing
@@ -472,7 +416,7 @@ When you're ready to move beyond evaluation:
 |-----------|-----------------|-----------------|
 | **API** | Azure Container Apps | Minimal (same Dockerfile) |
 | **Worker** | Azure Container Apps | Minimal (same Dockerfile) |
-| **Web** | Vercel / Azure Static Web Apps | Zero (already on Vercel) |
+| **Web** | Azure Static Web Apps | Minimal (same Dockerfile) |
 | **PostgreSQL** | Azure Database for PostgreSQL | Dump & restore from Supabase |
 | **MongoDB** | Azure Cosmos DB for MongoDB | Connection string change |
 | **Redis** | Azure Cache for Redis | Connection string change |
