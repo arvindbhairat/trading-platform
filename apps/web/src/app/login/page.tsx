@@ -7,9 +7,8 @@
 // Design system: tokens from globals.css and primitives.
 // Layout matches design_system/mock_screens/auth-screens.jsx.
 
+import { useEffect, useState } from "react";
 import { Card, Logo, Btn, LegalFooter } from "@/components/primitives";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 const providers = [
   {
@@ -30,6 +29,15 @@ const providers = [
 ] as const;
 
 export default function LoginPage() {
+  const [apiBase, setApiBase] = useState("");
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((cfg) => setApiBase(cfg.apiBaseUrl ?? ""))
+      .catch(() => {});
+  }, []);
+
   return (
     <div
       style={{
@@ -97,7 +105,7 @@ export default function LoginPage() {
                 size="lg"
                 full
                 onClick={() => {
-                  window.location.href = `${API_BASE}/api/v1/auth/login/${p.key}`;
+                  window.location.href = `${apiBase}/api/v1/auth/login/${p.key}`;
                 }}
               >
                 {p.label}

@@ -48,7 +48,26 @@ function getCsrfCookie(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+let _apiBaseCache: string | null = API_BASE ?? null;
+let _apiBasePromise: Promise<string> | null = null;
+
+async function getApiBase(): Promise<string> {
+  if (_apiBaseCache !== null) return _apiBaseCache;
+  if (!_apiBasePromise) {
+    _apiBasePromise = fetch("/api/config")
+      .then((r) => r.json())
+      .then((cfg) => {
+        _apiBaseCache = (cfg.apiBaseUrl ?? "") as string;
+        return _apiBaseCache;
+      })
+      .catch(() => {
+        _apiBaseCache = "";
+        return "";
+      });
+  }
+  return _apiBasePromise;
+}
 
 // Fetches and caches the CSRF token for the current session.
 let csrfTokenCache: string | null = null;
@@ -57,7 +76,8 @@ async function ensureCsrfToken(): Promise<string> {
   const cookie = getCsrfCookie();
   if (cookie && csrfTokenCache) return csrfTokenCache;
 
-  const res = await fetch(`${API_BASE}/api/v1/auth/csrf`, { credentials: "include" });
+  const base = await getApiBase();
+  const res = await fetch(`${base}/api/v1/auth/csrf`, { credentials: "include" });
   const data = (await res.json()) as { csrfToken: string };
   csrfTokenCache = data.csrfToken;
   return csrfTokenCache;
@@ -81,5 +101,6 @@ export async function apiFetch(
     headers.set("X-XSRF-TOKEN", csrf);
   }
 
-  return fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
+  const base = await getApiBase();
+  return fetch(`${base}${path}`, { ...init, headers, credentials: "include" });
 }

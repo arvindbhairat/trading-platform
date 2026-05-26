@@ -470,5 +470,8 @@ FodyWeavers.xsd
 *.msp
 /desktop.ini
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Additional user filtered files
 *.lscache
