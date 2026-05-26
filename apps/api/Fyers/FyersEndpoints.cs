@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
@@ -9,6 +10,14 @@ namespace SignalStack.Api.Fyers;
 
 public static class FyersEndpoints
 {
+    // REQ-AUTH-004/005: in-memory store for FYERS OAuth state parameters.
+    // Keyed by the random hex state string, with the originating user's ID
+    // and creation timestamp. Entries older than 5 minutes are cleaned up on access.
+    private static readonly ConcurrentDictionary<string, FyersOAuthState> FyersOAuthStates = new();
+    private static readonly TimeSpan FyersStateTtl = TimeSpan.FromMinutes(5);
+
+    private sealed record FyersOAuthState(string UserId, DateTime CreatedAt);
+
     public static IEndpointRouteBuilder MapFyersEndpoints(this IEndpointRouteBuilder app)
     {
         var fyers = app.MapGroup("/api/v1/fyers");
@@ -34,7 +43,10 @@ public static class FyersEndpoints
                 return Results.Forbid();
 
             var redirectBase = $"{context.Request.Scheme}://{context.Request.Host}";
-            var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase);
+            var state = Convert.ToHexString(
+                System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            FyersOAuthStates[state] = new FyersOAuthState(userId, DateTime.UtcNow);
+            var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase, state);
 
             return Results.Ok(new
             {
@@ -51,6 +63,7 @@ public static class FyersEndpoints
             HttpContext context,
             FyersAuthService fyersAuth,
             IUserRepository userRepo,
+            IFyersTokenRepository fyersTokenRepo,
             IConfiguration configuration) =>
         {
             var code = context.Request.Query["code"].ToString();
@@ -70,17 +83,29 @@ public static class FyersEndpoints
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("No authorization code received from FYERS.")}");
             }
 
-            // Identify the user from the state parameter.
-            // In a full implementation the state maps to a stored userId.
-            // For this implementation we use a simplified approach.
-            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? "";
-
-            if (string.IsNullOrWhiteSpace(userId))
+            // Identify the user from the persisted state parameter.
+            // The state→userId mapping was stored during POST /auth/init so the
+            // callback can correlate the FYERS redirect back to the platform user
+            // without requiring a JWT (which lives in the frontend's sessionStorage).
+            if (string.IsNullOrWhiteSpace(state))
             {
                 return Results.Redirect(
-                    $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("Session expired. Please sign in again.")}");
+                    $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("Missing state parameter.")}");
             }
+
+            if (!FyersOAuthStates.TryRemove(state, out var oauthState))
+            {
+                return Results.Redirect(
+                    $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("Invalid or expired state. Please start again from the FYERS connection page.")}");
+            }
+
+            if (DateTime.UtcNow - oauthState.CreatedAt > FyersStateTtl)
+            {
+                return Results.Redirect(
+                    $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("State expired. Please start again from the FYERS connection page.")}");
+            }
+
+            var userId = oauthState.UserId;
 
             var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
             if (user is null)
@@ -89,8 +114,8 @@ public static class FyersEndpoints
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("User not found.")}");
             }
 
-            var activeToken = await GetActiveToken(fyersAuth, userId, context.RequestAborted);
-            var existingFyersUserId = activeToken?.FyersUserId;
+            var activeDoc = await fyersTokenRepo.FindActiveByUserIdAsync(userId, context.RequestAborted);
+            var existingFyersUserId = activeDoc?.FyersUserId;
 
             var result = await fyersAuth.HandleCallbackAsync(
                 userId, code, existingFyersUserId, context.RequestAborted);
@@ -161,7 +186,10 @@ public static class FyersEndpoints
                 return Results.Forbid();
 
             var redirectBase = $"{context.Request.Scheme}://{context.Request.Host}";
-            var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase);
+            var state = Convert.ToHexString(
+                System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            FyersOAuthStates[state] = new FyersOAuthState(userId, DateTime.UtcNow);
+            var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase, state);
 
             return Results.Ok(new
             {
@@ -268,16 +296,5 @@ public static class FyersEndpoints
         }).RequireAuthorization();
 
         return app;
-    }
-
-    private static async Task<FyersTokenDocument?> GetActiveToken(
-        FyersAuthService fyersAuth, string userId, CancellationToken ct)
-    {
-        var status = await fyersAuth.GetTokenStatusAsync(userId, ct);
-        if (status.HasToken && status.Status == FyersTokenStatus.Active)
-        {
-            return null; // In a full implementation, retrieve from repo.
-        }
-        return null;
     }
 }

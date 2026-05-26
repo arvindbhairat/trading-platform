@@ -29,20 +29,15 @@ public sealed class FyersAuthService
     /// Returns the FYERS OAuth redirect URL for the given user.
     /// REQ-AUTH-004 (admin) / REQ-AUTH-005 (user): initiates FYERS auth.
     /// The redirect URL points to the FYERS OAuth authorize endpoint with the
-    /// platform's shared app_id and a state parameter for callback correlation.
+    /// platform's shared app_id and the caller-provided state for callback correlation.
     /// </summary>
-    public string BuildAuthInitUrl(string userId, string redirectBase)
+    public string BuildAuthInitUrl(string userId, string redirectBase, string state)
     {
         var appId = _configuration["Fyers:AppId"]
             ?? _configuration["FYERS_APP_ID"]
             ?? "";
         var redirectUri = $"{redirectBase}/api/v1/fyers/auth/callback";
-        var state = Convert.ToHexString(
-            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
-        // The state is stored temporarily for callback correlation.
-        // In a full implementation this would be persisted with an expiry.
-        // For this task we embed the userId in the redirect_uri query.
         return $"https://api.fyers.in/api/v2/token?app_id={appId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&state={state}";
     }
 
