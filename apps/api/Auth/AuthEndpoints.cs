@@ -330,7 +330,7 @@ public static class AuthEndpoints
         {
             var tokens = antiforgery.GetAndStoreTokens(context);
             return Results.Ok(new { csrfToken = tokens.RequestToken });
-        });
+        }).RequireAuthorization();
 
         // GET /api/v1/auth/me
         // Bearer-protected endpoint; proves the JWT auth boundary works.

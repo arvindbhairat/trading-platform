@@ -75,8 +75,11 @@ async function ensureCsrfToken(): Promise<string> {
   const cookie = getCsrfCookie();
   if (cookie && csrfTokenCache) return csrfTokenCache;
 
+  const token = getToken();
   const base = await getApiBase();
-  const res = await fetch(`${base}/api/v1/auth/csrf`, { credentials: "include" });
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`${base}/api/v1/auth/csrf`, { credentials: "include", headers });
   const data = (await res.json()) as { csrfToken: string };
   csrfTokenCache = data.csrfToken;
   return csrfTokenCache;
