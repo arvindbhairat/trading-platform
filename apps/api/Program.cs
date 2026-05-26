@@ -205,17 +205,18 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Railway terminates TLS at the edge and forwards plain HTTP to the container with
+// X-Forwarded-Proto: https. This middleware reads that header so the app knows the
+// original scheme — critical for OAuth redirect URIs and other scheme-sensitive code.
+app.Use((context, next) =>
 {
-  ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-  KnownIPNetworks = { },
-  KnownProxies = { }
+  if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto)
+      && proto.ToString().Equals("https", StringComparison.OrdinalIgnoreCase))
+  {
+    context.Request.Scheme = "https";
+  }
+  return next(context);
 });
-
-if (!app.Environment.IsEnvironment("Testing"))
-{
-  app.UseHttpsRedirection();
-}
 
 if (!app.Environment.IsDevelopment())
 {
