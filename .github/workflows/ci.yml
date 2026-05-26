@@ -1,10 +1,10 @@
 name: ci
 
+# ⚠ Auto-triggers disabled to stay within GitHub Actions free-tier minutes.
+# Original triggers: pull_request + push (main). Trigger manually via Actions tab → "Run workflow".
+
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches: ["main"]
 
 # Minimal permissions; jobs that need more declare them explicitly.
 permissions:

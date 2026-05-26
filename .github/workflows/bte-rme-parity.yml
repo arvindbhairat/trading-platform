@@ -1,12 +1,11 @@
 name: bte-rme-parity
 
+# ⚠ Auto-triggers disabled to stay within GitHub Actions free-tier minutes.
+# Original schedule: nightly cron "0 2 * * *" — REQ-NFR-017 BTE-vs-RME parity.
+# Trigger manually via Actions tab → "Run workflow".
+
 on:
-  schedule:
-    # Nightly at 02:00 UTC — after DataSync completes for NSE EOD.
-    # REQ-NFR-017: nightly BTE-vs-RME parity check on a fixed synthetic fixture.
-    - cron: "0 2 * * *"
   workflow_dispatch:
-    # Allow manual trigger for admin investigation.
     inputs:
       reason:
         description: "Reason for manual parity check"

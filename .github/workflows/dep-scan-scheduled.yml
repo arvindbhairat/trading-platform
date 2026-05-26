@@ -3,10 +3,11 @@
 
 name: Scheduled Dependency Scan
 
+# ⚠ Auto-triggers disabled to stay within GitHub Actions free-tier minutes.
+# Original trigger: weekly schedule (Monday 02:30 UTC, REQ-SEC-007).
+# Trigger manually via Actions tab → "Run workflow".
+
 on:
-  schedule:
-    # Every Monday at 02:30 UTC
-    - cron: "30 2 * * 1"
   workflow_dispatch:
 
 permissions:

@@ -12,9 +12,10 @@
 
 name: deploy-railway
 
+# ⚠ Auto-triggers disabled to stay within GitHub Actions free-tier minutes.
+# Original trigger: push (main). Trigger manually via Actions tab → "Run workflow".
+
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

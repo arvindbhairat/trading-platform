@@ -22,6 +22,10 @@
 
 name: deploy
 
+# ⚠ Auto-triggers disabled to stay within GitHub Actions free-tier minutes.
+# Original trigger: workflow_call (triggered by CI after merge to main).
+# Trigger manually via Actions tab → "Run workflow".
+
 on:
   workflow_dispatch:
     inputs:
@@ -38,16 +42,6 @@ on:
         required: true
         type: string
         default: "v0.3"
-
-  # Triggered by CI after a successful merge to main.
-  workflow_call:
-    inputs:
-      environment:
-        required: true
-        type: string
-      seed_version:
-        required: true
-        type: string
 
 permissions:
   contents: read
