@@ -46,4 +46,6 @@ type: reference
 
 | Variable | Status |
 |---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | ✅ Configured |
+| `API_BACKEND_URL` | ✅ Configured — `https://api-production-b8b8f.up.railway.app` (canonical name; read by `docker-entrypoint.sh` at container startup and written to `/app/public/api-config.json` for the `/api/config` route handler) |
+| `NEXT_PUBLIC_API_BASE_URL` | ✅ Configured (not used at runtime — Next.js inlines this at build time, so it resolves to empty in production) |
+| `API_BASE_URL` | ❌ Not configured (entrypoint falls back to `API_BACKEND_URL`) |
