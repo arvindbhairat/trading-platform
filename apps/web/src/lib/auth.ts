@@ -104,3 +104,10 @@ export async function apiFetch(
   const base = await getApiBase();
   return fetch(`${base}${path}`, { ...init, headers, credentials: "include" });
 }
+
+// Resolves a relative API path to an absolute URL using the runtime API base URL.
+// Used for browser navigation to OAuth endpoints (login, step-up, link).
+export async function resolveApiUrl(path: string): Promise<string> {
+  const base = await getApiBase();
+  return `${base}${path}`;
+}

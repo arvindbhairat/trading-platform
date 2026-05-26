@@ -15,7 +15,7 @@ import {
   Icon,
   adminNavItemsWithApprovals,
 } from "@/components/primitives";
-import { getToken, apiFetch } from "@/lib/auth";
+import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ export default function AdminApprovalsPage() {
 
   async function handleStepUp(stepUpUrl?: string) {
     if (stepUpUrl) {
-      window.location.assign(stepUpUrl);
+      window.location.assign(await resolveApiUrl(stepUpUrl));
       return true;
     }
     // If no step-up URL, try to initiate one.
@@ -121,7 +121,7 @@ export default function AdminApprovalsPage() {
     });
     if (stepUpRes.ok) {
       const { step_up_url } = await stepUpRes.json();
-      window.location.assign(step_up_url);
+      window.location.assign(await resolveApiUrl(step_up_url));
       return true;
     }
     return false;

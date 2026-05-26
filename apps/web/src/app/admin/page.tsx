@@ -21,7 +21,7 @@ import {
   StatusDot,
   adminNavItems,
 } from "@/components/primitives";
-import { getToken, apiFetch } from "@/lib/auth";
+import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ export default function AdminHomePage() {
           });
           if (stepUpRes.ok) {
             const { step_up_url } = await stepUpRes.json();
-            window.location.href = step_up_url;
+            window.location.href = await resolveApiUrl(step_up_url);
             return;
           }
           setImpError("Step-up required. Please re-authenticate.");

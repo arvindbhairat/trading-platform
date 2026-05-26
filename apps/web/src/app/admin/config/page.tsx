@@ -17,7 +17,7 @@ import {
   adminNavItems,
   Icon,
 } from "@/components/primitives";
-import { getToken, apiFetch } from "@/lib/auth";
+import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ export default function AdminConfigPage() {
 
       const data = await res.json();
       sessionStorage.setItem("returnTo", window.location.pathname);
-      window.location.href = data.step_up_url;
+      window.location.href = await resolveApiUrl(data.step_up_url);
       return false; // Will not reach here after redirect.
     } catch {
       setNotification({ type: "error", message: "Step-up request failed" });
