@@ -18,17 +18,20 @@ public sealed class FyersAuthService
     private readonly IAuditEventRepository _auditRepo;
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<FyersAuthService> _logger;
 
     public FyersAuthService(
         IFyersTokenRepository tokenRepo,
         IAuditEventRepository auditRepo,
         IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ILogger<FyersAuthService> logger)
     {
         _tokenRepo = tokenRepo;
         _auditRepo = auditRepo;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
+        _logger = logger;
     }
 
     /// <summary>
@@ -95,6 +98,8 @@ public sealed class FyersAuthService
                 code
             });
             var tokenContent = new StringContent(tokenBody, Encoding.UTF8, "application/json");
+            _logger.LogWarning("FYERS validate-authcode request: Body={Body}",
+                tokenBody.Replace(code, $"<code:{code.Length} chars>"));
             tokenResponse = await httpClient.PostAsync(
                 "https://api-t1.fyers.in/api/v3/validate-authcode", tokenContent, ct);
         }
@@ -104,6 +109,9 @@ public sealed class FyersAuthService
         }
 
         var tokenJson = await tokenResponse.Content.ReadAsStringAsync(ct);
+        _logger.LogWarning("FYERS validate-authcode response: Status={Status} Body={Body}",
+            (int)tokenResponse.StatusCode, tokenJson);
+
         using var tokenDoc = JsonDocument.Parse(tokenJson);
         var root = tokenDoc.RootElement;
 

@@ -10,6 +10,9 @@ namespace SignalStack.Api.Fyers;
 
 public static class FyersEndpoints
 {
+    // Logger category marker for DI — FyersEndpoints is static so ILogger<T> needs a non-static type.
+    internal sealed class Callback { }
+
     // REQ-AUTH-004/005: in-memory store for FYERS OAuth state parameters.
     // Keyed by the random hex state string, with the originating user's ID
     // and creation timestamp. Entries older than 5 minutes are cleaned up on access.
@@ -64,21 +67,36 @@ public static class FyersEndpoints
             FyersAuthService fyersAuth,
             IUserRepository userRepo,
             IFyersTokenRepository fyersTokenRepo,
-            IConfiguration configuration) =>
+            IConfiguration configuration,
+            ILogger<FyersEndpoints.Callback> logger) =>
         {
-            var code = context.Request.Query["code"].ToString();
+
+            var authCode = context.Request.Query["auth_code"].ToString();
+            var fyersStatus = context.Request.Query["s"].ToString();
+            var fyersCode = context.Request.Query["code"].ToString();
+
             var state = context.Request.Query["state"].ToString();
             var error = context.Request.Query["error"].ToString();
             var frontend = configuration["Auth:FrontendBaseUrl"] ?? "";
 
+            // Log only when FYERS reports something other than the expected success.
+            if (fyersStatus != "ok" || fyersCode != "200")
+            {
+                logger.LogWarning("FYERS callback with unexpected status: s={FyersStatus} code={FyersCode} auth_code={AuthCode}",
+                    fyersStatus, fyersCode, MaskAuthCode(authCode));
+            }
+
             if (!string.IsNullOrWhiteSpace(error))
             {
+                logger.LogWarning("FYERS callback returned error: {FyersError}", error);
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("FYERS authentication was denied or cancelled.")}");
             }
 
-            if (string.IsNullOrWhiteSpace(code))
+            if (string.IsNullOrWhiteSpace(authCode))
             {
+                logger.LogWarning("FYERS callback missing auth_code: s={FyersStatus} code={FyersCode}",
+                    fyersStatus, fyersCode);
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("No authorization code received from FYERS.")}");
             }
@@ -89,18 +107,21 @@ public static class FyersEndpoints
             // without requiring a JWT (which lives in the frontend's sessionStorage).
             if (string.IsNullOrWhiteSpace(state))
             {
+                logger.LogWarning("FYERS callback missing state parameter");
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("Missing state parameter.")}");
             }
 
             if (!FyersOAuthStates.TryRemove(state, out var oauthState))
             {
+                logger.LogWarning("FYERS callback with unknown/expired state: {State}", state);
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("Invalid or expired state. Please start again from the FYERS connection page.")}");
             }
 
             if (DateTime.UtcNow - oauthState.CreatedAt > FyersStateTtl)
             {
+                logger.LogWarning("FYERS callback with expired state for user {UserId}", oauthState.UserId);
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("State expired. Please start again from the FYERS connection page.")}");
             }
@@ -110,6 +131,7 @@ public static class FyersEndpoints
             var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
             if (user is null)
             {
+                logger.LogWarning("FYERS callback for unknown user {UserId}", userId);
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString("User not found.")}");
             }
@@ -118,10 +140,12 @@ public static class FyersEndpoints
             var existingFyersUserId = activeDoc?.FyersUserId;
 
             var result = await fyersAuth.HandleCallbackAsync(
-                userId, code, existingFyersUserId, context.RequestAborted);
+                userId, authCode, existingFyersUserId, context.RequestAborted);
 
             if (!result.IsSuccess)
             {
+                logger.LogWarning("FYERS token exchange failed for user {UserId}: {Error} auth_code={AuthCode}",
+                    userId, result.Error, MaskAuthCode(authCode));
                 return Results.Redirect(
                     $"{frontend}/fyers-auth?status=error&message={Uri.EscapeDataString(result.Error ?? "FYERS authentication failed.")}");
             }
@@ -296,5 +320,12 @@ public static class FyersEndpoints
         }).RequireAuthorization();
 
         return app;
+    }
+
+    private static string MaskAuthCode(string authCode)
+    {
+        if (string.IsNullOrWhiteSpace(authCode) || authCode.Length <= 8)
+            return "<empty or too short>";
+        return authCode[..4] + "..." + authCode[^4..];
     }
 }
