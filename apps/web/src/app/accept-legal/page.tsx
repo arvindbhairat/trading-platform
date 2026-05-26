@@ -69,10 +69,10 @@ export default function AcceptLegalPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accepted_tos_version: versions.tos_version,
-          accepted_privacy_version: versions.privacy_version,
-          accepted_tester_acknowledgement_version: versions.tester_acknowledgement_version,
-          accepted_minor_declaration: minorDeclared,
+          acceptedTosVersion: versions.tos_version,
+          acceptedPrivacyVersion: versions.privacy_version,
+          acceptedTesterAcknowledgementVersion: versions.tester_acknowledgement_version,
+          acceptedMinorDeclaration: minorDeclared,
         }),
       });
 
