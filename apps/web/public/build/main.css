@@ -1,0 +1,7 @@
+/* This file is loaded by the FYERS API Connect SDK (fyers-lib.js).
+   Their forked Kite Connect code injects <link rel="stylesheet" href="/build/main.css">
+   into the page body using the global _KITE_ROOT variable. Since _KITE_ROOT is not
+   set on this domain, the path resolves relative to the host, and FYERS does not
+   serve this CSS from their CDN. The widget works fine without it because the SDK
+   also inlines all its styles as <style> tags. This file exists solely to silence
+   the 400/404 in the browser console. */
