@@ -115,6 +115,7 @@ public static class AuthExtensions
             options.Cookie.SameSite = SameSiteMode.None;
             options.Cookie.HttpOnly = false;
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.SuppressIdentityHeuristicChecks = true;
         });
 
         return services;
