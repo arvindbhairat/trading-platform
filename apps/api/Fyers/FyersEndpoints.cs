@@ -297,7 +297,7 @@ public static class FyersEndpoints
 
             var requestUrl = $"https://api-t1.fyers.in/data/quotes?symbols={Uri.EscapeDataString(symbols)}";
             var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-            request.Headers.Add("Authorization", $"{appId}:{token}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(appId, $":{token}");
 
             try
             {
