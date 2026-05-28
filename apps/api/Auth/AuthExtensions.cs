@@ -40,6 +40,44 @@ public static class AuthExtensions
                         Encoding.UTF8.GetBytes(secret)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = ctx =>
+                    {
+                        var logger = ctx.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("SignalStack.Api.Auth.JwtBearer");
+                        logger.LogWarning(
+                            "JWT challenge: Error={Error} ErrorDescription={ErrorDescription} AuthHeader={AuthHeader}",
+                            ctx.Error,
+                            ctx.ErrorDescription,
+                            ctx.Request.Headers.Authorization.FirstOrDefault()?.Substring(0, Math.Min(80, ctx.Request.Headers.Authorization.FirstOrDefault()?.Length ?? 0)));
+                        return Task.CompletedTask;
+                    },
+                    OnAuthenticationFailed = ctx =>
+                    {
+                        var logger = ctx.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("SignalStack.Api.Auth.JwtBearer");
+                        logger.LogError(ctx.Exception,
+                            "JWT authentication failed: {Message}",
+                            ctx.Exception?.Message);
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = ctx =>
+                    {
+                        var logger = ctx.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("SignalStack.Api.Auth.JwtBearer");
+                        var sub = ctx.Principal?.FindFirst("sub")?.Value ?? "(none)";
+                        var jti = ctx.Principal?.FindFirst("jti")?.Value ?? "(none)";
+                        logger.LogInformation(
+                            "JWT validated: sub={Sub} jti={Jti} identityAuth={IsAuth}",
+                            sub, jti, ctx.Principal?.Identity?.IsAuthenticated);
+                        return Task.CompletedTask;
+                    },
+                };
             });
 
         // Short-lived cookie scheme for OAuth temp sign-in between the callback and the
