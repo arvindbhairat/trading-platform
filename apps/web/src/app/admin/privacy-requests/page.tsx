@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
@@ -15,7 +14,6 @@ import {
   TextInput,
   Select,
   Field,
-  adminNavItemsWithApprovals,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 
@@ -785,16 +783,14 @@ export default function AdminPrivacyRequestsPage() {
 
   // ── Main Render ──────────────────────────────────────────────────────
 
-  const currentNavItems = adminNavItemsWithApprovals(0);
-
   return (
-    <Shell current="privacy-requests" navItems={currentNavItems} admin={true}>
+    <>
       {view === "list" && renderList()}
       {view === "create" && renderCreate()}
       {view === "detail" && renderDetail()}
       {view === "erasureConfirm" && renderErasureConfirm()}
       {view === "export" && renderExport()}
-    </Shell>
+    </>
   );
 }
 

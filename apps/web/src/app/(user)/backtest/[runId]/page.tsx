@@ -8,13 +8,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Num,
   Label,
   Pill,
-  userNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 
@@ -193,26 +191,22 @@ export default function BacktestRunPage() {
 
   if (loading) {
     return (
-      <Shell current="signals" navItems={userNavItems}>
-        <div style={{ padding: "var(--s-8) var(--s-10)", textAlign: "center" }}>
-          <p className="t-body">Loading backtest results…</p>
-        </div>
-      </Shell>
+      <div style={{ padding: "var(--s-8) var(--s-10)", textAlign: "center" }}>
+        <p className="t-body">Loading backtest results…</p>
+      </div>
     );
   }
 
   if (error || !run) {
     return (
-      <Shell current="signals" navItems={userNavItems}>
-        <div style={{ padding: "var(--s-8) var(--s-10)" }}>
-          <Card accent="warn" style={{ padding: "var(--s-6)" }}>
-            <p style={{ color: "var(--down)" }}>{error ?? "Run not found"}</p>
-            <Btn variant="ghost" onClick={() => router.push("/signals")} style={{ marginTop: "var(--s-4)" }}>
-              ← Back to Signal Builder
-            </Btn>
-          </Card>
-        </div>
-      </Shell>
+      <div style={{ padding: "var(--s-8) var(--s-10)" }}>
+        <Card accent="warn" style={{ padding: "var(--s-6)" }}>
+          <p style={{ color: "var(--down)" }}>{error ?? "Run not found"}</p>
+          <Btn variant="ghost" onClick={() => router.push("/signals")} style={{ marginTop: "var(--s-4)" }}>
+            ← Back to Signal Builder
+          </Btn>
+        </Card>
+      </div>
     );
   }
 
@@ -225,7 +219,7 @@ export default function BacktestRunPage() {
   ];
 
   return (
-    <Shell current="signals" navItems={userNavItems}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: 1280, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--s-6)" }}>
@@ -391,6 +385,6 @@ export default function BacktestRunPage() {
           )}
         </Card>
       </div>
-    </Shell>
+    </>
   );
 }

@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
@@ -14,7 +13,6 @@ import {
   Select,
   Field,
   Icon,
-  userNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 
@@ -381,7 +379,7 @@ export default function SignalsPage() {
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="signals" navItems={userNavItems}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         {/* Header */}
         <div
@@ -774,6 +772,6 @@ export default function SignalsPage() {
           </div>
         )}
       </div>
-    </Shell>
+    </>
   );
 }

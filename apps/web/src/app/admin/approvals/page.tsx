@@ -8,12 +8,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   Icon,
-  adminNavItemsWithApprovals,
 } from "@/components/primitives";
 import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 
@@ -228,10 +226,8 @@ export default function AdminApprovalsPage() {
 
   // ── Render ───────────────────────────────────────────────────────────
 
-  const currentNavItems = adminNavItemsWithApprovals(pendingCount);
-
   return (
-    <Shell current="approvals" navItems={currentNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         {/* Header */}
         <div
@@ -558,7 +554,7 @@ export default function AdminApprovalsPage() {
           </Card>
         )}
       </div>
-    </Shell>
+    </>
   );
 }
 

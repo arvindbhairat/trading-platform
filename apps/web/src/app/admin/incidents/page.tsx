@@ -8,12 +8,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   Icon,
-  adminNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 
@@ -208,7 +206,7 @@ export default function AdminIncidentsPage() {
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="incidents" navItems={adminNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Header */}
         <div
@@ -507,6 +505,6 @@ export default function AdminIncidentsPage() {
           </div>
         )}
       </div>
-    </Shell>
+    </>
   );
 }

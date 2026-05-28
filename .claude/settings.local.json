@@ -4,7 +4,9 @@
       "Bash(dotnet sln *)",
       "Bash(dotnet build *)",
       "Bash(dotnet test *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(rm -rf .next)",
+      "Bash(npx tsc *)"
     ]
   }
 }

@@ -912,3 +912,50 @@ export function userNavItemsWithNotificationCount(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Navigation route maps — nav item ID → route path
+// ---------------------------------------------------------------------------
+
+export const userNavRoutes: Record<string, string> = {
+  dashboard: "/",
+  chart: "/chart",
+  signals: "/signals",
+  notifications: "/notifications",
+};
+
+export const adminNavRoutes: Record<string, string> = {
+  home: "/admin",
+  approvals: "/admin/approvals",
+  incidents: "/admin/incidents",
+  "privacy-requests": "/admin/privacy-requests",
+  config: "/admin/config",
+  universe: "/admin/universe",
+  jobs: "/admin/jobs",
+  calendar: "/admin/calendar",
+};
+
+/**
+ * Resolve the active nav item ID from the current pathname.
+ * Handles nested routes: /backtest/[runId] highlights "signals".
+ */
+export function resolveActiveNavId(
+  pathname: string,
+  routes: Record<string, string>,
+): string | undefined {
+  // Special case: backtest pages are children of signals.
+  if (pathname.startsWith("/backtest")) return "signals";
+
+  // Exact match first.
+  for (const [id, path] of Object.entries(routes)) {
+    if (pathname === path) return id;
+  }
+  // Prefix match for nested routes (e.g., /admin/approvals/xxx).
+  const sorted = Object.entries(routes).sort(
+    (a, b) => b[1].length - a[1].length,
+  );
+  for (const [id, path] of sorted) {
+    if (path !== "/" && pathname.startsWith(path + "/")) return id;
+  }
+  return undefined;
+}

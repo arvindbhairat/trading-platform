@@ -8,10 +8,8 @@
 // REQ-DASH-013: data freshness timestamp.
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { Shell, Card, Btn, Num, Pill, Label, userNavItems } from "@/components/primitives";
-import { apiFetch, getToken } from "@/lib/auth";
-import { useAuth } from "@/contexts/AuthContext";
+import { Card, Btn, Num, Pill, Label } from "@/components/primitives";
+import { apiFetch } from "@/lib/auth";
 import SessionExpiryBanner from "@/components/SessionExpiryBanner";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
@@ -72,9 +70,6 @@ interface ReconciliationStatusDto {
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { role } = useAuth();
-  const [authChecked] = useState(() => !!getToken());
   const [holdings, setHoldings] = useState<HoldingDto[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryDto | null>(null);
   const [reconStatus, setReconStatus] = useState<ReconciliationStatusDto | null>(null);
@@ -83,13 +78,6 @@ export default function DashboardPage() {
   const [reconLoading, setReconLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataFreshness, setDataFreshness] = useState<string | null>(null);
-
-  // ── Auth guard: redirect to login if no JWT token ─────────────────────
-  useEffect(() => {
-    if (!authChecked) {
-      router.replace("/login");
-    }
-  }, [authChecked, router]);
 
   // ── Exit modal state (P7-T11 / T-8) ──────────────────────────────────
   const [exitSymbol, setExitSymbol] = useState<string | null>(null);
@@ -234,16 +222,10 @@ export default function DashboardPage() {
     }
   };
 
-  // ── Auth guard: show nothing until token check completes ─────────────────
-  if (!authChecked) {
-    return null;
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <>
-    <Shell current="dashboard" navItems={userNavItems} admin={role === "admin"}>
       <div style={{ padding: "var(--s-8) var(--s-10)", display: "flex", flexDirection: "column", gap: "var(--s-6)" }}>
         <SessionExpiryBanner />
 
@@ -467,7 +449,6 @@ export default function DashboardPage() {
           </>
         )}
       </div>
-    </Shell>
 
       {/* Phase 1 exit modal — P7-T11 / T-8 */}
       {exitSymbol !== null && (

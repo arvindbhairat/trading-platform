@@ -6,13 +6,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   TextInput,
   Field,
-  adminNavItems,
   Icon,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
@@ -766,7 +764,7 @@ export default function AdminUniversePage() {
   const archivedCount = symbols.filter((s) => s.is_archived).length;
 
   return (
-    <Shell current="universe" navItems={adminNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Header */}
         <div
@@ -1720,7 +1718,7 @@ export default function AdminUniversePage() {
           </div>
         </Card>
       </div>
-    </Shell>
+    </>
   );
 }
 

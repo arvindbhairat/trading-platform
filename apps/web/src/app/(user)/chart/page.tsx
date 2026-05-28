@@ -9,12 +9,10 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  Shell,
   Card,
   Btn,
   Num,
   Pill,
-  userNavItems,
 } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
 import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live-quotes";
@@ -355,7 +353,7 @@ export default function ChartPage() {
           : "neutral";
 
   return (
-    <Shell current="chart" navItems={userNavItems}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: 1400, margin: "0 auto" }}>
         {/* Connection status strip */}
         {connStatus === "evicted" && (
@@ -626,6 +624,6 @@ export default function ChartPage() {
           onComplete={handleFyersWidgetComplete}
         />
       )}
-    </Shell>
+    </>
   );
 }

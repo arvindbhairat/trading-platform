@@ -7,7 +7,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
@@ -15,7 +14,6 @@ import {
   Select,
   Field,
   Icon,
-  userNavItemsWithNotificationCount,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
 import { getLiveAlerts } from "@/lib/live-alerts";
@@ -304,15 +302,10 @@ export default function NotificationsPage() {
     { value: "failed", label: "Failed" },
   ];
 
-  const navItems = userNavItemsWithNotificationCount(
-    unreadCount.total_unread,
-    unreadCount.critical_unread,
-  );
-
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="notifications" navItems={navItems}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         {/* Header */}
         <div
@@ -605,7 +598,7 @@ export default function NotificationsPage() {
           </Card>
         )}
       </div>
-    </Shell>
+    </>
   );
 }
 

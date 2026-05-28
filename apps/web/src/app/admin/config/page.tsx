@@ -7,14 +7,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   TextInput,
   Select,
   Field,
-  adminNavItems,
   Icon,
 } from "@/components/primitives";
 import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
@@ -293,7 +291,7 @@ export default function AdminConfigPage() {
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
-    <Shell current="config" navItems={adminNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         <div
           style={{
@@ -660,7 +658,7 @@ export default function AdminConfigPage() {
           </Card>
         )}
       </div>
-    </Shell>
+    </>
   );
 }
 

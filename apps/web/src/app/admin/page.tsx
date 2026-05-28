@@ -13,13 +13,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   Icon,
   StatusDot,
-  adminNavItems,
 } from "@/components/primitives";
 import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
@@ -402,7 +400,7 @@ export default function AdminHomePage() {
   const needsRecovery = summary?.needsReview && !summary.dismissed;
 
   return (
-    <Shell current="home" navItems={adminNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)", maxWidth: "1200px" }}>
         {/* Impersonation banner (P8-T5 / REQ-ADMIN-015) */}
         <ImpersonationBanner />
@@ -959,7 +957,7 @@ export default function AdminHomePage() {
           </>
         )}
       </div>
-    </Shell>
+    </>
   );
 }
 

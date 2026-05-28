@@ -1,13 +1,13 @@
 /**
  * Portal page component smoke tests.
- * Primary purpose: ensure src/app/page.tsx and src/app/layout.tsx are
+ * Primary purpose: ensure src/app/(user)/page.tsx and src/app/layout.tsx are
  * exercised so they contribute to the TypeScript coverage report (REQ-NFR-014).
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import Home from '../src/app/page';
+import Home from '../src/app/(user)/page';
 import RootLayout from '../src/app/layout';
 
 // SessionExpiryBanner uses browser-only APIs (sessionStorage, setInterval).

@@ -7,14 +7,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Shell,
   Card,
   Btn,
   Pill,
   TextInput,
   Select,
   Field,
-  adminNavItems,
   Icon,
 } from "@/components/primitives";
 import { getToken, apiFetch } from "@/lib/auth";
@@ -351,7 +349,7 @@ export default function AdminCalendarPage() {
   const isNonTradingDay = form.sessionType === "non_trading_day";
 
   return (
-    <Shell current="calendar" navItems={adminNavItems} admin={true}>
+    <>
       <div style={{ padding: "var(--s-8) var(--s-10)" }}>
         <div
           style={{
@@ -706,6 +704,6 @@ export default function AdminCalendarPage() {
           </Card>
         )}
       </div>
-    </Shell>
+    </>
   );
 }
