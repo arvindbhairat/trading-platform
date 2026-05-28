@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MongoDB.Bson;
 using SignalStack.Domain.Notifications;
+using SignalStack.Domain.Users;
 using SignalStack.Storage.Notifications;
 
 namespace SignalStack.Api.Notifications;
@@ -48,6 +49,7 @@ public static class NotificationEndpoints
         group.MapGet("/", async (
             HttpContext context,
             INotificationRepository repo,
+            IUserRepository userRepo,
             int limit = 50,
             int skip = 0,
             string? type = null,
@@ -57,11 +59,14 @@ public static class NotificationEndpoints
             string? deliveryStatus = null) =>
         {
             var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            if (string.IsNullOrWhiteSpace(userIdStr) || !ObjectId.TryParse(userIdStr, out var userId))
+            if (string.IsNullOrWhiteSpace(userIdStr))
+                return Results.Unauthorized();
+            var user = await userRepo.FindByUserIdAsync(userIdStr, context.RequestAborted);
+            if (user is null)
                 return Results.Unauthorized();
 
             var list = await repo.GetByUserIdFilteredAsync(
-                userId, limit, skip, type, symbol, dateFrom, dateTo, deliveryStatus,
+                user.Id, limit, skip, type, symbol, dateFrom, dateTo, deliveryStatus,
                 context.RequestAborted);
 
             return Results.Ok(list.Select(n => MapToFeedDto(n)));
@@ -72,14 +77,18 @@ public static class NotificationEndpoints
         // REQ-NOTIFY-014: two-count indicator (critical · total).
         group.MapGet("/unread-count", async (
             HttpContext context,
-            INotificationRepository repo) =>
+            INotificationRepository repo,
+            IUserRepository userRepo) =>
         {
             var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            if (string.IsNullOrWhiteSpace(userIdStr) || !ObjectId.TryParse(userIdStr, out var userId))
+            if (string.IsNullOrWhiteSpace(userIdStr))
+                return Results.Unauthorized();
+            var user = await userRepo.FindByUserIdAsync(userIdStr, context.RequestAborted);
+            if (user is null)
                 return Results.Unauthorized();
 
-            var totalUnread = await repo.CountUnreadByUserAsync(userId, context.RequestAborted);
-            var criticalUnread = await repo.CountUnreadCriticalByUserAsync(userId, context.RequestAborted);
+            var totalUnread = await repo.CountUnreadByUserAsync(user.Id, context.RequestAborted);
+            var criticalUnread = await repo.CountUnreadCriticalByUserAsync(user.Id, context.RequestAborted);
 
             return Results.Ok(new
             {
@@ -93,10 +102,14 @@ public static class NotificationEndpoints
         group.MapPost("/{id}/read", async (
             string id,
             HttpContext context,
-            INotificationRepository repo) =>
+            INotificationRepository repo,
+            IUserRepository userRepo) =>
         {
             var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            if (string.IsNullOrWhiteSpace(userIdStr) || !ObjectId.TryParse(userIdStr, out var _))
+            if (string.IsNullOrWhiteSpace(userIdStr))
+                return Results.Unauthorized();
+            var user = await userRepo.FindByUserIdAsync(userIdStr, context.RequestAborted);
+            if (user is null)
                 return Results.Unauthorized();
 
             if (!ObjectId.TryParse(id, out var oid))
@@ -110,13 +123,17 @@ public static class NotificationEndpoints
         // Mark all unread notifications for the current user as read.
         group.MapPost("/mark-all-read", async (
             HttpContext context,
-            INotificationRepository repo) =>
+            INotificationRepository repo,
+            IUserRepository userRepo) =>
         {
             var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            if (string.IsNullOrWhiteSpace(userIdStr) || !ObjectId.TryParse(userIdStr, out var userId))
+            if (string.IsNullOrWhiteSpace(userIdStr))
+                return Results.Unauthorized();
+            var user = await userRepo.FindByUserIdAsync(userIdStr, context.RequestAborted);
+            if (user is null)
                 return Results.Unauthorized();
 
-            var count = await repo.MarkAllAsReadAsync(userId, context.RequestAborted);
+            var count = await repo.MarkAllAsReadAsync(user.Id, context.RequestAborted);
             return Results.Ok(new { status = "all_read", count });
         }).RequireAuthorization().WithTags(Tag);
 
