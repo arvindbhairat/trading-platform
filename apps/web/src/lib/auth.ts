@@ -73,13 +73,22 @@ let csrfTokenCache: string | null = null;
 
 async function ensureCsrfToken(): Promise<string> {
   const cookie = getCsrfCookie();
-  if (cookie && csrfTokenCache) return csrfTokenCache;
+  // Use the cookie value directly if present — in the double-submit cookie pattern
+  // the cookie IS the CSRF token the server expects in the X-XSRF-TOKEN header.
+  // Only fetch from the API when no cookie exists (first visit in a session).
+  if (cookie) {
+    csrfTokenCache = cookie;
+    return cookie;
+  }
 
   const token = getToken();
   const base = await getApiBase();
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const res = await fetch(`${base}/api/v1/auth/csrf`, { credentials: "include", headers });
+  if (!res.ok) {
+    throw new Error(`Failed to obtain CSRF token: ${res.status}`);
+  }
   const data = (await res.json()) as { csrfToken: string };
   csrfTokenCache = data.csrfToken;
   return csrfTokenCache;
