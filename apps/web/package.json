@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typegen:api": "node scripts/typegen-api.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:axe": "vitest run __tests__/accessibility.test.ts"
@@ -28,6 +29,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.6",
     "jsdom": "^26.1.0",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3",
     "vitest": "^3.1.3"
   }

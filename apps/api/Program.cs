@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.DataProtection;
@@ -52,6 +53,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddSignalStackBootstrapConfiguration(ApiServiceName);
 builder.AddSignalStackTelemetry(ApiServiceName);
 
+// ── API Contract Standards ──────────────────────────────────────────────
+// Phase 1: OpenAPI generation scaffolding — exposes /openapi/v1.json
+builder.Services.AddOpenApi();
+
+// Phase 2: Global snake_case naming policy for all HTTP JSON.
+// Fixes compound snake_case fields (signal_type_id, rme_configuration, etc.)
+// binding to PascalCase C# DTO properties.
+// See docs/api-contract-standardization-plan.md for full rationale.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+  options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+  options.SerializerOptions.PropertyNameCaseInsensitive = true;
+});
+// ────────────────────────────────────────────────────────────────────────
+
 var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
 var mongoDatabaseName = builder.Configuration["MongoDB:DatabaseName"] ?? "signalstack";
 builder.Services.AddMongoMigrations(mongoConnectionString, mongoDatabaseName);
@@ -64,10 +80,10 @@ var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
     ?? builder.Configuration["Redis:ConnectionString"];
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
-    var redis = ConnectionMultiplexer.Connect(redisConnectionString);
-    builder.Services.AddDataProtection()
-        .SetApplicationName("SignalStack.Api")
-        .PersistKeysToStackExchangeRedis(() => redis.GetDatabase(), "DataProtection-Keys");
+  var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+  builder.Services.AddDataProtection()
+      .SetApplicationName("SignalStack.Api")
+      .PersistKeysToStackExchangeRedis(() => redis.GetDatabase(), "DataProtection-Keys");
 }
 
 // Trade-ledger write lock primitives (REQ-PORT-031/031a/031b)
@@ -108,7 +124,7 @@ builder.Services.AddFyersTokenManagement();
 builder.Services.AddSingleton<FyersAuthService>();
 builder.Services.AddHttpClient("FyersApi", client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(30);
+  client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 // PLD WebSocket session lease — REQ-SESSION-014
@@ -209,16 +225,16 @@ builder.Services.AddRateLimiter(options =>
 var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 if (corsAllowedOrigins is { Length: > 0 })
 {
-    builder.Services.AddCors(options =>
-    {
-        options.AddDefaultPolicy(policy =>
-        {
-            policy.WithOrigins(corsAllowedOrigins)
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        });
-    });
+  builder.Services.AddCors(options =>
+  {
+    options.AddDefaultPolicy(policy =>
+      {
+        policy.WithOrigins(corsAllowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+      });
+  });
 }
 
 var app = builder.Build();
@@ -272,7 +288,7 @@ app.Use(async (context, next) =>
 // WebSocket support for browser-tier PLD stream — REQ-SESSION-014.
 app.UseWebSockets(new WebSocketOptions
 {
-    KeepAliveInterval = TimeSpan.FromSeconds(30)
+  KeepAliveInterval = TimeSpan.FromSeconds(30)
 });
 
 app.UseRateLimiter();
@@ -280,28 +296,28 @@ app.UseRateLimiter();
 // Diagnostic logging for OAuth callback/complete requests.
 app.Use(async (context, next) =>
 {
-    var path = context.Request.Path.Value ?? "";
-    if (path.Contains("/api/v1/auth/callback") || path.Contains("/api/v1/auth/complete"))
-    {
-        var logger = context.RequestServices
-            .GetRequiredService<ILoggerFactory>()
-            .CreateLogger("SignalStack.Api.Auth");
-        var state = context.Request.Query["state"].FirstOrDefault() ?? "";
-        var code = context.Request.Query["code"].FirstOrDefault() ?? "";
-        var err = context.Request.Query["error"].FirstOrDefault() ?? "";
-        logger.LogWarning(
-            "OAuth callback: Scheme={Scheme} Host={Host} Path={Path} State={SLen} Code={CLen} Error={Error} XFP={XFP}",
-            context.Request.Scheme, context.Request.Host, context.Request.Path,
-            state.Length, code.Length, err,
-            context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault());
-    }
-    await next(context);
+  var path = context.Request.Path.Value ?? "";
+  if (path.Contains("/api/v1/auth/callback") || path.Contains("/api/v1/auth/complete"))
+  {
+    var logger = context.RequestServices
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("SignalStack.Api.Auth");
+    var state = context.Request.Query["state"].FirstOrDefault() ?? "";
+    var code = context.Request.Query["code"].FirstOrDefault() ?? "";
+    var err = context.Request.Query["error"].FirstOrDefault() ?? "";
+    logger.LogWarning(
+        "OAuth callback: Scheme={Scheme} Host={Host} Path={Path} State={SLen} Code={CLen} Error={Error} XFP={XFP}",
+        context.Request.Scheme, context.Request.Host, context.Request.Path,
+        state.Length, code.Length, err,
+        context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault());
+  }
+  await next(context);
 });
 
 // CORS — handles preflight (OPTIONS) requests before auth so the OAuth
 // login flow from the frontend origin is not rejected.
 if (corsAllowedOrigins is { Length: > 0 })
-    app.UseCors();
+  app.UseCors();
 
 // Auth middleware — must precede CsrfMiddleware so context.User is populated.
 app.UseAuthentication();
@@ -315,7 +331,7 @@ app.UseMiddleware<SessionValidationMiddleware>();
 // Disabled in Testing environment: integration tests use Bearer tokens not cookies,
 // so CSRF validation would reject all test mutation requests with 403 Forbidden.
 if (!app.Environment.IsEnvironment("Testing"))
-    app.UseMiddleware<CsrfMiddleware>();
+  app.UseMiddleware<CsrfMiddleware>();
 
 // Admin impersonation write-rejection middleware — REQ-ADMIN-015.
 // Must run after SessionValidationMiddleware so the session is loaded,
@@ -359,7 +375,7 @@ app.MapSignalSubscriptionEndpoints();
 app.MapHealthChecks("/api/v1/healthz");
 app.MapHealthChecks("/api/v1/readyz", new()
 {
-    Predicate = check => check.Tags.Contains("readyz")
+  Predicate = check => check.Tags.Contains("readyz")
 });
 app.MapGroup("/api/v1/auth")
   .RequireRateLimiting(AuthRateLimitPolicy)
@@ -467,6 +483,9 @@ app.MapGroup("/api/v1/backtest").RequireAuthorization().MapBacktestingEndpoints(
 // Initialize historical services: load symbol-to-table-name mapping from symbol master.
 // REQ-HIST-011: mapping is loaded in memory at startup.
 await app.InitializeHistoricalServicesAsync();
+
+// Phase 1: Expose OpenAPI spec at /openapi/v1.json
+app.MapOpenApi();
 
 app.Run();
 

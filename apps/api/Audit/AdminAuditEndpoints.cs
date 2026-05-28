@@ -99,16 +99,26 @@ public static class AdminAuditEndpoints
         return user is not null && user.Role == UserRole.Admin;
     }
 
-    private static object MapToEntry(AuditEventDocument doc)
+    private static AuditEventEntry MapToEntry(AuditEventDocument doc)
     {
-        return new
-        {
-            id = doc.Id.ToString(),
-            actor_id = doc.ActorId,
-            action_type = doc.ActionType,
-            event_at = doc.EventAt.ToString("O"),
-            details = doc.Details,
-            step_up_event_ref = doc.StepUpEventRef?.ToString()
-        };
+        return new AuditEventEntry(
+            Id: doc.Id.ToString(),
+            ActorId: doc.ActorId,
+            ActionType: doc.ActionType,
+            EventAt: doc.EventAt.ToString("O"),
+            Details: doc.Details,
+            StepUpEventRef: doc.StepUpEventRef?.ToString()
+        );
     }
 }
+
+// ── Response DTOs ────────────────────────────────────────────────────────
+
+public sealed record AuditEventEntry(
+    string Id,
+    string ActorId,
+    string ActionType,
+    string EventAt,
+    Dictionary<string, object?>? Details,
+    string? StepUpEventRef
+);

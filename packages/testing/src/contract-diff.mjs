@@ -185,6 +185,224 @@ async function validateAgainstApi(contracts) {
   }
 }
 
+// ── OpenAPI spec validation ─────────────────────────────────────────────────────
+
+/**
+ * Loads and parses an OpenAPI 3.0 JSON spec from disk.
+ * Returns the parsed spec object, or null on failure.
+ */
+function loadOpenApiSpec(openapiPath) {
+  if (!openapiPath) return null;
+  if (!existsSync(openapiPath)) {
+    fail(`OpenAPI spec not found at "${openapiPath}".`);
+    return null;
+  }
+  try {
+    const raw = readFileSync(openapiPath, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    fail(`Failed to parse OpenAPI spec: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Validates all contracts against an OpenAPI 3.0 spec.
+ * For each contract:
+ *   1. Verifies the endpoint + method exists in the spec paths
+ *   2. For each requestFields.path, verifies the field exists in the spec's requestBody schema
+ *   3. For each responseFields.path, verifies the field exists in the spec's response schema (200)
+ */
+function validateContractsAgainstOpenApi(contracts, spec) {
+  info('── OpenAPI Validation ─────────────────────────────────────────────');
+  let openApiOk = 0;
+  let openApiFail = 0;
+
+  for (const contract of contracts) {
+    const key = endpointKey(contract);
+    const specPath = normalizeEndpointForSpec(contract.endpoint);
+    const method = contract.method.toLowerCase();
+
+    // 1. Check endpoint exists in spec paths.
+    const pathItem = spec.paths?.[specPath];
+    if (!pathItem) {
+      fail(`[OpenAPI] ${key} — endpoint not found in OpenAPI spec paths.`);
+      openApiFail++;
+      continue;
+    }
+
+    const operation = pathItem[method];
+    if (!operation) {
+      fail(`[OpenAPI] ${key} — method "${contract.method}" not found for path "${specPath}" in OpenAPI spec.`);
+      openApiFail++;
+      continue;
+    }
+
+    // 2. Validate requestFields against the spec's requestBody schema.
+    if (Array.isArray(contract.requestFields) && contract.requestFields.length > 0) {
+      const requestSchema = extractSchemaFromRequestBody(operation);
+      if (!requestSchema) {
+        warn(`[OpenAPI] ${key} — contract declares requestFields but OpenAPI spec has no requestBody schema.`);
+      } else {
+        for (const field of contract.requestFields) {
+          const propPath = field.path.replace(/\./g, '/properties/');
+          const found = findSchemaProperty(requestSchema, field.path);
+          if (!found) {
+            fail(`[OpenAPI] ${key} — request field "${field.path}" not found in OpenAPI requestBody schema.`);
+            openApiFail++;
+          }
+        }
+      }
+    }
+
+    // 3. Validate responseFields against the spec's 200 response schema.
+    if (Array.isArray(contract.responseFields) && contract.responseFields.length > 0) {
+      const responseSchema = extractSchemaFromResponse(operation, '200');
+      if (!responseSchema) {
+        warn(`[OpenAPI] ${key} — contract declares responseFields but OpenAPI spec has no 200 response schema.`);
+      } else {
+        for (const field of contract.responseFields) {
+          const found = findSchemaProperty(responseSchema, field.path);
+          if (!found && field.required) {
+            fail(`[OpenAPI] ${key} — required response field "${field.path}" not found in OpenAPI 200 response schema.`);
+            openApiFail++;
+          }
+        }
+      }
+    }
+
+    openApiOk++;
+    info(`  ✓ ${key}`);
+  }
+
+  info(`  OpenAPI validation: ${openApiOk} passed, ${openApiFail} failed`);
+  return openApiFail === 0;
+}
+
+/**
+ * Normalizes an endpoint path to OpenAPI spec format (replaces {param} with
+ * OpenAPI's {param} notation — already the same format used in contracts).
+ */
+function normalizeEndpointForSpec(endpoint) {
+  // Remove /api/v1 prefix since OpenAPI paths typically don't include version prefix
+  // if it's part of the base URL. But since our OpenAPI spec is generated from the
+  // API code which includes the full path, we need to match as-is.
+  // However, contract endpoints might not include the /api/v1/ prefix.
+  // Try matching with and without the prefix.
+  if (!endpoint.startsWith('/api/v1') && !endpoint.startsWith('/api/')) {
+    // If the endpoint doesn't start with our API prefix, we won't find it.
+    // This is informational only — the endpoint may be a mock or external.
+    return endpoint;
+  }
+  return endpoint;
+}
+
+/**
+ * Extracts the request body schema from an OpenAPI operation object.
+ */
+function extractSchemaFromRequestBody(operation) {
+  const requestBody = operation.requestBody;
+  if (!requestBody) return null;
+
+  const content = requestBody.content?.['application/json'];
+  if (!content?.schema) return null;
+
+  return resolveSchemaRef(content.schema);
+}
+
+/**
+ * Extracts the response schema from an OpenAPI operation object for the given status code.
+ */
+function extractSchemaFromResponse(operation, statusCode) {
+  const response = operation.responses?.[statusCode];
+  if (!response) return null;
+
+  const content = response.content?.['application/json'];
+  if (!content?.schema) return null;
+
+  return resolveSchemaRef(content.schema);
+}
+
+/**
+ * Resolves a $ref to its target in the spec's components.schemas.
+ */
+function resolveSchemaRef(schema, resolvedCache = new Map()) {
+  if (!schema) return null;
+
+  if (schema.$ref) {
+    if (resolvedCache.has(schema.$ref)) return resolvedCache.get(schema.$ref);
+
+    // Resolve "#/components/schemas/SchemaName"
+    const parts = schema.$ref.replace('#/', '').split('/');
+    // We can't resolve without the full spec here — return the ref name
+    // so callers know the schema type is defined elsewhere.
+    return { _ref: schema.$ref, _refName: parts[parts.length - 1] };
+  }
+
+  return schema;
+}
+
+/**
+ * Searches for a property path in an OpenAPI schema object.
+ * Supports dot-notation paths like "holdings.symbol".
+ */
+function findSchemaProperty(schema, path) {
+  if (!schema) return false;
+
+  const parts = path.split('.');
+  let current = schema;
+
+  for (const part of parts) {
+    if (!current) return false;
+
+    // Handle $ref — extract the referenced schema name.
+    if (current.$ref) {
+      current = { _refName: current.$ref.split('/').pop() };
+      // We can't resolve without the full spec, but at least we know the ref name.
+    }
+
+    // Check properties
+    if (current.properties?.[part] !== undefined) {
+      current = current.properties[part];
+      continue;
+    }
+
+    // Check items for array types (e.g., holdings[].symbol → items.properties.symbol)
+    if (current.type === 'array' && current.items?.properties?.[part] !== undefined) {
+      current = current.items.properties[part];
+      continue;
+    }
+
+    // Handle the case where the property wraps the response in an object
+    // like { holdings: [...] } — look one level deeper
+    if (current.properties) {
+      return false;
+    }
+
+    // Handle allOf / oneOf
+    const composition = current.allOf || current.oneOf || [];
+    let found = false;
+    for (const sub of composition) {
+      if (findSchemaProperty(sub, part)) {
+        found = true;
+        current = sub;
+        break;
+      }
+    }
+    if (found) continue;
+
+    // Handle additionalProperties
+    if (current.additionalProperties && typeof current.additionalProperties === 'object') {
+      current = current.additionalProperties;
+      continue;
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getNestedValue(obj, path) {
@@ -198,9 +416,31 @@ function endpointKey(contract) {
   return `${contract.method} ${contract.endpoint}`;
 }
 
+// ── CLI argument parsing ────────────────────────────────────────────────────────
+
+/**
+ * Parses --openapi <path> from the command line arguments.
+ * Returns an object with { openapiPath } or null if not provided.
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const result = { openapiPath: null };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--openapi' && i + 1 < args.length) {
+      result.openapiPath = args[i + 1];
+      i++;
+    }
+  }
+
+  return result;
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const cliArgs = parseArgs();
+
   if (!existsSync(contractsDir)) {
     info('contracts/ directory not found — scaffolding pass (no contracts registered).');
     process.exit(0);
@@ -263,6 +503,17 @@ async function main() {
   // Live API validation.
   await validateAgainstApi(contracts);
 
+  // OpenAPI spec validation (Phase 5).
+  let openApiPassed = true;
+  if (cliArgs.openapiPath) {
+    const spec = loadOpenApiSpec(cliArgs.openapiPath);
+    if (spec) {
+      openApiPassed = validateContractsAgainstOpenApi(contracts, spec);
+    } else {
+      openApiPassed = false;
+    }
+  }
+
   // Final report.
   const total = files.length;
   info('');
@@ -270,6 +521,9 @@ async function main() {
   info(`  Contracts: ${total}`);
   info(`  Errors:    ${errors.length}`);
   info(`  Warnings:  ${warnings.length}`);
+  if (cliArgs.openapiPath) {
+    info(`  OpenAPI:   ${openApiPassed ? 'passed' : 'failed'}`);
+  }
 
   process.exit(exitCode);
 }

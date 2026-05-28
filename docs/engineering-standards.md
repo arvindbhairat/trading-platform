@@ -22,6 +22,39 @@ Product requirements belong in [requirements-spec.md](./requirements-spec.md), n
 - require idempotency or deduplication strategies for sensitive write flows
 - document auth and permission requirements per endpoint
 
+## API Contract Standards
+
+### JSON naming convention
+
+- All HTTP JSON property names use **snake_case** (e.g., `signal_type_id`, `rme_configuration`)
+- Enforced globally via `JsonNamingPolicy.SnakeCaseLower` in `ConfigureHttpJsonOptions`
+- `PropertyNameCaseInsensitive = true` is also set for defense-in-depth (accepts camelCase or mixed-case requests)
+- This applies to all ASP.NET Core endpoint parameter binding (Path A) automatically
+- Endpoints using `ReadFromJsonAsync<T>()` (Path B) are unaffected and should be migrated to endpoint parameter binding where possible
+
+### Source of truth
+
+- C# typed records are the authoritative definition of the API contract
+- OpenAPI spec is generated from the API code at runtime via `/openapi/v1.json`
+- Frontend TypeScript types should be derived from the OpenAPI spec (via `openapi-typescript`), not hand-written
+
+### Contract enforcement
+
+- `*.contract.json` files serve as a human-readable subset of the API contract
+- `contract-diff` validates contract files against the live OpenAPI spec
+- CI enforces that committed generated types match the OpenAPI spec
+
+### Scope
+
+| Area | In scope? |
+|------|-----------|
+| ASP.NET Core API HTTP contract (request + response) | ✅ In scope |
+| Worker app (`apps/worker/`) serialization | ❌ Separate process, own config |
+| FYERS API calls via `HttpClient` | ❌ Separate `JsonSerializerOptions` |
+| MongoDB BSON serialization | ❌ Different serializer |
+| Redis push event serialization | ✅ Already uses `SnakeCaseLower` explicitly |
+| OAuth middleware | ❌ Middleware internals |
+
 ## Data Standards
 
 - store timestamps in UTC

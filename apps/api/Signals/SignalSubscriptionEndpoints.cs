@@ -278,25 +278,23 @@ public static class SignalSubscriptionEndpoints
                 ? sub.Versions[sub.CurrentVersionIndex]
                 : null;
 
-            var versionDtos = sub.Versions.Select((v, idx) => new
-            {
-                version_id = v.VersionId.ToString(),
-                version_number = v.VersionNumber,
-                status = idx == sub.PendingVersionIndex ? "pending"
+            var versionDtos = sub.Versions.Select((v, idx) => new VersionListItemResponse(
+                VersionId: v.VersionId.ToString(),
+                VersionNumber: v.VersionNumber,
+                Status: idx == sub.PendingVersionIndex ? "pending"
                     : idx == sub.CurrentVersionIndex ? "live"
                     : "superseded",
-                effective_from = v.EffectiveFrom.ToString("o"),
-                created_at = v.CreatedAt.ToString("o"),
-                is_live = idx == sub.CurrentVersionIndex,
-                is_pending = idx == sub.PendingVersionIndex
-            });
+                EffectiveFrom: v.EffectiveFrom.ToString("o"),
+                CreatedAt: v.CreatedAt.ToString("o"),
+                IsLive: idx == sub.CurrentVersionIndex,
+                IsPending: idx == sub.PendingVersionIndex
+            ));
 
-            return Results.Ok(new
-            {
-                versions = versionDtos,
-                current_version = liveVersion?.VersionNumber,
-                pending_version_index = sub.PendingVersionIndex
-            });
+            return Results.Ok(new VersionListResponse(
+                Versions: versionDtos,
+                CurrentVersion: liveVersion?.VersionNumber,
+                PendingVersionIndex: sub.PendingVersionIndex
+            ));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── POST /api/v1/signals/subscriptions/{id}/versions/{versionId}/discard ──
@@ -360,35 +358,74 @@ public static class SignalSubscriptionEndpoints
 
     // ── DTO mapping ───────────────────────────────────────────────────────
 
-    private static object MapToDto(SignalSubscriptionDocument sub)
+    private static SubscriptionResponse MapToDto(SignalSubscriptionDocument sub)
     {
         var liveVersion = sub.CurrentVersionIndex >= 0 && sub.CurrentVersionIndex < sub.Versions.Count
             ? sub.Versions[sub.CurrentVersionIndex]
             : null;
 
-        return new
-        {
-            id = sub.Id.ToString(),
-            user_id = sub.UserId,
-            name = sub.Name,
-            signal_type_id = sub.SignalTypeId,
-            timeframe = sub.Timeframe,
-            parameters = BsonNormalizer.NormalizeBsonDocument(sub.Parameters),
-            status = sub.Status,
-            is_paused = sub.Status == SubscriptionStatus.Paused,
-            current_version = liveVersion is not null ? new
-            {
-                version_id = liveVersion.VersionId.ToString(),
-                version_number = liveVersion.VersionNumber,
-                effective_from = liveVersion.EffectiveFrom.ToString("o")
-            } : null,
-            has_pending_version = sub.PendingVersionIndex.HasValue,
-            version_count = sub.Versions.Count,
-            created_at = sub.CreatedAt.ToString("o"),
-            updated_at = sub.UpdatedAt.ToString("o")
-        };
+        return new SubscriptionResponse(
+            Id: sub.Id.ToString(),
+            UserId: sub.UserId,
+            Name: sub.Name,
+            SignalTypeId: sub.SignalTypeId,
+            Timeframe: sub.Timeframe,
+            Parameters: BsonNormalizer.NormalizeBsonDocument(sub.Parameters),
+            Status: sub.Status.ToString(),
+            IsPaused: sub.Status == SubscriptionStatus.Paused,
+            CurrentVersion: liveVersion is not null
+                ? new CurrentVersionResponse(
+                    VersionId: liveVersion.VersionId.ToString(),
+                    VersionNumber: liveVersion.VersionNumber,
+                    EffectiveFrom: liveVersion.EffectiveFrom.ToString("o"))
+                : null,
+            HasPendingVersion: sub.PendingVersionIndex.HasValue,
+            VersionCount: sub.Versions.Count,
+            CreatedAt: sub.CreatedAt.ToString("o"),
+            UpdatedAt: sub.UpdatedAt.ToString("o")
+        );
     }
 }
+
+// ── Response DTOs ────────────────────────────────────────────────────────
+
+public sealed record SubscriptionResponse(
+    string Id,
+    string UserId,
+    string Name,
+    string SignalTypeId,
+    string Timeframe,
+    Dictionary<string, object?>? Parameters,
+    string Status,
+    bool IsPaused,
+    CurrentVersionResponse? CurrentVersion,
+    bool HasPendingVersion,
+    int VersionCount,
+    string CreatedAt,
+    string UpdatedAt
+);
+
+public sealed record CurrentVersionResponse(
+    string VersionId,
+    int VersionNumber,
+    string EffectiveFrom
+);
+
+public sealed record VersionListItemResponse(
+    string VersionId,
+    int VersionNumber,
+    string Status,
+    string EffectiveFrom,
+    string CreatedAt,
+    bool IsLive,
+    bool IsPending
+);
+
+public sealed record VersionListResponse(
+    IEnumerable<VersionListItemResponse> Versions,
+    int? CurrentVersion,
+    int? PendingVersionIndex
+);
 
 // ── Request DTOs ─────────────────────────────────────────────────────────
 

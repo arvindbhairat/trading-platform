@@ -125,12 +125,11 @@ public static class NotificationEndpoints
         // Used by the portal filter UI.
         group.MapGet("/types", () =>
         {
-            var types = NotificationType.UserFacing.Select(t => new
-            {
-                type = t,
-                label = TypeLabels.GetValueOrDefault(t, t),
-                is_critical = NotificationType.Critical.Contains(t),
-            });
+            var types = NotificationType.UserFacing.Select(t => new NotificationTypeResponse(
+                Type: t,
+                Label: TypeLabels.GetValueOrDefault(t, t),
+                IsCritical: NotificationType.Critical.Contains(t)
+            ));
 
             return Results.Ok(types);
         }).RequireAuthorization().WithTags(Tag);
@@ -140,28 +139,53 @@ public static class NotificationEndpoints
 
     // ── DTO mapping ───────────────────────────────────────────────────────
 
-    private static object MapToFeedDto(NotificationDocument n)
+    private static NotificationFeedResponse MapToFeedDto(NotificationDocument n)
     {
         var isFailed = string.Equals(
             n.TelegramDeliveryStatus, DeliveryStatus.Failed, StringComparison.Ordinal);
 
-        return new
-        {
-            id = n.Id.ToString(),
-            notification_type = n.NotificationType,
-            type_label = TypeLabels.GetValueOrDefault(n.NotificationType, n.NotificationType),
-            is_critical = NotificationType.Critical.Contains(n.NotificationType),
-            signal_type_name = n.SignalTypeName,
-            timeframe = n.Timeframe,
-            symbol = n.Symbol,
-            content = n.Content,
-            deep_link = n.DeepLink,
-            generated_at = n.GeneratedAt.ToString("o"),
-            is_read = n.IsRead,
-            telegram_delivery_status = n.TelegramDeliveryStatus,
-            telegram_delivery_attempts = n.TelegramDeliveryAttempts,
-            delivery_failed = isFailed,
-            error_details = isFailed ? n.ErrorDetails : null,
-        };
+        return new NotificationFeedResponse(
+            Id: n.Id.ToString(),
+            NotificationType: n.NotificationType,
+            TypeLabel: TypeLabels.GetValueOrDefault(n.NotificationType, n.NotificationType),
+            IsCritical: NotificationType.Critical.Contains(n.NotificationType),
+            SignalTypeName: n.SignalTypeName,
+            Timeframe: n.Timeframe,
+            Symbol: n.Symbol,
+            Content: n.Content,
+            DeepLink: n.DeepLink,
+            GeneratedAt: n.GeneratedAt.ToString("o"),
+            IsRead: n.IsRead,
+            TelegramDeliveryStatus: n.TelegramDeliveryStatus,
+            TelegramDeliveryAttempts: n.TelegramDeliveryAttempts,
+            DeliveryFailed: isFailed,
+            ErrorDetails: isFailed ? n.ErrorDetails : null
+        );
     }
 }
+
+// ── Response DTOs ────────────────────────────────────────────────────────
+
+public sealed record NotificationFeedResponse(
+    string Id,
+    string NotificationType,
+    string TypeLabel,
+    bool IsCritical,
+    string? SignalTypeName,
+    string? Timeframe,
+    string? Symbol,
+    string Content,
+    string? DeepLink,
+    string GeneratedAt,
+    bool IsRead,
+    string? TelegramDeliveryStatus,
+    int TelegramDeliveryAttempts,
+    bool DeliveryFailed,
+    string? ErrorDetails
+);
+
+public sealed record NotificationTypeResponse(
+    string Type,
+    string Label,
+    bool IsCritical
+);

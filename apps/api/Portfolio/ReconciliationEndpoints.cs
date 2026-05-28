@@ -49,23 +49,19 @@ public static class ReconciliationEndpoints
                 .Find(Builders<BsonDocument>.Filter.Eq("user_id", userId))
                 .CountDocumentsAsync(context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                sync_status = BuildSyncStatus(syncDoc),
-                recovery_options = new[]
-                {
-                    new { step = 1, action = "refresh", label = "Manual refresh from broker",
-                        description = "Triggers a full re-sync of recent trade data from FYERS.",
-                        available = true },
-                    new { step = 2, action = "backfill", label = "Historical backfill",
-                        description = "Extended backfill for a selected symbol or date range.",
-                        available = true },
-                    new { step = 3, action = "adjustment", label = "Manual adjustment",
-                        description = "Audited manual adjustment when broker sync cannot restore accuracy.",
-                        available = true },
-                },
-                adjustment_count = adjustmentCount,
-            });
+            return Results.Ok(new ReconciliationStatusResponse(
+                SyncStatus: BuildSyncStatus(syncDoc),
+                RecoveryOptions:
+                [
+                    new RecoveryOptionResponse(Step: 1, Action: "refresh", Label: "Manual refresh from broker",
+                        Description: "Triggers a full re-sync of recent trade data from FYERS.", Available: true),
+                    new RecoveryOptionResponse(Step: 2, Action: "backfill", Label: "Historical backfill",
+                        Description: "Extended backfill for a selected symbol or date range.", Available: true),
+                    new RecoveryOptionResponse(Step: 3, Action: "adjustment", Label: "Manual adjustment",
+                        Description: "Audited manual adjustment when broker sync cannot restore accuracy.", Available: true),
+                ],
+                AdjustmentCount: adjustmentCount
+            ));
         });
 
         // ── POST /api/v1/reconciliation/refresh ──────────────────────────────
@@ -110,12 +106,11 @@ public static class ReconciliationEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                status = "sync_requested",
-                message = "Manual sync requested. The system will process this shortly.",
-                requested_at = now,
-            });
+            return Results.Ok(new RefreshResponse(
+                Status: "sync_requested",
+                Message: "Manual sync requested. The system will process this shortly.",
+                RequestedAt: now
+            ));
         });
 
         // ── POST /api/v1/reconciliation/adjustment ──────────────────────────
@@ -193,16 +188,15 @@ public static class ReconciliationEndpoints
 
             var adjId = await adjustmentRepo.InsertAsync(adjustmentDoc, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                status = "adjustment_recorded",
-                adjustment_id = adjId.ToString(),
-                symbol = request.Symbol,
-                quantity_delta = request.QuantityDelta,
-                cost_basis_delta = request.CostBasisDelta,
-                recorded_at = now,
-                message = "Manual adjustment recorded. It will be reflected in portfolio calculations after the next refresh.",
-            });
+            return Results.Ok(new AdjustmentRecordedResponse(
+                Status: "adjustment_recorded",
+                AdjustmentId: adjId.ToString(),
+                Symbol: request.Symbol,
+                QuantityDelta: request.QuantityDelta,
+                CostBasisDelta: request.CostBasisDelta,
+                RecordedAt: now,
+                Message: "Manual adjustment recorded. It will be reflected in portfolio calculations after the next refresh."
+            ));
         });
 
         // ── GET /api/v1/reconciliation/adjustments ──────────────────────────
@@ -225,39 +219,37 @@ public static class ReconciliationEndpoints
                 adjustments = await adjustmentRepo.GetByUserAsync(
                     userId, ct: context.RequestAborted);
 
-            var result = adjustments.Select(a => new
-            {
-                id = a.Id.ToString(),
-                symbol = a.Symbol,
-                adjustment_type = a.AdjustmentType,
-                quantity_delta = a.QuantityDelta,
-                cost_basis_delta = a.CostBasisDelta,
-                reason = a.Reason,
-                requested_by = a.RequestedBy,
-                approved_by = a.ApprovedBy,
-                created_at = a.CreatedAt,
-                notes = a.Notes,
-            }).ToList();
+            var result = adjustments.Select(a => new AdjustmentHistoryResponse(
+                Id: a.Id.ToString(),
+                Symbol: a.Symbol,
+                AdjustmentType: a.AdjustmentType,
+                QuantityDelta: a.QuantityDelta,
+                CostBasisDelta: a.CostBasisDelta,
+                Reason: a.Reason,
+                RequestedBy: a.RequestedBy,
+                ApprovedBy: a.ApprovedBy,
+                CreatedAt: a.CreatedAt,
+                Notes: a.Notes
+            )).ToList();
 
-            return Results.Ok(new { adjustments = result });
+            return Results.Ok(new AdjustmentHistoryListResponse(Adjustments: result));
         });
 
         return app;
     }
 
-    private static object BuildSyncStatus(BsonDocument? syncDoc)
+    private static SyncStatusResponse BuildSyncStatus(BsonDocument? syncDoc)
     {
         if (syncDoc is null)
         {
-            return new
-            {
-                status = "never_synced",
-                last_successful_sync_at = (DateTime?)null,
-                last_sync_attempt_at = (DateTime?)null,
-                last_sync_request_at = (DateTime?)null,
-                sync_request_status = (string?)null,
-                message = "Account has never been synced. Use refresh to initiate a sync.",
-            };
+            return new SyncStatusResponse(
+                Status: "never_synced",
+                LastSuccessfulSyncAt: null,
+                LastSyncAttemptAt: null,
+                LastSyncRequestAt: null,
+                SyncRequestStatus: null,
+                Message: "Account has never been synced. Use refresh to initiate a sync."
+            );
         }
 
         var syncStatus = syncDoc.GetValue("sync_status", BsonNull.Value)?.AsString ?? "unknown";
@@ -266,21 +258,20 @@ public static class ReconciliationEndpoints
         var lastRequest = syncDoc.GetValue("last_sync_request_at", BsonNull.Value);
         var requestStatus = syncDoc.GetValue("sync_request_status", BsonNull.Value);
 
-        return new
-        {
-            status = syncStatus,
-            last_successful_sync_at = lastSync.IsBsonNull ? null : (DateTime?)lastSync.ToUniversalTime(),
-            last_sync_attempt_at = lastAttempt.IsBsonNull ? null : (DateTime?)lastAttempt.ToUniversalTime(),
-            last_sync_request_at = lastRequest.IsBsonNull ? null : (DateTime?)lastRequest.ToUniversalTime(),
-            sync_request_status = requestStatus.IsBsonNull ? null : requestStatus.AsString,
-            message = syncStatus switch
+        return new SyncStatusResponse(
+            Status: syncStatus,
+            LastSuccessfulSyncAt: lastSync.IsBsonNull ? null : (DateTime?)lastSync.ToUniversalTime(),
+            LastSyncAttemptAt: lastAttempt.IsBsonNull ? null : (DateTime?)lastAttempt.ToUniversalTime(),
+            LastSyncRequestAt: lastRequest.IsBsonNull ? null : (DateTime?)lastRequest.ToUniversalTime(),
+            SyncRequestStatus: requestStatus.IsBsonNull ? null : requestStatus.AsString,
+            Message: syncStatus switch
             {
                 "completed" => $"Last successful sync: {lastSync.ToUniversalTime():O}",
                 "failed" => "Last sync attempt failed. Use refresh to retry.",
                 "suspended" => "Auto-sync is temporarily suspended due to repeated failures. Manual refresh is available.",
                 _ => "Sync status unknown. Use refresh to initiate a sync.",
-            },
-        };
+            }
+        );
     }
 }
 
@@ -293,3 +284,61 @@ public sealed record AdjustmentRequest(
     string? AdjustmentType = null,
     string? ApprovedBy = null,
     string? Notes = null);
+
+// ── Response DTOs ────────────────────────────────────────────────────────
+
+public sealed record SyncStatusResponse(
+    string Status,
+    DateTime? LastSuccessfulSyncAt,
+    DateTime? LastSyncAttemptAt,
+    DateTime? LastSyncRequestAt,
+    string? SyncRequestStatus,
+    string Message
+);
+
+public sealed record RecoveryOptionResponse(
+    int Step,
+    string Action,
+    string Label,
+    string Description,
+    bool Available
+);
+
+public sealed record ReconciliationStatusResponse(
+    SyncStatusResponse SyncStatus,
+    RecoveryOptionResponse[] RecoveryOptions,
+    long AdjustmentCount
+);
+
+public sealed record RefreshResponse(
+    string Status,
+    string Message,
+    DateTime RequestedAt
+);
+
+public sealed record AdjustmentRecordedResponse(
+    string Status,
+    string AdjustmentId,
+    string Symbol,
+    int QuantityDelta,
+    decimal CostBasisDelta,
+    DateTime RecordedAt,
+    string Message
+);
+
+public sealed record AdjustmentHistoryResponse(
+    string Id,
+    string Symbol,
+    string AdjustmentType,
+    int QuantityDelta,
+    decimal CostBasisDelta,
+    string Reason,
+    string RequestedBy,
+    string? ApprovedBy,
+    DateTime CreatedAt,
+    string? Notes
+);
+
+public sealed record AdjustmentHistoryListResponse(
+    List<AdjustmentHistoryResponse> Adjustments
+);

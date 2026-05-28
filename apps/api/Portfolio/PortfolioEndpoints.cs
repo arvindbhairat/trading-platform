@@ -39,21 +39,20 @@ public static class PortfolioEndpoints
             var caSymbols = await GetCaSuspensionSymbolsAsync(
                 database, userId, context.RequestAborted);
 
-            var result = holdings.Select(h => new
-            {
-                symbol = h.Symbol,
-                quantity = h.Quantity,
-                average_buy_price = h.AverageBuyPrice,
-                total_invested = h.TotalInvested,
-                current_price = h.CurrentPrice,
-                current_market_value = h.CurrentMarketValue,
-                unrealized_pnl = h.UnrealizedPnl,
-                unrealized_pnl_percent = h.UnrealizedPnlPercent,
-                holding_period_days = h.HoldingPeriodDays,
-                corporate_action_warning_active = caSymbols.Contains(h.Symbol),
-            }).ToList();
+            var result = holdings.Select(h => new HoldingResponse(
+                Symbol: h.Symbol,
+                Quantity: h.Quantity,
+                AverageBuyPrice: h.AverageBuyPrice,
+                TotalInvested: h.TotalInvested,
+                CurrentPrice: h.CurrentPrice,
+                CurrentMarketValue: h.CurrentMarketValue,
+                UnrealizedPnl: h.UnrealizedPnl,
+                UnrealizedPnlPercent: h.UnrealizedPnlPercent,
+                HoldingPeriodDays: h.HoldingPeriodDays,
+                CorporateActionWarningActive: caSymbols.Contains(h.Symbol)
+            )).ToList();
 
-            return Results.Ok(new { holdings = result });
+            return Results.Ok(new HoldingsListResponse(Holdings: result));
         });
 
         // ── GET /api/v1/portfolio/holdings/{symbol} ───────────────────────
@@ -78,26 +77,24 @@ public static class PortfolioEndpoints
             var caSymbols = await GetCaSuspensionSymbolsAsync(
                 database, userId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                symbol = holding.Symbol,
-                quantity = holding.Quantity,
-                average_buy_price = holding.AverageBuyPrice,
-                total_invested = holding.TotalInvested,
-                current_price = holding.CurrentPrice,
-                current_market_value = holding.CurrentMarketValue,
-                unrealized_pnl = holding.UnrealizedPnl,
-                unrealized_pnl_percent = holding.UnrealizedPnlPercent,
-                holding_period_days = holding.HoldingPeriodDays,
-                corporate_action_warning_active = caSymbols.Contains(holding.Symbol),
-                lots = holding.Lots.Select(l => new
-                {
-                    trade_id = l.TradeId,
-                    remaining_quantity = l.RemainingQuantity,
-                    buy_price = l.BuyPrice,
-                    buy_date = l.BuyDate,
-                }),
-            });
+            return Results.Ok(new HoldingDetailResponse(
+                Symbol: holding.Symbol,
+                Quantity: holding.Quantity,
+                AverageBuyPrice: holding.AverageBuyPrice,
+                TotalInvested: holding.TotalInvested,
+                CurrentPrice: holding.CurrentPrice,
+                CurrentMarketValue: holding.CurrentMarketValue,
+                UnrealizedPnl: holding.UnrealizedPnl,
+                UnrealizedPnlPercent: holding.UnrealizedPnlPercent,
+                HoldingPeriodDays: holding.HoldingPeriodDays,
+                CorporateActionWarningActive: caSymbols.Contains(holding.Symbol),
+                Lots: holding.Lots.Select(l => new LotResponse(
+                    TradeId: l.TradeId,
+                    RemainingQuantity: l.RemainingQuantity,
+                    BuyPrice: l.BuyPrice,
+                    BuyDate: l.BuyDate
+                ))
+            ));
         });
 
         // ── GET /api/v1/portfolio/impact ──────────────────────────────────
@@ -114,23 +111,21 @@ public static class PortfolioEndpoints
             var impact = await impactService.ComputeImpactAsync(
                 userId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                portfolio_heat_pct = impact.PortfolioHeatPct,
-                max_heat_pct = impact.MaxHeatPct,
-                total_open_risk = impact.TotalOpenRisk,
-                account_equity = impact.AccountEquity,
-                open_position_count = impact.OpenPositionCount,
-                suspended_position_count = impact.SuspendedPositionCount,
-                entry_blocked = impact.EntryBlocked,
-                entry_blocked_reason = impact.EntryBlockedReason,
-                sector_exposures = impact.SectorExposures?.Select(s => new
-                {
-                    sector = s.Sector,
-                    exposure_pct = s.ExposurePct,
-                    open_risk = s.OpenRisk,
-                }),
-            });
+            return Results.Ok(new PortfolioImpactResponse(
+                PortfolioHeatPct: impact.PortfolioHeatPct,
+                MaxHeatPct: impact.MaxHeatPct,
+                TotalOpenRisk: impact.TotalOpenRisk,
+                AccountEquity: impact.AccountEquity,
+                OpenPositionCount: impact.OpenPositionCount,
+                SuspendedPositionCount: impact.SuspendedPositionCount,
+                EntryBlocked: impact.EntryBlocked,
+                EntryBlockedReason: impact.EntryBlockedReason,
+                SectorExposures: impact.SectorExposures?.Select(s => new SectorExposureResponse(
+                    Sector: s.Sector,
+                    ExposurePct: s.ExposurePct,
+                    OpenRisk: s.OpenRisk
+                ))
+            ));
         });
 
         // ── GET /api/v1/portfolio/summary ─────────────────────────────────
@@ -147,18 +142,81 @@ public static class PortfolioEndpoints
             var summary = await holdingsService.ComputeSummaryAsync(
                 userId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                total_invested = summary.TotalInvested,
-                total_market_value = summary.TotalMarketValue,
-                total_unrealized_pnl = summary.TotalUnrealizedPnl,
-                total_unrealized_pnl_percent = summary.TotalUnrealizedPnlPercent,
-                position_count = summary.PositionCount,
-            });
+            return Results.Ok(new PortfolioSummaryResponse(
+                TotalInvested: summary.TotalInvested,
+                TotalMarketValue: summary.TotalMarketValue,
+                TotalUnrealizedPnl: summary.TotalUnrealizedPnl,
+                TotalUnrealizedPnlPercent: summary.TotalUnrealizedPnlPercent,
+                PositionCount: summary.PositionCount
+            ));
         });
 
         return app;
     }
+
+    // ── Response DTOs ────────────────────────────────────────────────────────
+
+    public sealed record HoldingResponse(
+        string Symbol,
+        int Quantity,
+        decimal AverageBuyPrice,
+        decimal TotalInvested,
+        decimal? CurrentPrice,
+        decimal? CurrentMarketValue,
+        decimal? UnrealizedPnl,
+        decimal? UnrealizedPnlPercent,
+        int HoldingPeriodDays,
+        bool CorporateActionWarningActive
+    );
+
+    public sealed record HoldingsListResponse(IEnumerable<HoldingResponse> Holdings);
+
+    public sealed record LotResponse(
+        string TradeId,
+        int RemainingQuantity,
+        decimal BuyPrice,
+        DateTime BuyDate
+    );
+
+    public sealed record HoldingDetailResponse(
+        string Symbol,
+        int Quantity,
+        decimal AverageBuyPrice,
+        decimal TotalInvested,
+        decimal? CurrentPrice,
+        decimal? CurrentMarketValue,
+        decimal? UnrealizedPnl,
+        decimal? UnrealizedPnlPercent,
+        int HoldingPeriodDays,
+        bool CorporateActionWarningActive,
+        IEnumerable<LotResponse> Lots
+    );
+
+    public sealed record PortfolioImpactResponse(
+        decimal PortfolioHeatPct,
+        decimal MaxHeatPct,
+        decimal TotalOpenRisk,
+        decimal AccountEquity,
+        int OpenPositionCount,
+        int SuspendedPositionCount,
+        bool EntryBlocked,
+        string? EntryBlockedReason,
+        IEnumerable<SectorExposureResponse>? SectorExposures
+    );
+
+    public sealed record SectorExposureResponse(
+        string Sector,
+        decimal ExposurePct,
+        decimal OpenRisk
+    );
+
+    public sealed record PortfolioSummaryResponse(
+        decimal TotalInvested,
+        decimal? TotalMarketValue,
+        decimal? TotalUnrealizedPnl,
+        decimal? TotalUnrealizedPnlPercent,
+        int PositionCount
+    );
 
     /// <summary>
     /// Returns the set of symbols that have open corporate_action_suspension
