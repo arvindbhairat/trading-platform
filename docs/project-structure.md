@@ -69,6 +69,8 @@ When your task's **Touches** includes any of these, use the "Where to put new co
 signalstack/                  ← repo root
 ├── CLAUDE.md                 ← AI agent config for Claude / Cowork (non-negotiable guardrails)
 ├── AGENTS.md                 ← AI agent config for Codex / OpenAI agents (same guardrails)
+├── .cursorrules              ← AI agent rules for Cursor IDE (directs to memory & guardrails)
+├── .github/copilot-instructions.md ← Instructions for GitHub Copilot
 ├── RUNBOOK.md                ← Single-line pointer: tells agents to read execution_plan/agent.md
 ├── README.md                 ← Human-readable project intro
 ├── SignalStack.sln           ← .NET solution file (includes api + worker + their tests)
@@ -515,15 +517,17 @@ Short, task-specific execution aids consumed by Claude when working on a specifi
 
 ## Root-level agent configuration files
 
-Three files at the repo root configure AI agent behaviour. They carry identical guardrails; which one an agent reads depends on the platform.
+Several files in the repository configure AI agent behaviour. They carry identical guardrails; which one an agent reads depends on the platform.
 
-| File | Used by |
-|------|---------|
-| `CLAUDE.md` | Claude / Cowork agents |
-| `AGENTS.md` | Codex / OpenAI agents |
-| `RUNBOOK.md` | Any agent — single-line pointer to `execution_plan/agent.md` |
+| File | Used by | Description |
+|------|---------|-------------|
+| `CLAUDE.md` | Claude / Cowork agents | Primary reference for Claude-based agents |
+| `AGENTS.md` | Codex / OpenAI / general agents | Sync'd with CLAUDE.md for generic LLM endpoints |
+| `.cursorrules` | Cursor IDE | Automatically configures Cursor Chat / Composer context |
+| `.github/copilot-instructions.md` | GitHub Copilot | Automatically configures Copilot Chat / Inline suggestions |
+| `RUNBOOK.md` | Any agent | Single-line pointer to `execution_plan/agent.md` |
 
-All three enforce the same non-negotiable guardrails. When in doubt, read `CLAUDE.md`; it is the most complete version.
+All of them enforce the same non-negotiable guardrails and point to the memory/execution plan systems.
 
 ---
 

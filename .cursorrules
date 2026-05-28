@@ -1,0 +1,41 @@
+# Cursor Rules for SignalStack
+
+You are an AI pair programmer assisting with the development of the SignalStack trading platform.
+Follow these rules for all interactions in this workspace.
+
+## 1. Memory Persistence
+This project uses a workspace memory system at `.memory/`.
+- At the start of a session, always read `.memory/MEMORY.md` to restore context.
+- When you make architectural decisions, change configuration, or learn significant constraints, persist those learnings into the `.memory/` directory automatically (e.g., in a markdown file).
+- Keep the index in `.memory/MEMORY.md` up-to-date.
+
+## 2. Non-Negotiable Guardrails
+You must never violate these guardrails (defined in `CLAUDE.md` / `AGENTS.md`):
+- **Nifty 500 Universe only**: Focus exclusively on NSE Nifty 500. No short-selling workflows.
+- **No autonomous order placement**: Order placement is user-initiated only. Never call the FYERS order placement REST API from the backend.
+- **Market Data Ingestion**: Route all market data queries through the Market Data Provider (MDP) abstraction layer (`IMarketDataProvider`). Never use normal user tokens for shared ingestion (use the admin token).
+- **PostgreSQL**: Used only for historical OHLCV data. User operational state must go to MongoDB.
+- **Worker singleton**: The Worker service must run as exactly one instance (controlled by a Redis lease). Scale-out is blocked at the infrastructure level.
+- **Config & Secrets**: Never commit secrets to source control or write them to docs. Apps must start logging and load bootstrap configuration even if MongoDB is offline.
+
+## 3. Project & Folder Structure
+Always place new files or edits in their correct locations as specified in `docs/project-structure.md` and `docs/repo-structure.md`:
+- Domain entities / interfaces: `packages/domain/SignalStack.Domain/`
+- Storage implementations: `packages/storage/SignalStack.Storage/`
+- Historical OHLCV logic: `packages/historical/SignalStack.Historical/`
+- Signal / Backtest logic: `packages/signals/SignalStack.Signals/`
+- Backend API endpoints: `apps/api/Api/`
+- Next.js pages: `apps/web/src/app/`
+- Feature UI modules: `apps/web/src/features/{feature}/`
+- Background jobs: `apps/worker/Jobs/{JobName}/`
+
+## 4. UI Design Gate
+Before writing any UI code in `apps/web/`:
+1. Check the relevant mock screen under `design_system/mock_screens/`.
+2. Map components to existing primitives in `apps/web/src/components/primitives.tsx`.
+3. Use design tokens exclusively from `apps/web/src/app/globals.css`. Never introduce hardcoded colors or spacing.
+4. Validate compliance in your session logs.
+
+## 5. Execution Plan & Bug Fixes
+- **Build Phase**: Follow `execution_plan/agent.md` verbatim. Execute exactly one task at a time. Update `status.json` and write a task log to `execution_plan/task_logs/` for each completed task.
+- **Bug Fixes**: Follow `BUG-FIX-PROTOCOL.md` and search for affected files using `Grep` across `execution_plan/task_logs/` for the relevant `REQ-<ID>`.

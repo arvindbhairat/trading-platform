@@ -1,4 +1,11 @@
-# NSE Trading Platform Build Guide for Codex
+# NSE Trading Platform Build Guide for Codex and Generic Agents
+
+## Memory Persistence
+
+This project has a workspace memory system at `.memory/`. Future sessions MUST:
+1. **Read** `.memory/MEMORY.md` at session start to restore context
+2. **Persist** new learnings (decisions, configs, architecture insights) to `.memory/` automatically — no need for the user to ask
+3. Keep the index in `.memory/MEMORY.md` concise and up-to-date
 
 ## Mission
 
@@ -20,8 +27,9 @@ Start with these files in order:
 9. [docs/portfolio-risk-guidelines.md](docs/portfolio-risk-guidelines.md)
 10. [docs/data-management.md](docs/data-management.md)
 11. [docs/repo-structure.md](docs/repo-structure.md)
+12. [docs/project-structure.md](docs/project-structure.md)
 
-Then load only the skill file relevant to the task.
+Then, when implementing a task, load only the skill file relevant to the task. Use `docs/project-structure.md` as the practical map to locate where code belongs.
 
 ## Documentation Rules
 
@@ -30,7 +38,7 @@ Then load only the skill file relevant to the task.
 - `docs/system-architecture.md` explains how the system is shaped to satisfy the requirements.
 - `docs/implementation-roadmap.md` sequences delivery work and must not invent new requirements.
 - `docs/engineering-standards.md` holds reusable engineering conventions, not feature requirements.
-- `.Codex/skills/*` are execution aids and must remain short and derived from the canonical docs.
+- `.claude/skills/*` are execution aids and must remain short and derived from the canonical docs.
 - significant design trade-offs should be recorded in `docs/adr`.
 
 ## Default Technical Direction
@@ -58,7 +66,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Secrets: environment variables and Azure Key Vault
 - Admin-managed runtime settings: MongoDB `sys_config`
 - Source control and CI/CD: GitHub + GitHub Actions
-- Hosting: Azure
+- Hosting: Railway (Phase 1 zero-cost; API, Worker, and Web all in same Railway project)
 
 ## Non-Negotiable Guardrails
 
@@ -74,6 +82,7 @@ Unless the repository evolves in another direction, use these defaults:
 - Never make startup-critical configuration depend only on MongoDB.
 - Never introduce secrets into source control, fixtures, or docs.
 - Never deploy the Worker Service as more than one running instance until the Phase C multi-instance partitioning extension in ADR-0003 is delivered and accepted in a new ADR. Azure App Service scale-out, auto-scale rules, and VM scale-sets must remain disabled for the Worker Service. Scale-out silently breaks the per-position channel invariant and causes concurrent writes on the same position document. The API service is unaffected and may scale horizontally.
+- **Design system enforcement is mandatory before any UI code is written.** Before implementing any UI component in `apps/web`, follow the design gate procedure in `execution_plan/agent.md` step 5: (1) read the relevant mock screen from `design_system/mock_screens/`, (2) map components from `apps/web/src/components/primitives.tsx`, (3) use only design tokens from `apps/web/src/app/globals.css`. Never introduce hardcoded colors, spacing, font sizes, shadows, or inline styles with arbitrary values. All colors must use `--bg-*`, `--fg-*`, `--brand-*`, `--up-*`, `--down-*`, `--warn-*`, `--info-*`, `--neutral-*`, `--line-*` tokens. All spacing must use `var(--s-*)`. All type must use `t-*` classes. Verification step 7 checks compliance — the task log must record the mock screen consulted and any violations found. See `docs/engineering-standards.md` § "Design System Standards" for the full reference rules.
 
 ## Working Style
 
@@ -82,3 +91,12 @@ Unless the repository evolves in another direction, use these defaults:
 - update the canonical docs when a requirement actually changes
 - keep implementations simple, typed, observable, and testable
 - avoid speculative rewrites when incremental delivery is possible
+- enforce the design system strictly via the `execution_plan/agent.md` step 5 design gate: start every UI change from `design_system/mock_screens/`, map components from `src/components/primitives.tsx`, use tokens from `globals.css`, and validate against `design_system/preview/` — never hardcode visual values; record compliance in the task log
+
+## Code Discovery
+
+This project uses an **agent-driven on-the-fly code indexing** approach — no generated index files, no scripts, no maintenance. See `CODE-INDEX.md` (root) for the full reference.
+
+- **During build-phase execution** (`execution_plan/agent.md`): Step 1 ("Load state and discover code") runs a set of Glob calls automatically at session start to give the agent a complete file inventory for the task.
+- **During live trials or bug fixes**: Read `BUG-FIX-PROTOCOL.md` (root) for the 7-step procedure to identify affected files via REQ-ID lookup in task logs, Grep, and the Explore agent.
+- **REQ-ID to file mapping**: Grep `execution_plan/task_logs/*.md` for the REQ-ID — every task log records which files were changed for which requirements.
