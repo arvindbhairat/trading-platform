@@ -23,6 +23,13 @@ export const metadata: Metadata = {
   title: "Signal Stack",
   description:
     "A browser-based decision-support platform for NSE Nifty 500 equities.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-favicon.svg", type: "image/svg+xml" },
+    ],
+  },
+  themeColor: "#1f63f5",
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
