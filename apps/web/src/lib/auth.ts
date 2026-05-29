@@ -42,10 +42,18 @@ export async function logout(): Promise<void> {
 
 // Returns the value of the XSRF-TOKEN cookie set by the API's /auth/csrf endpoint.
 // The API antiforgery middleware reads this back from the X-XSRF-TOKEN request header.
+// SAFE-DECODE: replaces + with %2B before decodeURIComponent so base64 tokens
+// containing + are not corrupted (decodeURIComponent converts + to space).
 function getCsrfCookie(): string | null {
   if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    if (!match) return null;
+    const value = match[1].replace(/\+/g, "%2B");
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 let _apiBaseCache: string | null = null;
@@ -70,28 +78,50 @@ async function getApiBase(): Promise<string> {
 
 // Fetches and caches the CSRF token for the current session.
 let csrfTokenCache: string | null = null;
+// Guards against concurrent ensureCsrfToken calls to avoid duplicate /auth/csrf fetches.
+let csrfFetchPromise: Promise<string> | null = null;
 
 async function ensureCsrfToken(): Promise<string> {
+  // 1. Return cached in-memory token if available.
+  if (csrfTokenCache) return csrfTokenCache;
+
+  // 2. Try reading the XSRF-TOKEN cookie (double-submit cookie pattern).
+  //    Validate the value — reject empty strings and the literal "undefined".
   const cookie = getCsrfCookie();
-  // Use the cookie value directly if present — in the double-submit cookie pattern
-  // the cookie IS the CSRF token the server expects in the X-XSRF-TOKEN header.
-  // Only fetch from the API when no cookie exists (first visit in a session).
-  if (cookie) {
+  if (cookie && cookie !== "undefined" && cookie.length > 0) {
     csrfTokenCache = cookie;
     return cookie;
   }
 
+  // 3. Guard concurrent calls — reuse an in-flight fetch rather than starting a new one.
+  if (csrfFetchPromise) return csrfFetchPromise;
+
+  // 4. Fetch a fresh token from the API.
   const token = getToken();
   const base = await getApiBase();
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(`${base}/api/v1/auth/csrf`, { credentials: "include", headers });
-  if (!res.ok) {
-    throw new Error(`Failed to obtain CSRF token: ${res.status}`);
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  csrfTokenCache = data.csrfToken;
-  return csrfTokenCache;
+
+  csrfFetchPromise = (async (): Promise<string> => {
+    const res = await fetch(`${base}/api/v1/auth/csrf`, {
+      credentials: "include",
+      headers,
+    });
+    if (!res.ok) {
+      csrfFetchPromise = null;
+      throw new Error(`Failed to obtain CSRF token: ${res.status}`);
+    }
+    const data = (await res.json()) as { csrfToken?: string };
+    if (!data.csrfToken) {
+      csrfFetchPromise = null;
+      throw new Error("CSRF token response missing token field");
+    }
+    csrfTokenCache = data.csrfToken;
+    csrfFetchPromise = null;
+    return csrfTokenCache;
+  })();
+
+  return csrfFetchPromise;
 }
 
 // Portal-to-API fetch wrapper.  Always attaches Bearer JWT.
