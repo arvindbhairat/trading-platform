@@ -14,6 +14,13 @@ Supabase:
 JQ5bSRnfdwmICX5k
 postgresql://postgres:JQ5bSRnfdwmICX5k@db.oxkopvwrtbmbbdtscotx.supabase.co:5432/postgres
 
+
+mcp_user
+0E8NAIQ9nZlTMcWt
+
+postgresql://mcp_user:mypassword@db.oxkopvwrtbmbbdtscotx.supabase.co:5432/postgres
+
+
 MongoDB:
 Free Atlas M0 cluster
 mongodb+srv://nmdi1a9Bzg:ikkw3ovoltRSOJdM@prod-cluster.amhmico.mongodb.net/live/?retryWrites=true&w=majority
@@ -23,6 +30,9 @@ Free redis database
 redis-cli -u redis://default:HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW@petunia-leather-cool-75695.db.redis.io:14772
 
 petunia-leather-cool-75695.db.redis.io:14772,password=HNm03ZaO4kdyaLBFy2CbQc4IxYCL1BTW,ssl=True,abortConnect=false
+
+redis-cli -u redis://default:my_random_password@petunia-leather-cool-75695.db.redis.io:14772
+
 
 
 Railway
@@ -61,3 +71,17 @@ app_id=O83XGN26RT-200
 &response_type=code
 &state=9DFB5F7F455A6B8B42628E2A7F02AEEB986717190B08B914486968F6B0D1E7A6
 
+
+
+
+mongodb mcp 
+mongodb+srv://mcp_reader:0E8NAIQ9nZlTMcWt@prod-cluster.amhmico.mongodb.net/live/?retryWrites=true&w=majority
+
+Name:     MongoDB Atlas (Production - Read Only)
+Type:     STDIO
+Command:  npx
+Args:     -y
+          mongodb-mcp-server@latest
+          --readOnly    ← this is the SECOND layer of protection
+
+Env:      MDB_MCP_CONNECTION_STRING=mongodb+srv://mcp_reader:0E8NAIQ9nZlTMcWt@prod-cluster.amhmico.mongodb.net/?retryWrites=true&w=majority
