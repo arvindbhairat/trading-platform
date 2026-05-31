@@ -130,7 +130,7 @@ internal static class TelemetryBootstrapExtensions
 
     if (!string.IsNullOrWhiteSpace(options.ApiKey))
     {
-      exporter.Headers = $"Authorization=Basic {options.ApiKey}";
+      exporter.Headers = $"x-honeycomb-team={options.ApiKey}";
     }
   }
 }
