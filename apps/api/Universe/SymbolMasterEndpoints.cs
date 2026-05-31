@@ -44,16 +44,16 @@ public static class SymbolMasterEndpoints
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Symbol))
-                return Results.BadRequest(new { error = "Symbol is required." });
+                return Results.BadRequest(new ErrorResponse("Symbol is required."));
 
             if (string.IsNullOrWhiteSpace(request.Isin))
-                return Results.BadRequest(new { error = "ISIN code is required." });
+                return Results.BadRequest(new ErrorResponse("ISIN code is required."));
 
             // Check symbol/ISIN uniqueness (REQ-UNIV-002)
             var hasConflict = await repo.HasConflictAsync(
                 request.Symbol.Trim(), request.Isin.Trim(), null, ct);
             if (hasConflict)
-                return Results.Conflict(new { error = "Symbol or ISIN already exists." });
+                return Results.Conflict(new ErrorResponse("Symbol or ISIN already exists."));
 
             // Generate deterministic sql_table_name_suffix (REQ-HIST-006/007)
             string suffix;
@@ -63,18 +63,16 @@ public static class SymbolMasterEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new ErrorResponse(ex.Message));
             }
 
             // Check suffix collision (REQ-HIST-008a)
             var existingBySuffix = await repo.FindBySuffixAsync(suffix, ct);
             if (existingBySuffix is not null)
-                return Results.Conflict(new
-                {
-                    error = $"sql_table_name_suffix '{suffix}' already in use by symbol '{existingBySuffix.Symbol}'.",
-                    collidingSymbol = existingBySuffix.Symbol,
-                    generatedSuffix = suffix
-                });
+                return Results.Conflict(new SymbolConflictResponse(
+                    $"sql_table_name_suffix '{suffix}' already in use by symbol '{existingBySuffix.Symbol}'.",
+                    existingBySuffix.Symbol,
+                    suffix));
 
             var now = DateTime.UtcNow;
             var doc = new SymbolMasterDocument
@@ -117,7 +115,7 @@ public static class SymbolMasterEndpoints
                 scanExcluded: request.ScanExcluded,
                 ct: ct);
 
-            return Results.Ok(new { status = "updated" });
+            return Results.Ok(new StatusResponse("updated"));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -129,7 +127,7 @@ public static class SymbolMasterEndpoints
             CancellationToken ct) =>
         {
             var count = await repo.CountAsync(archived, ct);
-            return Results.Ok(new { count });
+            return Results.Ok(new CountResponse(count));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -175,3 +173,17 @@ public sealed record UpdateSymbolRequest
     /// <summary>True to exclude from scans. Null = no change.</summary>
     public bool? ScanExcluded { get; init; }
 }
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record ErrorResponse(string Error);
+
+public sealed record SymbolConflictResponse(
+    string Error,
+    string CollidingSymbol,
+    string GeneratedSuffix
+);
+
+public sealed record StatusResponse(string Status);
+
+public sealed record CountResponse(long Count);

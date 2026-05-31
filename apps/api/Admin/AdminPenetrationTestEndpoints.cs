@@ -53,17 +53,17 @@ public static class AdminPenetrationTestEndpoints
             var body = await context.Request.ReadFromJsonAsync<SchedulePentestRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (string.IsNullOrWhiteSpace(body.VendorName))
-                return Results.BadRequest(new { error = "vendor_name_required" });
+                return Results.BadRequest(new AdminErrorResponse("vendor_name_required"));
 
             if (body.Scope is null || body.Scope.Count == 0)
-                return Results.BadRequest(new { error = "scope_required" });
+                return Results.BadRequest(new AdminErrorResponse("scope_required"));
 
             var invalidScopes = body.Scope.Where(s => !AllowedScopes.Contains(s)).ToList();
             if (invalidScopes.Count > 0)
-                return Results.BadRequest(new { error = "invalid_scope_values", invalid_values = invalidScopes });
+                return Results.BadRequest(new InvalidScopeValuesError("invalid_scope_values", invalidScopes));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -72,7 +72,7 @@ public static class AdminPenetrationTestEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var doc = new PenetrationTestDocument
@@ -102,15 +102,14 @@ public static class AdminPenetrationTestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Created($"/api/v1/admin/pentest/{doc.Id}", new
-            {
-                id = doc.Id.ToString(),
-                vendor_name = doc.VendorName,
-                scope = doc.Scope,
-                status = doc.Status,
-                scheduled_date = doc.ScheduledDate?.ToString("O"),
-                engagement_ref = doc.EngagementRef
-            });
+            return Results.Created($"/api/v1/admin/pentest/{doc.Id}",
+                new PentestCreatedResponse(
+                    doc.Id.ToString(),
+                    doc.VendorName,
+                    doc.Scope,
+                    doc.Status,
+                    doc.ScheduledDate?.ToString("O"),
+                    doc.EngagementRef));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -135,23 +134,23 @@ public static class AdminPenetrationTestEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var test = await pentestRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (test is null)
-                return Results.NotFound(new { error = "pentest_not_found" });
+                return Results.NotFound(new AdminErrorResponse("pentest_not_found"));
 
             var body = await context.Request.ReadFromJsonAsync<AddFindingRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (string.IsNullOrWhiteSpace(body.Title))
-                return Results.BadRequest(new { error = "title_required" });
+                return Results.BadRequest(new AdminErrorResponse("title_required"));
             if (string.IsNullOrWhiteSpace(body.Description))
-                return Results.BadRequest(new { error = "description_required" });
+                return Results.BadRequest(new AdminErrorResponse("description_required"));
             if (string.IsNullOrWhiteSpace(body.Severity) || !AllowedSeverities.Contains(body.Severity))
-                return Results.BadRequest(new { error = "invalid_severity", allowed = AllowedSeverities });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_severity", AllowedSeverities));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -160,7 +159,7 @@ public static class AdminPenetrationTestEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var findingId = $"PT-{DateTime.UtcNow:yyyyMMdd}-{(test.Findings?.Count ?? 0) + 1:D3}";
@@ -190,13 +189,8 @@ public static class AdminPenetrationTestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Created($"/api/v1/admin/pentest/{id}/findings/{findingId}", new
-            {
-                finding_id = findingId,
-                title = body.Title,
-                severity = body.Severity,
-                status = "open"
-            });
+            return Results.Created($"/api/v1/admin/pentest/{id}/findings/{findingId}",
+                new FindingCreatedResponse(findingId, body.Title, body.Severity, "open"));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -222,19 +216,19 @@ public static class AdminPenetrationTestEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var test = await pentestRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (test is null)
-                return Results.NotFound(new { error = "pentest_not_found" });
+                return Results.NotFound(new AdminErrorResponse("pentest_not_found"));
 
             var body = await context.Request.ReadFromJsonAsync<UpdateFindingRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (body.Status is not null && !AllowedFindingStatuses.Contains(body.Status))
-                return Results.BadRequest(new { error = "invalid_status", allowed = AllowedFindingStatuses });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_status", AllowedFindingStatuses));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -243,7 +237,7 @@ public static class AdminPenetrationTestEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             await pentestRepo.UpdateFindingAsync(
@@ -261,7 +255,7 @@ public static class AdminPenetrationTestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { success = true, finding_id = findingId, status = body.Status });
+            return Results.Ok(new FindingUpdatedResponse(true, findingId, body.Status));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -285,19 +279,19 @@ public static class AdminPenetrationTestEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var test = await pentestRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (test is null)
-                return Results.NotFound(new { error = "pentest_not_found" });
+                return Results.NotFound(new AdminErrorResponse("pentest_not_found"));
 
             var body = await context.Request.ReadFromJsonAsync<UpdatePentestStatusRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (string.IsNullOrWhiteSpace(body.Status) || !AllowedTestStatuses.Contains(body.Status))
-                return Results.BadRequest(new { error = "invalid_status", allowed = AllowedTestStatuses });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_status", AllowedTestStatuses));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -306,7 +300,7 @@ public static class AdminPenetrationTestEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var completedDate = body.Status == "completed" ? DateTime.UtcNow : test.CompletedDate;
@@ -328,12 +322,8 @@ public static class AdminPenetrationTestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                success = true,
-                status = body.Status,
-                completed_date = completedDate?.ToString("O")
-            });
+            return Results.Ok(new PentestStatusUpdatedResponse(
+                true, body.Status, completedDate?.ToString("O")));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -359,11 +349,11 @@ public static class AdminPenetrationTestEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var test = await pentestRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (test is null)
-                return Results.NotFound(new { error = "pentest_not_found" });
+                return Results.NotFound(new AdminErrorResponse("pentest_not_found"));
 
             // REQ-SEC-011: step-up required.
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -372,7 +362,7 @@ public static class AdminPenetrationTestEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             // REQ-SEC-010: verify all high/critical findings are remediated before marking gate.
@@ -381,14 +371,12 @@ public static class AdminPenetrationTestEndpoints
 
             if (unresolvedCount > 0)
             {
-                return Results.UnprocessableEntity(new
-                {
-                    error = "unresolved_high_critical_findings",
-                    message = $"Cannot mark penetration test gate as complete: {unresolvedCount} " +
-                              "high/critical finding(s) are still unresolved. Remediate or accept " +
-                              "all high and critical findings before marking the gate.",
-                    unresolved_high_critical_count = unresolvedCount
-                });
+                return Results.UnprocessableEntity(new UnresolvedFindingsError(
+                    "unresolved_high_critical_findings",
+                    $"Cannot mark penetration test gate as complete: {unresolvedCount} " +
+                    "high/critical finding(s) are still unresolved. Remediate or accept " +
+                    "all high and critical findings before marking the gate.",
+                    unresolvedCount));
             }
 
             await gateSvc.SetGateAsync(
@@ -396,14 +384,8 @@ public static class AdminPenetrationTestEndpoints
                 $"Penetration test '{test.VendorName}' ({test.Id}) — all high/critical findings remediated.",
                 context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                success = true,
-                gate = PhaseGateService.GatePenTest,
-                passed = true,
-                pentest_id = id,
-                vendor_name = test.VendorName
-            });
+            return Results.Ok(new PentestGateResponse(
+                true, PhaseGateService.GatePenTest, true, id, test.VendorName));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -420,32 +402,30 @@ public static class AdminPenetrationTestEndpoints
 
             var tests = await pentestRepo.ListAllAsync(context.RequestAborted);
 
-            var result = tests.Select(t => new
+            var result = tests.Select(t =>
             {
-                id = t.Id.ToString(),
-                vendor_name = t.VendorName,
-                scope = t.Scope,
-                status = t.Status,
-                scheduled_date = t.ScheduledDate?.ToString("O"),
-                completed_date = t.CompletedDate?.ToString("O"),
-                engagement_ref = t.EngagementRef,
-                findings_summary = new
-                {
-                    total = t.Findings?.Count ?? 0,
-                    critical_open = t.Findings?.Count(f =>
-                        f.Severity == "critical" && f.Status is not ("remediated" or "false_positive")) ?? 0,
-                    high_open = t.Findings?.Count(f =>
-                        f.Severity == "high" && f.Status is not ("remediated" or "false_positive")) ?? 0,
-                    medium_open = t.Findings?.Count(f =>
-                        f.Severity == "medium" && f.Status is not ("remediated" or "false_positive")) ?? 0,
-                    remediated = t.Findings?.Count(f => f.Status == "remediated") ?? 0,
-                    accepted = t.Findings?.Count(f => f.Status == "accepted") ?? 0
-                },
-                created_at = t.CreatedAt.ToString("O"),
-                updated_at = t.UpdatedAt.ToString("O")
+                var f = t.Findings;
+                var summary = new FindingsSummary(
+                    f?.Count ?? 0,
+                    f?.Count(ff => ff.Severity == "critical" && ff.Status is not ("remediated" or "false_positive")) ?? 0,
+                    f?.Count(ff => ff.Severity == "high" && ff.Status is not ("remediated" or "false_positive")) ?? 0,
+                    f?.Count(ff => ff.Severity == "medium" && ff.Status is not ("remediated" or "false_positive")) ?? 0,
+                    f?.Count(ff => ff.Status == "remediated") ?? 0,
+                    f?.Count(ff => ff.Status == "accepted") ?? 0);
+                return new PentestListItem(
+                    t.Id.ToString(),
+                    t.VendorName,
+                    t.Scope,
+                    t.Status,
+                    t.ScheduledDate?.ToString("O"),
+                    t.CompletedDate?.ToString("O"),
+                    t.EngagementRef,
+                    summary,
+                    t.CreatedAt.ToString("O"),
+                    t.UpdatedAt.ToString("O"));
             }).ToList();
 
-            return Results.Ok(new { penetration_tests = result });
+            return Results.Ok(new PentestListResponse(result));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -461,11 +441,11 @@ public static class AdminPenetrationTestEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var test = await pentestRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (test is null)
-                return Results.NotFound(new { error = "pentest_not_found" });
+                return Results.NotFound(new AdminErrorResponse("pentest_not_found"));
 
             var findings = test.Findings?
                 .OrderByDescending(f => f.Severity switch
@@ -477,31 +457,29 @@ public static class AdminPenetrationTestEndpoints
                     _ => 1
                 })
                 .ThenBy(f => f.FindingId)
-                .Select(f => new
-                {
-                    finding_id = f.FindingId,
-                    title = f.Title,
-                    description = f.Description,
-                    severity = f.Severity,
-                    status = f.Status,
-                    remediation_notes = f.RemediationNotes,
-                    created_at = f.CreatedAt.ToString("O"),
-                    updated_at = f.UpdatedAt.ToString("O")
-                }).ToList() ?? [];
+                .Select(f => new PentestFindingResponse(
+                    f.FindingId,
+                    f.Title,
+                    f.Description,
+                    f.Severity,
+                    f.Status,
+                    f.RemediationNotes,
+                    f.CreatedAt.ToString("O"),
+                    f.UpdatedAt.ToString("O")
+                )).ToList() ?? [];
 
-            return Results.Ok(new
-            {
-                id = test.Id.ToString(),
-                vendor_name = test.VendorName,
-                scope = test.Scope,
-                status = test.Status,
-                scheduled_date = test.ScheduledDate?.ToString("O"),
-                completed_date = test.CompletedDate?.ToString("O"),
-                engagement_ref = test.EngagementRef,
+            return Results.Ok(new PentestDetailResponse(
+                test.Id.ToString(),
+                test.VendorName,
+                test.Scope,
+                test.Status,
+                test.ScheduledDate?.ToString("O"),
+                test.CompletedDate?.ToString("O"),
+                test.EngagementRef,
                 findings,
-                created_at = test.CreatedAt.ToString("O"),
-                updated_at = test.UpdatedAt.ToString("O")
-            });
+                test.CreatedAt.ToString("O"),
+                test.UpdatedAt.ToString("O")
+            ));
         }).RequireAuthorization();
 
         return app;
@@ -541,3 +519,41 @@ public sealed record UpdateFindingRequest(
 
 public sealed record UpdatePentestStatusRequest(
     string? Status);
+
+// ── Response DTOs ────────────────────────────────────────────────────────────
+
+public sealed record PentestCreatedResponse(
+    string Id, string? VendorName, List<string>? Scope,
+    string Status, string? ScheduledDate, string? EngagementRef);
+
+public sealed record FindingCreatedResponse(string FindingId, string? Title, string? Severity, string Status);
+
+public sealed record FindingUpdatedResponse(bool Success, string FindingId, string? Status);
+
+public sealed record PentestStatusUpdatedResponse(bool Success, string? Status, string? CompletedDate);
+
+public sealed record PentestGateResponse(bool Success, string Gate, bool Passed, string PentestId, string? VendorName);
+
+public sealed record FindingsSummary(int Total, int CriticalOpen, int HighOpen, int MediumOpen, int Remediated, int Accepted);
+
+public sealed record PentestListItem(
+    string Id, string? VendorName, List<string>? Scope, string Status,
+    string? ScheduledDate, string? CompletedDate, string? EngagementRef,
+    FindingsSummary FindingsSummary, string CreatedAt, string UpdatedAt);
+
+public sealed record PentestListResponse(IEnumerable<PentestListItem> PenetrationTests);
+
+public sealed record PentestFindingResponse(
+    string FindingId, string? Title, string? Description, string? Severity,
+    string? Status, string? RemediationNotes, string CreatedAt, string UpdatedAt);
+
+public sealed record PentestDetailResponse(
+    string Id, string? VendorName, List<string>? Scope, string Status,
+    string? ScheduledDate, string? CompletedDate, string? EngagementRef,
+    List<PentestFindingResponse> Findings, string CreatedAt, string UpdatedAt);
+
+// ── Error DTOs ────────────────────────────────────────────────────────────
+
+public sealed record InvalidScopeValuesError(string Error, List<string> InvalidValues);
+
+public sealed record UnresolvedFindingsError(string Error, string Message, long UnresolvedHighCriticalCount);

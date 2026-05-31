@@ -37,12 +37,7 @@ public static class TelegramLinkingEndpoints
             var result = await linkingService.GenerateTokenAsync(
                 user.Id, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                result.Token,
-                result.ExpiresAt,
-                result.ExpiresInMinutes
-            });
+            return Results.Ok(result);
         }).RequireAuthorization();
 
         // POST /api/v1/telegram/link — validate token and link chat ID
@@ -59,24 +54,22 @@ public static class TelegramLinkingEndpoints
                 cancellationToken: context.RequestAborted);
 
             if (body is null || string.IsNullOrWhiteSpace(body.Token))
-                return Results.BadRequest(new { error = "token_required" });
+                return Results.BadRequest(new ErrorResponse("token_required"));
 
             if (body.ChatId <= 0)
-                return Results.BadRequest(new { error = "invalid_chat_id" });
+                return Results.BadRequest(new ErrorResponse("invalid_chat_id"));
 
             var result = await linkingService.ValidateAndLinkAsync(
                 body.Token, body.ChatId, context.RequestAborted);
 
             if (!result.Success)
             {
-                return Results.BadRequest(new
-                {
-                    error = result.ErrorCode,
-                    detail = result.ErrorDetail
-                });
+                return Results.BadRequest(new LinkErrorResponse(
+                    result.ErrorCode,
+                    result.ErrorDetail));
             }
 
-            return Results.Ok(new { success = true });
+            return Results.Ok(new SuccessResponse(true));
         });
 
         // POST /api/v1/telegram/unlink — unlink Telegram account
@@ -95,9 +88,9 @@ public static class TelegramLinkingEndpoints
                 user.Id, context.RequestAborted);
 
             if (!result.Success)
-                return Results.BadRequest(new { error = result.ErrorDetail });
+                return Results.BadRequest(new ErrorResponse(result.ErrorDetail!));
 
-            return Results.Ok(new { success = true });
+            return Results.Ok(new SuccessResponse(true));
         }).RequireAuthorization();
 
         // GET /api/v1/telegram/status — link status
@@ -130,3 +123,7 @@ public static class TelegramLinkingEndpoints
 }
 
 public sealed record LinkChatRequest(string Token, long ChatId);
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record LinkErrorResponse(string? Error, string? Detail);

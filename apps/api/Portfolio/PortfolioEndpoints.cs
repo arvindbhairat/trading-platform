@@ -72,7 +72,7 @@ public static class PortfolioEndpoints
                 userId, symbol, context.RequestAborted);
 
             if (holding is null)
-                return Results.NotFound(new { error = $"No open holding found for symbol '{symbol}'." });
+                return Results.NotFound(new PortfolioErrorResponse($"No open holding found for symbol '{symbol}'."));
 
             var caSymbols = await GetCaSuspensionSymbolsAsync(
                 database, userId, context.RequestAborted);
@@ -217,6 +217,10 @@ public static class PortfolioEndpoints
         decimal? TotalUnrealizedPnlPercent,
         int PositionCount
     );
+
+    // ── Error DTOs ────────────────────────────────────────────────────────
+
+    public sealed record PortfolioErrorResponse(string Error);
 
     /// <summary>
     /// Returns the set of symbols that have open corporate_action_suspension

@@ -185,7 +185,7 @@ public static class AdminHomeEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { dismissed = true });
+            return Results.Ok(new DismissRecoverySummaryResponse(true));
         }).RequireAuthorization();
 
         return app;
@@ -215,3 +215,5 @@ public sealed record DegradedModeResponse(
     string? LastSuccessfulTokenAt,
     string? DegradedReason
 );
+
+public sealed record DismissRecoverySummaryResponse(bool Dismissed);

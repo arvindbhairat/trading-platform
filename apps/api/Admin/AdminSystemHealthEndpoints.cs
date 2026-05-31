@@ -52,7 +52,7 @@ public static class AdminSystemHealthEndpoints
             var sysConfigCol = database.GetCollection<BsonDocument>("sys_config");
 
             // ── 1. Background job components ──────────────────────────────────
-            var jobComponents = new List<object>();
+            var jobComponents = new List<JobComponentResponse>();
             foreach (var jobType in BackgroundJobTypes)
             {
                 var breakdown = await GetDailyBreakdownAsync(
@@ -63,15 +63,14 @@ public static class AdminSystemHealthEndpoints
                     .SortByDescending(j => j["started_at"])
                     .FirstOrDefaultAsync(context.RequestAborted);
 
-                jobComponents.Add(new
-                {
-                    name = jobType,
-                    label = JobTypeLabel(jobType),
-                    status = ComputeJobStatus(lastRun, breakdown),
-                    last_run_at = lastRun?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
-                    last_outcome = lastRun?.GetValue("outcome", "")?.AsString ?? "never_run",
-                    daily_breakdown = breakdown
-                });
+                jobComponents.Add(new JobComponentResponse(
+                    Name: jobType,
+                    Label: JobTypeLabel(jobType),
+                    Status: ComputeJobStatus(lastRun, breakdown),
+                    LastRunAt: lastRun?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
+                    LastOutcome: lastRun?.GetValue("outcome", "")?.AsString ?? "never_run",
+                    DailyBreakdown: breakdown
+                ));
             }
 
             // ── 2. Admin FYERS token ─────────────────────────────────────────
@@ -94,22 +93,24 @@ public static class AdminSystemHealthEndpoints
                 auditCol, since, now, context.RequestAborted);
 
             // ── 7. Maintenance windows (A-14) ────────────────────────────────
-            var maintenanceWindows = new
-            {
-                pre_market = new { start = "07:00", end = "08:30", timezone = "IST", label = "Pre-market — Universe Sync and small HDS seeds" },
-                post_eod = new { start = "20:00", end = "23:59", timezone = "IST", label = "Post-EODSR — large HDS seeds and high-write operations" }
-            };
+            var maintenanceWindows = new MaintenanceWindowsResponse(
+                PreMarket: new MaintenanceWindow(
+                    Start: "07:00", End: "08:30", Timezone: "IST",
+                    Label: "Pre-market — Universe Sync and small HDS seeds"),
+                PostEod: new MaintenanceWindow(
+                    Start: "20:00", End: "23:59", Timezone: "IST",
+                    Label: "Post-EODSR — large HDS seeds and high-write operations")
+            );
 
-            return Results.Ok(new
-            {
-                components = jobComponents,
-                admin_fyers_token = adminFyers,
-                market_data_provider = mdpData,
-                telegram_pipeline = telegramData,
-                kill_switch = killSwitchData,
-                market_halt = marketHaltData,
-                maintenance_windows = maintenanceWindows
-            });
+            return Results.Ok(new SystemHealthResponse(
+                Components: jobComponents,
+                AdminFyersToken: adminFyers,
+                MarketDataProvider: mdpData,
+                TelegramPipeline: telegramData,
+                KillSwitch: killSwitchData,
+                MarketHalt: marketHaltData,
+                MaintenanceWindows: maintenanceWindows
+            ));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/jobs/{jobType}/trigger-manual — trigger a background job run
@@ -126,7 +127,7 @@ public static class AdminSystemHealthEndpoints
                 return Results.Forbid();
 
             if (!BackgroundJobTypes.Contains(jobType) && jobType != "SYMBOL_PROBE")
-                return Results.BadRequest(new { error = "unknown_job_type", jobType });
+                return Results.BadRequest(new UnknownJobTypeError("unknown_job_type", jobType));
 
             var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
                 ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -161,12 +162,11 @@ public static class AdminSystemHealthEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                triggered = true,
-                job_type = jobType,
-                run_id = jobRunDoc["_id"].AsObjectId.ToString()
-            });
+            return Results.Ok(new ManualTriggerResponse(
+                Triggered: true,
+                JobType: jobType,
+                RunId: jobRunDoc["_id"].AsObjectId.ToString()
+            ));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/symbol-probe/summary — latest Symbol Validity Probe results
@@ -232,7 +232,7 @@ public static class AdminSystemHealthEndpoints
 
     // ── Per-job daily breakdown ──────────────────────────────────────────────
 
-    private static async Task<List<object>> GetDailyBreakdownAsync(
+    private static async Task<List<DailyBreakdownEntry>> GetDailyBreakdownAsync(
         IMongoCollection<BsonDocument> jobRunsCol,
         string jobType,
         DateTime since,
@@ -286,19 +286,18 @@ public static class AdminSystemHealthEndpoints
         var results = await jobRunsCol.Aggregate<BsonDocument>(pipeline, cancellationToken: ct)
             .ToListAsync(ct);
 
-        return results.Select(r => (object)new
-        {
-            date = r["_id"].AsString,
-            runs = r.GetValue("runs", 0).AsInt32,
-            success = r.GetValue("success", 0).AsInt32,
-            warnings = r.GetValue("warnings", 0).AsInt32,
-            errors = r.GetValue("errors", 0).AsInt32
-        }).ToList();
+        return results.Select(r => new DailyBreakdownEntry(
+            Date: r["_id"].AsString,
+            Runs: r.GetValue("runs", 0).AsInt32,
+            Success: r.GetValue("success", 0).AsInt32,
+            Warnings: r.GetValue("warnings", 0).AsInt32,
+            Errors: r.GetValue("errors", 0).AsInt32
+        )).ToList();
     }
 
     // ── Admin FYERS token ────────────────────────────────────────────────────
 
-    private static async Task<object> BuildAdminFyersTokenAsync(
+    private static async Task<AdminFyersTokenResponse> BuildAdminFyersTokenAsync(
         IMongoDatabase database,
         IMongoCollection<BsonDocument> auditCol,
         CancellationToken ct)
@@ -346,17 +345,16 @@ public static class AdminSystemHealthEndpoints
             details = e.GetValue("details", BsonNull.Value).IsBsonNull ? null : e["details"]
         }).ToList();
 
-        return new
-        {
-            status = tokenStatus,
-            expires_at = expiry,
-            history
-        };
+        return new AdminFyersTokenResponse(
+            Status: tokenStatus,
+            ExpiresAt: expiry,
+            History: history
+        );
     }
 
     // ── Market data provider ─────────────────────────────────────────────────
 
-    private static async Task<object> BuildMarketDataProviderAsync(
+    private static async Task<MarketDataProviderResponse> BuildMarketDataProviderAsync(
         IMongoCollection<BsonDocument> sysConfigCol,
         IMongoCollection<BsonDocument> jobRunsCol,
         DateTime since,
@@ -383,29 +381,27 @@ public static class AdminSystemHealthEndpoints
 
         // Combine DS + HDS daily breakdown.
         var combined = breakdown.Concat(hdsBreakdown)
-            .GroupBy(d => ((dynamic)d).date)
-            .Select(g => new
-            {
-                date = g.Key,
-                runs = g.Sum(d => ((dynamic)d).runs),
-                success = g.Sum(d => ((dynamic)d).success),
-                warnings = g.Sum(d => ((dynamic)d).warnings),
-                errors = g.Sum(d => ((dynamic)d).errors)
-            })
-            .OrderBy(d => d.date)
+            .GroupBy(d => d.Date)
+            .Select(g => new DailyBreakdownEntry(
+                Date: g.Key,
+                Runs: g.Sum(d => d.Runs),
+                Success: g.Sum(d => d.Success),
+                Warnings: g.Sum(d => d.Warnings),
+                Errors: g.Sum(d => d.Errors)
+            ))
+            .OrderBy(d => d.Date)
             .ToList();
 
-        return new
-        {
-            active_provider = activeProvider,
-            last_successful_fetch_at = lastSuccess?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            daily_breakdown = combined
-        };
+        return new MarketDataProviderResponse(
+            ActiveProvider: activeProvider,
+            LastSuccessfulFetchAt: lastSuccess?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            DailyBreakdown: combined
+        );
     }
 
     // ── Telegram pipeline ────────────────────────────────────────────────────
 
-    private static async Task<object> BuildTelegramPipelineAsync(
+    private static async Task<TelegramPipelineResponse> BuildTelegramPipelineAsync(
         IMongoCollection<BsonDocument> notificationsCol,
         DateTime since,
         DateTime now,
@@ -462,25 +458,24 @@ public static class AdminSystemHealthEndpoints
             .Aggregate<BsonDocument>(pipeline, cancellationToken: ct)
             .ToListAsync(ct);
 
-        var breakdown = results.Select(r => (object)new
-        {
-            date = r["_id"].AsString,
-            attempts = r.GetValue("attempts", 0).AsInt32,
-            delivered = r.GetValue("delivered", 0).AsInt32,
-            failed = r.GetValue("failed", 0).AsInt32
-        }).ToList();
+        var breakdown = results.Select(r => new DailyBreakdownEntry(
+            Date: r["_id"].AsString,
+            Runs: r.GetValue("attempts", 0).AsInt32,
+            Success: r.GetValue("delivered", 0).AsInt32,
+            Warnings: 0,
+            Errors: r.GetValue("failed", 0).AsInt32
+        )).ToList();
 
-        return new
-        {
-            last_successful_delivery_at = lastDelivered?.GetValue("last_telegram_attempt_at", BsonNull.Value)
+        return new TelegramPipelineResponse(
+            LastSuccessfulDeliveryAt: lastDelivered?.GetValue("last_telegram_attempt_at", BsonNull.Value)
                 ?.ToNullableUniversalTime(),
-            daily_breakdown = breakdown
-        };
+            DailyBreakdown: breakdown
+        );
     }
 
     // ── Kill switch ─────────────────────────────────────────────────────────
 
-    private static async Task<object> BuildKillSwitchAsync(
+    private static async Task<KillSwitchResponse> BuildKillSwitchAsync(
         IMongoCollection<BsonDocument> sysConfigCol,
         IMongoCollection<BsonDocument> auditCol,
         CancellationToken ct)
@@ -500,17 +495,16 @@ public static class AdminSystemHealthEndpoints
             .SortByDescending(e => e["event_at"])
             .FirstOrDefaultAsync(ct);
 
-        return new
-        {
-            active = isActive,
-            last_change_at = lastChange?.GetValue("event_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            last_change_actor = lastChange?.GetValue("actor_id", "")?.AsString
-        };
+        return new KillSwitchResponse(
+            Active: isActive,
+            LastChangeAt: lastChange?.GetValue("event_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            LastChangeActor: lastChange?.GetValue("actor_id", "")?.AsString
+        );
     }
 
     // ── Market halt ─────────────────────────────────────────────────────────
 
-    private static async Task<object> BuildMarketHaltAsync(
+    private static async Task<MarketHaltResponse> BuildMarketHaltAsync(
         IMongoCollection<BsonDocument> auditCol,
         DateTime since,
         DateTime now,
@@ -549,20 +543,19 @@ public static class AdminSystemHealthEndpoints
                 .FirstOrDefault()
             : null;
 
-        return new
-        {
-            status = isHalted ? "halted" : "clear",
-            source,
-            started_at = haltStart,
-            history
-        };
+        return new MarketHaltResponse(
+            Status: isHalted ? "halted" : "clear",
+            Source: source,
+            StartedAt: haltStart,
+            History: history
+        );
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static string ComputeJobStatus(
         BsonDocument? lastRun,
-        List<object> dailyBreakdown)
+        List<DailyBreakdownEntry> dailyBreakdown)
     {
         if (lastRun is null)
             return "critical";
@@ -573,8 +566,7 @@ public static class AdminSystemHealthEndpoints
 
         // Check if the last `lookback_days` have any errors.
         var hasRecentErrors = dailyBreakdown
-            .Cast<dynamic>()
-            .Any(d => d.errors > 0);
+            .Any(d => d.Errors > 0);
         if (hasRecentErrors)
             return "warning";
 
@@ -617,3 +609,77 @@ public sealed record SymbolProbeSummaryResponse(
     List<string> FlaggedSymbols,
     string? Outcome,
     bool ShowBanner);
+
+public sealed record DailyBreakdownEntry(
+    string Date,
+    int Runs,
+    int Success,
+    int Warnings,
+    int Errors
+);
+
+public sealed record JobComponentResponse(
+    string Name,
+    string Label,
+    string Status,
+    DateTime? LastRunAt,
+    string LastOutcome,
+    List<DailyBreakdownEntry> DailyBreakdown
+);
+
+public sealed record AdminFyersTokenResponse(
+    string Status,
+    DateTime? ExpiresAt,
+    List<object> History
+);
+
+public sealed record MarketDataProviderResponse(
+    string ActiveProvider,
+    DateTime? LastSuccessfulFetchAt,
+    List<DailyBreakdownEntry> DailyBreakdown
+);
+
+public sealed record TelegramPipelineResponse(
+    DateTime? LastSuccessfulDeliveryAt,
+    List<DailyBreakdownEntry> DailyBreakdown
+);
+
+public sealed record KillSwitchResponse(
+    bool Active,
+    DateTime? LastChangeAt,
+    string? LastChangeActor
+);
+
+public sealed record MarketHaltResponse(
+    string Status,
+    string Source,
+    DateTime? StartedAt,
+    List<object> History
+);
+
+public sealed record MaintenanceWindow(string Start, string End, string Timezone, string Label);
+
+public sealed record MaintenanceWindowsResponse(
+    MaintenanceWindow PreMarket,
+    MaintenanceWindow PostEod
+);
+
+public sealed record ManualTriggerResponse(
+    bool Triggered,
+    string JobType,
+    string RunId
+);
+
+public sealed record SystemHealthResponse(
+    List<JobComponentResponse> Components,
+    AdminFyersTokenResponse AdminFyersToken,
+    MarketDataProviderResponse MarketDataProvider,
+    TelegramPipelineResponse TelegramPipeline,
+    KillSwitchResponse KillSwitch,
+    MarketHaltResponse MarketHalt,
+    MaintenanceWindowsResponse MaintenanceWindows
+);
+
+// ── Error DTOs ────────────────────────────────────────────────────────────
+
+public sealed record UnknownJobTypeError(string Error, string JobType);

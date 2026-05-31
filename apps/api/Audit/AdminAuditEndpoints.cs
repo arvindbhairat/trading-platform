@@ -51,16 +51,11 @@ public static class AdminAuditEndpoints
 
             var entries = items.Select(MapToEntry).ToList();
 
-            return Results.Ok(new
-            {
-                entries,
-                total_count = totalCount,
-                page,
-                page_size,
-                total_pages = totalCount > 0
-                    ? (int)Math.Ceiling((double)totalCount / page_size)
-                    : 0
-            });
+            var totalPages = totalCount > 0
+                ? (int)Math.Ceiling((double)totalCount / page_size)
+                : 0;
+            return Results.Ok(new AuditEventListResponse(
+                entries, totalCount, page, page_size, totalPages));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/audit-events/{id} — single event detail
@@ -74,13 +69,13 @@ public static class AdminAuditEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new ErrorResponse("invalid_id_format"));
 
             var doc = await auditRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (doc is null)
-                return Results.NotFound(new { error = "audit_event_not_found" });
+                return Results.NotFound(new ErrorResponse("audit_event_not_found"));
 
-            return Results.Ok(new { entry = MapToEntry(doc) });
+            return Results.Ok(new AuditEventDetailResponse(MapToEntry(doc)));
         }).RequireAuthorization();
 
         return app;
@@ -122,3 +117,17 @@ public sealed record AuditEventEntry(
     Dictionary<string, object?>? Details,
     string? StepUpEventRef
 );
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record AuditEventListResponse(
+    IReadOnlyList<AuditEventEntry> Entries,
+    long TotalCount,
+    int Page,
+    int PageSize,
+    int TotalPages
+);
+
+public sealed record ErrorResponse(string Error);
+
+public sealed record AuditEventDetailResponse(AuditEventEntry Entry);

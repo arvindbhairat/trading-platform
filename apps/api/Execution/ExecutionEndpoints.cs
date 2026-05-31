@@ -37,19 +37,12 @@ public static class ExecutionEndpoints
             var result = await preFlightService.CheckAsync(
                 userId, symbol, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                can_execute = result.CanExecute,
-                checks = result.Checks.Select(c => new
-                {
-                    check = c.Check,
-                    passed = c.Passed,
-                    severity = c.Severity,
-                    message = c.Message,
-                }),
-                blocking_count = result.Checks.Count(c => !c.Passed && c.Severity == "blocking"),
-                warning_count = result.Checks.Count(c => !c.Passed && c.Severity == "warning"),
-            });
+            return Results.Ok(new PreFlightResponse(
+                result.CanExecute,
+                result.Checks,
+                result.Checks.Count(c => !c.Passed && c.Severity == "blocking"),
+                result.Checks.Count(c => !c.Passed && c.Severity == "warning")
+            ));
         });
 
         // ── GET /api/v1/execution/order-context?symbol={symbol}&action={action} ─
@@ -66,40 +59,16 @@ public static class ExecutionEndpoints
                 return Results.Unauthorized();
 
             if (string.IsNullOrWhiteSpace(symbol))
-                return Results.BadRequest(new { error = "symbol query parameter is required." });
+                return Results.BadRequest(new ApiErrorResponse("symbol query parameter is required."));
 
             var validActions = new[] { "entry", "add", "reduce", "exit" };
             if (!validActions.Contains(action.ToLowerInvariant()))
-                return Results.BadRequest(new { error = $"action must be one of: {string.Join(", ", validActions)}" });
+                return Results.BadRequest(new ApiErrorResponse($"action must be one of: {string.Join(", ", validActions)}"));
 
             var result = await orderContextService.GetOrderContextAsync(
                 userId, symbol, action, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                symbol = result.Symbol,
-                action_type = result.ActionType,
-                recommended_quantity = result.RecommendedQuantity,
-                current_price = result.CurrentPrice,
-                stop_level = result.StopLevel,
-                trailing_stop_level = result.TrailingStopLevel,
-                trailing_stop_active = result.TrailingStopActive,
-                portfolio_heat_before_pct = result.PortfolioHeatBeforePct,
-                portfolio_heat_after_pct = result.PortfolioHeatAfterPct,
-                max_heat_pct = result.MaxHeatPct,
-                account_equity = result.AccountEquity,
-                drawdown_pct = result.DrawdownPct,
-                entry_blocked = result.EntryBlocked,
-                entry_blocked_reason = result.EntryBlockedReason,
-                is_market_halted = result.IsMarketHalted,
-                in_market_hours = result.InMarketHours,
-                market_hours_message = result.MarketHoursMessage,
-                circuit_limit_direction = result.CircuitLimitDirection,
-                circuit_limit_active = result.CircuitLimitActive,
-                circuit_limit_stale = result.CircuitLimitStale,
-                has_position = result.HasPosition,
-                position_state = result.PositionState,
-            });
+            return Results.Ok(result);
         });
 
         // ── POST /api/v1/execution/intent/signed-payload ────────────────────
@@ -122,25 +91,11 @@ public static class ExecutionEndpoints
                 var result = await signingService.CreateSignedPayloadAsync(
                     userId, sessionId, request, context.RequestAborted);
 
-                return Results.Ok(new
-                {
-                    nonce = result.Nonce,
-                    data_attributes = result.DataAttributes,
-                    payload_hash = result.PayloadHash,
-                    expires_at_unix = result.ExpiresAtUnix,
-                });
+                return Results.Ok(result);
             }
             catch (SignedPayloadSigningException ex)
             {
-                return Results.UnprocessableEntity(new
-                {
-                    error = new
-                    {
-                        reason = ex.Reason,
-                        message = ex.Error.Message,
-                        last_successful_sync_at = ex.Error.LastSuccessfulSyncAt,
-                    }
-                });
+                return Results.UnprocessableEntity(new SignedPayloadErrorResponse(ex.Error));
             }
         });
 
@@ -158,17 +113,17 @@ public static class ExecutionEndpoints
                 return Results.Unauthorized();
 
             if (string.IsNullOrWhiteSpace(request.Nonce))
-                return Results.BadRequest(new { error = "nonce is required." });
+                return Results.BadRequest(new ApiErrorResponse("nonce is required."));
 
             var validStatuses = new[] { IntentStatus.Matched, IntentStatus.SubmissionFailed };
             if (!validStatuses.Contains(request.Status))
-                return Results.BadRequest(new { error = $"status must be one of: {string.Join(", ", validStatuses)}." });
+                return Results.BadRequest(new ApiErrorResponse($"status must be one of: {string.Join(", ", validStatuses)}."));
 
             var updated = await intentLedger.UpdateIntentFromCallbackAsync(
                 request.Nonce, request.Status, request.RequestToken, context.RequestAborted);
 
             if (updated is null)
-                return Results.NotFound(new { error = "Intent not found for the given nonce or already updated." });
+                return Results.NotFound(new ApiErrorResponse("Intent not found for the given nonce or already updated."));
 
             // ── Emit callback reliability metric (REQ-ORDER-015d) ─────────
             // Tagged by status (matched / submission_failed) and user class.
@@ -179,13 +134,12 @@ public static class ExecutionEndpoints
                 new KeyValuePair<string, object?>("action_type", updated.Action),
                 new KeyValuePair<string, object?>("user_class", "production"));
 
-            return Results.Ok(new
-            {
-                nonce = updated.Nonce,
-                status = updated.Status,
-                match_source = updated.MatchSource,
-                callback_received_at = updated.CallbackReceivedAt,
-            });
+            return Results.Ok(new IntentCallbackResponse(
+                updated.Nonce,
+                updated.Status,
+                updated.MatchSource,
+                updated.CallbackReceivedAt
+            ));
         });
 
         // ── GET /api/v1/execution/intent/pending-confirmations?symbol={symbol} ─
@@ -207,7 +161,7 @@ public static class ExecutionEndpoints
                 userId, symbol, context.RequestAborted);
 
             if (matchedIntents.Count == 0)
-                return Results.Ok(new { pending_confirmations = Array.Empty<object>() });
+                return Results.Ok(new PendingConfirmationsResponse(Array.Empty<PendingConfirmationItem>()));
 
             // Get the user's last successful LADS sync timestamp
             var accountSync = database.GetCollection<BsonDocument>("fyers_account_sync");
@@ -225,23 +179,57 @@ public static class ExecutionEndpoints
                 lastSyncAt = syncVal.ToUniversalTime();
             }
 
-            var result = matchedIntents.Select(intent => new
-            {
-                symbol = intent.Symbol,
-                action = intent.Action,
-                side = intent.Side,
-                quantity = intent.Quantity,
-                order_type = intent.OrderType,
-                submission_timestamp = intent.CallbackReceivedAt ?? intent.CreatedAt,
-                callback_received_at = intent.CallbackReceivedAt,
-                intent_created_at = intent.CreatedAt,
-                last_lads_sync_at = lastSyncAt,
-                nonce = intent.Nonce,
-            });
+            var result = matchedIntents.Select(intent => new PendingConfirmationItem(
+                intent.Symbol,
+                intent.Action,
+                intent.Side,
+                intent.Quantity,
+                intent.OrderType,
+                intent.CallbackReceivedAt ?? intent.CreatedAt,
+                intent.CallbackReceivedAt,
+                intent.CreatedAt,
+                lastSyncAt,
+                intent.Nonce
+            ));
 
-            return Results.Ok(new { pending_confirmations = result });
+            return Results.Ok(new PendingConfirmationsResponse(result));
         });
 
         return app;
     }
 }
+
+public sealed record PreFlightResponse(
+    bool CanExecute,
+    IReadOnlyList<CheckResult> Checks,
+    int BlockingCount,
+    int WarningCount
+);
+
+public sealed record IntentCallbackResponse(
+    string Nonce,
+    string Status,
+    string? MatchSource,
+    DateTime? CallbackReceivedAt
+);
+
+public sealed record PendingConfirmationItem(
+    string Symbol,
+    string Action,
+    string Side,
+    int Quantity,
+    string OrderType,
+    DateTime SubmissionTimestamp,
+    DateTime? CallbackReceivedAt,
+    DateTime IntentCreatedAt,
+    DateTime? LastLadsSyncAt,
+    string Nonce
+);
+
+public sealed record PendingConfirmationsResponse(
+    IEnumerable<PendingConfirmationItem> PendingConfirmations
+);
+
+public sealed record ApiErrorResponse(string Error);
+
+public sealed record SignedPayloadErrorResponse(SignedPayloadError Error);

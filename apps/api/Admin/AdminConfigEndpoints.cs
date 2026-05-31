@@ -34,7 +34,7 @@ public static class AdminConfigEndpoints
         {
             var entries = await configRepo.ListAllAsync(category, context.RequestAborted);
             var result = entries.Select(doc => MapToEntry(doc));
-            return Results.Ok(new { entries = result });
+            return Results.Ok(new ConfigEntriesResponse(Entries: result));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/config/categories — list distinct categories
@@ -43,7 +43,7 @@ public static class AdminConfigEndpoints
             ISysConfigRepository configRepo) =>
         {
             var categories = await configRepo.ListCategoriesAsync(context.RequestAborted);
-            return Results.Ok(new { categories });
+            return Results.Ok(new ConfigCategoriesResponse(Categories: categories));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/config/{key} — get single entry
@@ -54,9 +54,9 @@ public static class AdminConfigEndpoints
         {
             var doc = await configRepo.GetByKeyAsync(key, context.RequestAborted);
             if (doc is null)
-                return Results.NotFound(new { error = "config_key_not_found" });
+                return Results.NotFound(new AdminSimpleErrorResponse(Error: "config_key_not_found"));
 
-            return Results.Ok(new { entry = MapToEntry(doc) });
+            return Results.Ok(new ConfigEntryResponse(Entry: MapToEntry(doc)));
         }).RequireAuthorization();
 
         // PUT /api/v1/admin/config/{key} — update a config value
@@ -84,15 +84,15 @@ public static class AdminConfigEndpoints
             var body = await context.Request.ReadFromJsonAsync<UpdateConfigRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminSimpleErrorResponse(Error: "invalid_body"));
 
             // Fetch current entry before mutation for audit and step-up check.
             var current = await configRepo.GetByKeyAsync(key, context.RequestAborted);
             if (current is null)
-                return Results.NotFound(new { error = "config_key_not_found" });
+                return Results.NotFound(new AdminSimpleErrorResponse(Error: "config_key_not_found"));
 
             if (!current.Contains("isEditable") || !current["isEditable"].AsBoolean)
-                return Results.BadRequest(new { error = "config_key_not_editable" });
+                return Results.BadRequest(new AdminSimpleErrorResponse(Error: "config_key_not_editable"));
 
             var category = current.Contains("category") ? current["category"].AsString : "";
             var valueType = current.Contains("valueType") ? current["valueType"].AsString : "string";
@@ -102,13 +102,11 @@ public static class AdminConfigEndpoints
             // phase transition endpoint with full gating validation.
             if (key == "operations.phase.current")
             {
-                return Results.BadRequest(new
-                {
-                    error = "use_dedicated_phase_endpoint",
-                    message = "Phase transitions must go through the dedicated " +
+                return Results.BadRequest(new DedicatedPhaseEndpointResponse(
+                    Error: "use_dedicated_phase_endpoint",
+                    Message: "Phase transitions must go through the dedicated " +
                               "POST /api/v1/admin/phase/transition endpoint which " +
-                              "validates all gating conditions (REQ-LEGAL-005)."
-                });
+                              "validates all gating conditions (REQ-LEGAL-005)."));
             }
 
             // REQ-SEC-011: step-up check for sensitive categories.
@@ -118,7 +116,7 @@ public static class AdminConfigEndpoints
             {
                 if (string.IsNullOrWhiteSpace(body.Justification))
                 {
-                    return Results.BadRequest(new { error = "justification_required" });
+                    return Results.BadRequest(new AdminSimpleErrorResponse(Error: "justification_required"));
                 }
 
                 var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -128,7 +126,7 @@ public static class AdminConfigEndpoints
                 if (!stepUpValid)
                 {
                     return Results.Json(
-                        new { error = "step_up_required", category },
+                        new AdminStepUpRequiredResponse(Error: "step_up_required", Category: category),
                         statusCode: StatusCodes.Status401Unauthorized);
                 }
 
@@ -143,7 +141,7 @@ public static class AdminConfigEndpoints
             }
             catch (FormatException)
             {
-                return Results.BadRequest(new { error = "invalid_value_for_type", valueType });
+                return Results.BadRequest(new InvalidValueResponse(Error: "invalid_value_for_type", ValueType: valueType));
             }
 
             // Build shared audit details (REQ-CONFIG-005/005a, REQ-LEGAL-001).
@@ -184,9 +182,9 @@ public static class AdminConfigEndpoints
                 key, newBsonValue, userId, context.RequestAborted);
 
             if (updated is null)
-                return Results.NotFound(new { error = "config_key_not_found" });
+                return Results.NotFound(new AdminSimpleErrorResponse(Error: "config_key_not_found"));
 
-            return Results.Ok(new { entry = MapToEntry(updated) });
+            return Results.Ok(new ConfigEntryResponse(Entry: MapToEntry(updated)));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/config/{key}/reset — reset a config value to its default
@@ -216,7 +214,7 @@ public static class AdminConfigEndpoints
             // Fetch current entry before mutation for audit and step-up check.
             var current = await configRepo.GetByKeyAsync(key, context.RequestAborted);
             if (current is null)
-                return Results.NotFound(new { error = "config_key_not_found" });
+                return Results.NotFound(new AdminSimpleErrorResponse(Error: "config_key_not_found"));
 
             var category = current.Contains("category") ? current["category"].AsString : "";
             var priorValue = ExtractValue(current, "value");
@@ -229,7 +227,7 @@ public static class AdminConfigEndpoints
             {
                 if (body is null || string.IsNullOrWhiteSpace(body.Justification))
                 {
-                    return Results.BadRequest(new { error = "justification_required" });
+                    return Results.BadRequest(new AdminSimpleErrorResponse(Error: "justification_required"));
                 }
 
                 var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -239,7 +237,7 @@ public static class AdminConfigEndpoints
                 if (!stepUpValid)
                 {
                     return Results.Json(
-                        new { error = "step_up_required", category },
+                        new AdminStepUpRequiredResponse(Error: "step_up_required", Category: category),
                         statusCode: StatusCodes.Status401Unauthorized);
                 }
 
@@ -283,9 +281,9 @@ public static class AdminConfigEndpoints
                 key, userId, context.RequestAborted);
 
             if (updated is null)
-                return Results.NotFound(new { error = "config_key_not_found" });
+                return Results.NotFound(new AdminSimpleErrorResponse(Error: "config_key_not_found"));
 
-            return Results.Ok(new { entry = MapToEntry(updated) });
+            return Results.Ok(new ConfigEntryResponse(Entry: MapToEntry(updated)));
         }).RequireAuthorization();
 
         return app;
@@ -385,3 +383,9 @@ public sealed record UpdateConfigRequest(JsonElement Value, string? Justificatio
 /// REQ-LEGAL-001: justification is required for sensitive category resets.
 /// </summary>
 public sealed record ResetConfigRequest(string? Justification = null);
+
+public sealed record ConfigEntriesResponse(IEnumerable<SysConfigEntry> Entries);
+public sealed record ConfigCategoriesResponse(IEnumerable<string> Categories);
+public sealed record ConfigEntryResponse(SysConfigEntry Entry);
+public sealed record InvalidValueResponse(string Error, string ValueType);
+public sealed record DedicatedPhaseEndpointResponse(string Error, string Message);

@@ -38,7 +38,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -62,9 +62,9 @@ public static class SignalSubscriptionEndpoints
                 return Results.Unauthorized();
 
             if (string.IsNullOrWhiteSpace(request.Name))
-                return Results.BadRequest(new { error = "Subscription name is required." });
+                return Results.BadRequest(new ErrorResponse("Subscription name is required."));
             if (string.IsNullOrWhiteSpace(request.SignalTypeId))
-                return Results.BadRequest(new { error = "Signal type is required." });
+                return Results.BadRequest(new ErrorResponse("Signal type is required."));
 
             var now = DateTime.UtcNow;
             var versionId = ObjectId.GenerateNewId();
@@ -109,7 +109,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -146,7 +146,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -157,7 +157,7 @@ public static class SignalSubscriptionEndpoints
                 return Results.NotFound();
 
             if (sub.Status == SubscriptionStatus.Paused)
-                return Results.Ok(new { status = "already_paused", message = "Subscription is already paused." });
+                return Results.Ok(new StatusMessageResponse("already_paused", "Subscription is already paused."));
 
             await repo.UpdateStatusAsync(oid, SubscriptionStatus.Paused, DateTime.UtcNow, context.RequestAborted);
 
@@ -166,7 +166,7 @@ public static class SignalSubscriptionEndpoints
             // The pause endpoint sets the subscription state; the position service
             // observes the change and transitions eligible PendingEntry positions.
 
-            return Results.Ok(new { status = "paused" });
+            return Results.Ok(new StatusResponse("paused"));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── POST /api/v1/signals/subscriptions/{id}/resume ────────────────
@@ -180,7 +180,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -191,11 +191,11 @@ public static class SignalSubscriptionEndpoints
                 return Results.NotFound();
 
             if (sub.Status == SubscriptionStatus.Active)
-                return Results.Ok(new { status = "already_active", message = "Subscription is already active." });
+                return Results.Ok(new StatusMessageResponse("already_active", "Subscription is already active."));
 
             await repo.UpdateStatusAsync(oid, SubscriptionStatus.Active, DateTime.UtcNow, context.RequestAborted);
 
-            return Results.Ok(new { status = "active" });
+            return Results.Ok(new StatusResponse("active"));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── POST /api/v1/signals/subscriptions/{id}/versions ──────────────
@@ -210,7 +210,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -222,7 +222,7 @@ public static class SignalSubscriptionEndpoints
 
             var rmeConfig = request.RmeConfiguration.ToBsonDocument();
             if (rmeConfig.ElementCount == 0)
-                return Results.BadRequest(new { error = "RME configuration is required." });
+                return Results.BadRequest(new ErrorResponse("RME configuration is required."));
 
             // Determine the next version number.
             var nextVersionNumber = sub.Versions.Count > 0
@@ -245,14 +245,13 @@ public static class SignalSubscriptionEndpoints
             var newPendingIndex = sub.Versions.Count;
             await repo.AddVersionAsync(oid, newVersion, newPendingIndex, now, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                version_id = newVersion.VersionId.ToString(),
-                version_number = newVersion.VersionNumber,
-                status = "pending",
-                effective_from = newVersion.EffectiveFrom.ToString("o"),
-                message = "New RME configuration version created. It will govern the next eligible EODSR run."
-            });
+            return Results.Ok(new VersionCreateResponse(
+                newVersion.VersionId.ToString(),
+                newVersion.VersionNumber,
+                "pending",
+                newVersion.EffectiveFrom.ToString("o"),
+                "New RME configuration version created. It will govern the next eligible EODSR run."
+            ));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── GET /api/v1/signals/subscriptions/{id}/versions ──────────────
@@ -264,7 +263,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -307,7 +306,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid) || !ObjectId.TryParse(versionId, out var vid))
-                return Results.BadRequest(new { error = "Invalid ID format." });
+                return Results.BadRequest(new ErrorResponse("Invalid ID format."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -318,15 +317,15 @@ public static class SignalSubscriptionEndpoints
                 return Results.NotFound();
 
             if (sub.PendingVersionIndex is null)
-                return Results.BadRequest(new { error = "No pending version to discard." });
+                return Results.BadRequest(new ErrorResponse("No pending version to discard."));
 
             var pendingVersion = sub.Versions[sub.PendingVersionIndex.Value];
             if (pendingVersion.VersionId != vid)
-                return Results.BadRequest(new { error = "Specified version is not the current pending version." });
+                return Results.BadRequest(new ErrorResponse("Specified version is not the current pending version."));
 
             await repo.DiscardPendingVersionAsync(oid, DateTime.UtcNow, context.RequestAborted);
 
-            return Results.Ok(new { status = "discarded", message = "Pending version discarded." });
+            return Results.Ok(new StatusMessageResponse("discarded", "Pending version discarded."));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── DELETE /api/v1/signals/subscriptions/{id} ────────────────────
@@ -339,7 +338,7 @@ public static class SignalSubscriptionEndpoints
             ISignalSubscriptionRepository repo) =>
         {
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid subscription ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid subscription ID."));
 
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
             if (string.IsNullOrWhiteSpace(userId))
@@ -350,7 +349,7 @@ public static class SignalSubscriptionEndpoints
                 return Results.NotFound();
 
             await repo.DeleteAsync(oid, context.RequestAborted);
-            return Results.Ok(new { status = "deleted" });
+            return Results.Ok(new StatusResponse("deleted"));
         }).RequireAuthorization().WithTags(Tag);
 
         return app;
@@ -425,6 +424,20 @@ public sealed record VersionListResponse(
     IEnumerable<VersionListItemResponse> Versions,
     int? CurrentVersion,
     int? PendingVersionIndex
+);
+
+public sealed record ErrorResponse(string Error);
+
+public sealed record StatusResponse(string Status);
+
+public sealed record StatusMessageResponse(string Status, string Message);
+
+public sealed record VersionCreateResponse(
+    string VersionId,
+    int VersionNumber,
+    string Status,
+    string EffectiveFrom,
+    string Message
 );
 
 // ── Request DTOs ─────────────────────────────────────────────────────────

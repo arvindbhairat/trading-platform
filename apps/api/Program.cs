@@ -192,11 +192,9 @@ builder.Services.AddRateLimiter(options =>
   {
     context.HttpContext.Response.Headers["Retry-After"] = "60";
     await context.HttpContext.Response.WriteAsJsonAsync(
-      new
-      {
-        error = "rate_limit_exceeded",
-        message = "Authentication request rate limit exceeded."
-      },
+      new ErrorResponse(
+        "rate_limit_exceeded",
+        "Authentication request rate limit exceeded."),
       cancellationToken: cancellationToken);
   };
 
@@ -379,7 +377,7 @@ app.MapHealthChecks("/api/v1/readyz", new()
 });
 app.MapGroup("/api/v1/auth")
   .RequireRateLimiting(AuthRateLimitPolicy)
-  .MapPost("/probe", () => Results.Ok(new { status = "ok" }));
+  .MapPost("/probe", () => Results.Ok(new AuthProbeResponse("ok")));
 
 // Auth endpoints: providers, login, callback, csrf, me — P2-T1
 app.MapAuthEndpoints(app.Environment);
@@ -490,5 +488,9 @@ app.MapOpenApi();
 app.Run();
 
 public sealed record ApiRootResponse(string Name, string Version);
+
+public sealed record ErrorResponse(string Error, string Message);
+
+public sealed record AuthProbeResponse(string Status);
 
 public partial class Program;

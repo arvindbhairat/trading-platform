@@ -47,7 +47,7 @@ public static class ImpersonationEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required" },
+                    new ImpersonationErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
@@ -55,7 +55,7 @@ public static class ImpersonationEndpoints
                 cancellationToken: context.RequestAborted);
             if (body is null || string.IsNullOrWhiteSpace(body.TargetUserId))
             {
-                return Results.BadRequest(new { error = "target_user_id_required" });
+                return Results.BadRequest(new ImpersonationErrorResponse("target_user_id_required"));
             }
 
             // Validate target user exists.
@@ -63,13 +63,13 @@ public static class ImpersonationEndpoints
                 body.TargetUserId, context.RequestAborted);
             if (targetUser is null)
             {
-                return Results.NotFound(new { error = "target_user_not_found" });
+                return Results.NotFound(new ImpersonationErrorResponse("target_user_not_found"));
             }
 
             // Prevent self-impersonation.
             if (body.TargetUserId == adminUserId)
             {
-                return Results.BadRequest(new { error = "cannot_impersonate_self" });
+                return Results.BadRequest(new ImpersonationErrorResponse("cannot_impersonate_self"));
             }
 
             // REQ-PRIVACY-012 / REQ-PRIVACY-004: record that impersonation was performed
@@ -94,14 +94,13 @@ public static class ImpersonationEndpoints
             await sessionRepo.StartImpersonationAsync(
                 jti, body.TargetUserId, now, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                started = true,
-                target_user_id = body.TargetUserId,
-                target_display_name = targetUser.DisplayName,
-                started_at = now.ToString("o"),
-                idle_timeout_minutes = 15,
-            });
+            return Results.Ok(new ImpersonationStartResponse(
+                Started: true,
+                TargetUserId: body.TargetUserId,
+                TargetDisplayName: targetUser.DisplayName,
+                StartedAt: now.ToString("o"),
+                IdleTimeoutMinutes: 15
+            ));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/impersonation/stop
@@ -124,7 +123,7 @@ public static class ImpersonationEndpoints
 
             if (string.IsNullOrEmpty(adminSession.ImpersonatingUserId))
             {
-                return Results.BadRequest(new { error = "not_impersonating" });
+                return Results.BadRequest(new ImpersonationErrorResponse("not_impersonating"));
             }
 
             var now = DateTime.UtcNow;
@@ -146,7 +145,7 @@ public static class ImpersonationEndpoints
 
             await sessionRepo.StopImpersonationAsync(jti, context.RequestAborted);
 
-            return Results.Ok(new { stopped = true });
+            return Results.Ok(new ImpersonationStopResponse(true));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/impersonation/status
@@ -169,10 +168,7 @@ public static class ImpersonationEndpoints
 
             if (string.IsNullOrEmpty(adminSession.ImpersonatingUserId))
             {
-                return Results.Ok(new
-                {
-                    active = false,
-                });
+                return Results.Ok(new ImpersonationStatusNotActiveResponse(false));
             }
 
             // Check idle timeout (default 15 min).
@@ -185,16 +181,15 @@ public static class ImpersonationEndpoints
             var targetUser = await userRepo.FindByUserIdAsync(
                 adminSession.ImpersonatingUserId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                active = !idleExpired,
-                idle_expired = idleExpired,
-                target_user_id = adminSession.ImpersonatingUserId,
-                target_display_name = targetUser?.DisplayName,
-                started_at = adminSession.ImpersonationStartedAt?.ToString("o"),
-                last_activity_at = adminSession.ImpersonationLastActivityAt?.ToString("o"),
-                idle_timeout_minutes = idleTimeoutMinutes,
-            });
+            return Results.Ok(new ImpersonationStatusActiveResponse(
+                Active: !idleExpired,
+                IdleExpired: idleExpired,
+                TargetUserId: adminSession.ImpersonatingUserId,
+                TargetDisplayName: targetUser?.DisplayName,
+                StartedAt: adminSession.ImpersonationStartedAt?.ToString("o"),
+                LastActivityAt: adminSession.ImpersonationLastActivityAt?.ToString("o"),
+                IdleTimeoutMinutes: idleTimeoutMinutes
+            ));
         }).RequireAuthorization();
 
         return app;
@@ -209,3 +204,27 @@ public static class ImpersonationEndpoints
 }
 
 internal sealed record StartImpersonationRequest(string TargetUserId);
+
+public sealed record ImpersonationStopResponse(bool Stopped);
+
+public sealed record ImpersonationStatusNotActiveResponse(bool Active);
+
+public sealed record ImpersonationStatusActiveResponse(
+    bool Active,
+    bool IdleExpired,
+    string TargetUserId,
+    string? TargetDisplayName,
+    string? StartedAt,
+    string? LastActivityAt,
+    int IdleTimeoutMinutes
+);
+
+public sealed record ImpersonationStartResponse(
+    bool Started,
+    string TargetUserId,
+    string? TargetDisplayName,
+    string StartedAt,
+    int IdleTimeoutMinutes
+);
+
+public sealed record ImpersonationErrorResponse(string Error);

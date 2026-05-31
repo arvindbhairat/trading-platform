@@ -41,11 +41,7 @@ public static class AdminKillSwitchEndpoints
                 && doc["value"] is BsonBoolean b
                 && b.Value;
 
-            return Results.Ok(new
-            {
-                kill_switch_active = isActive,
-                key = "risk.kill_switch.active",
-            });
+            return Results.Ok(new KillSwitchStatusResponse(isActive, "risk.kill_switch.active"));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/kill-switch/activate
@@ -109,7 +105,7 @@ public static class AdminKillSwitchEndpoints
         if (!stepUpValid)
         {
             return Results.Json(
-                new { error = "step_up_required" },
+                new AdminErrorResponse("step_up_required"),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
 
@@ -139,12 +135,12 @@ public static class AdminKillSwitchEndpoints
             userId,
             context.RequestAborted);
 
-        return Results.Ok(new
-        {
-            kill_switch_active = activate,
-            message = activate
-                ? "Global RME kill switch activated. All positions will be suspended on next RME cycle."
-                : "Global RME kill switch deactivated. Positions remain suspended until a fresh EODSR run."
-        });
+        var message = activate
+            ? "Global RME kill switch activated. All positions will be suspended on next RME cycle."
+            : "Global RME kill switch deactivated. Positions remain suspended until a fresh EODSR run.";
+        return Results.Ok(new KillSwitchToggleResponse(activate, message));
     }
 }
+
+public sealed record KillSwitchStatusResponse(bool KillSwitchActive, string Key);
+public sealed record KillSwitchToggleResponse(bool KillSwitchActive, string Message);

@@ -56,7 +56,7 @@ public static class AdminUserEndpoints
             var users = await userRepo.ListUsersAsync(status, context.RequestAborted);
             var result = users.Select(MapToUserEntry).ToList();
 
-            return Results.Ok(new { users = result });
+            return Results.Ok(new AdminUsersResponse(result));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/users/pending/count — count of pending-approval users
@@ -74,7 +74,7 @@ public static class AdminUserEndpoints
                 return Results.Forbid();
 
             var count = await userRepo.CountPendingAsync(context.RequestAborted);
-            return Results.Ok(new { count });
+            return Results.Ok(new PendingUserCountResponse(count));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/users/{userId}/approve — approve a user
@@ -96,13 +96,9 @@ public static class AdminUserEndpoints
             if (!result.Success)
             {
                 return result.Error == "tester_ceiling_reached"
-                    ? Results.UnprocessableEntity(new
-                    {
-                        error = result.Error,
-                        ceiling = result.Ceiling,
-                        current_count = result.CurrentCount
-                    })
-                    : Results.NotFound(new { error = result.Error });
+                    ? Results.UnprocessableEntity(new TesterCeilingErrorResponse(
+                        result.Error!, result.Ceiling, result.CurrentCount))
+                    : Results.NotFound(new AdminErrorResponse(result.Error!));
             }
 
             // Write audit event for approval (REQ-CONFIG-005a pattern: audit before effect).
@@ -116,7 +112,7 @@ public static class AdminUserEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { approved = true });
+            return Results.Ok(new UserApprovedResponse(true));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/users/{userId}/deactivate — deactivate a user
@@ -209,11 +205,11 @@ public static class AdminUserEndpoints
         // Verify target user exists.
         var target = await userRepo.FindByUserIdAsync(targetUserId, context.RequestAborted);
         if (target is null)
-            return Results.NotFound(new { error = "user_not_found" });
+            return Results.NotFound(new AdminErrorResponse("user_not_found"));
 
         // Cannot deactivate admin accounts.
         if (target.Role == UserRole.Admin)
-            return Results.BadRequest(new { error = "cannot_deactivate_admin" });
+            return Results.BadRequest(new AdminErrorResponse("cannot_deactivate_admin"));
 
         // REQ-SEC-011: validate step-up re-authentication within 5 minutes.
         var stepUpResult = await ValidateStepUpAsync(context, sessionRepo);
@@ -287,15 +283,14 @@ public static class AdminUserEndpoints
             },
             cancellationToken: ct);
 
-        return Results.Ok(new
-        {
-            deactivated = true,
-            pending_positions_suspended = pendingResult.ModifiedCount,
-            fyers_tokens_marked_dirty = tokenResult.ModifiedCount,
-            intent_ledger_expired = intentResult.ModifiedCount,
-            message = "User deactivated. Sessions invalidated, PendingEntry positions suspended, " +
-                      "FYERS tokens marked dirty, pending intent-ledger records expired."
-        });
+        return Results.Ok(new UserDeactivatedResponse(
+            true,
+            pendingResult.ModifiedCount,
+            tokenResult.ModifiedCount,
+            intentResult.ModifiedCount,
+            "User deactivated. Sessions invalidated, PendingEntry positions suspended, " +
+            "FYERS tokens marked dirty, pending intent-ledger records expired."
+        ));
     }
 
     // ── Reactivate (REQ-ADMIN-001b) ───────────────────────────────────────
@@ -333,14 +328,12 @@ public static class AdminUserEndpoints
             // Check if the user exists at all.
             var target = await userRepo.FindByUserIdAsync(targetUserId, ct);
             if (target is null)
-                return Results.NotFound(new { error = "user_not_found" });
+                return Results.NotFound(new AdminErrorResponse("user_not_found"));
 
-            return Results.BadRequest(new
-            {
-                error = "not_deactivated",
-                message = "User is not currently deactivated and cannot be reactivated.",
-                current_status = target.Status
-            });
+            return Results.BadRequest(new NotDeactivatedErrorResponse(
+                "not_deactivated",
+                "User is not currently deactivated and cannot be reactivated.",
+                target.Status));
         }
 
         // Write audit event.
@@ -355,12 +348,11 @@ public static class AdminUserEndpoints
             },
             cancellationToken: ct);
 
-        return Results.Ok(new
-        {
-            reactivated = true,
-            message = "User reactivated. FYERS token remains dirty — user must complete " +
-                      "fresh FYERS re-authentication before accessing FYERS-dependent features."
-        });
+        return Results.Ok(new UserReactivatedResponse(
+            true,
+            "User reactivated. FYERS token remains dirty — user must complete " +
+            "fresh FYERS re-authentication before accessing FYERS-dependent features."
+        ));
     }
 
     // ── Per-user signal suspension (REQ-ADMIN-010) ────────────────────────
@@ -386,7 +378,7 @@ public static class AdminUserEndpoints
         // Verify target user exists.
         var target = await userRepo.FindByUserIdAsync(targetUserId, context.RequestAborted);
         if (target is null)
-            return Results.NotFound(new { error = "user_not_found" });
+            return Results.NotFound(new AdminErrorResponse("user_not_found"));
 
         // REQ-SEC-011: validate step-up re-authentication.
         var stepUpResult = await ValidateStepUpAsync(context, sessionRepo);
@@ -439,23 +431,21 @@ public static class AdminUserEndpoints
 
         if (suspend)
         {
-            return Results.Ok(new
-            {
-                signals_suspended = true,
-                pending_positions_suspended = pendingPositionsSuspended,
-                message = "Signal delivery suspended. The user retains read-only platform " +
-                          "access. PendingEntry positions transitioned to Suspended. " +
-                          "On re-enable, Suspended positions are NOT auto-reinstated."
-            });
+            return Results.Ok(new UserSignalSuspendedResponse(
+                true,
+                pendingPositionsSuspended,
+                "Signal delivery suspended. The user retains read-only platform " +
+                "access. PendingEntry positions transitioned to Suspended. " +
+                "On re-enable, Suspended positions are NOT auto-reinstated."
+            ));
         }
         else
         {
-            return Results.Ok(new
-            {
-                signals_suspended = false,
-                message = "Signal delivery re-enabled. Suspended PendingEntry positions " +
-                          "remain Suspended until superseded by a fresh EODSR entry signal."
-            });
+            return Results.Ok(new UserSignalEnabledResponse(
+                false,
+                "Signal delivery re-enabled. Suspended PendingEntry positions " +
+                "remain Suspended until superseded by a fresh EODSR entry signal."
+            ));
         }
     }
 
@@ -471,7 +461,7 @@ public static class AdminUserEndpoints
         if (!stepUpValid)
         {
             return Results.Json(
-                new { error = "step_up_required" },
+                new AdminErrorResponse("step_up_required"),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
         return null;
@@ -506,3 +496,13 @@ public sealed record AdminUserEntry(
     string CreatedAt,
     string UpdatedAt
 );
+
+public sealed record AdminUsersResponse(IEnumerable<AdminUserEntry> Users);
+public sealed record PendingUserCountResponse(long Count);
+public sealed record UserApprovedResponse(bool Approved);
+public sealed record UserDeactivatedResponse(bool Deactivated, long PendingPositionsSuspended, long FyersTokensMarkedDirty, long IntentLedgerExpired, string Message);
+public sealed record UserReactivatedResponse(bool Reactivated, string Message);
+public sealed record UserSignalSuspendedResponse(bool SignalsSuspended, long PendingPositionsSuspended, string Message);
+public sealed record UserSignalEnabledResponse(bool SignalsSuspended, string Message);
+public sealed record NotDeactivatedErrorResponse(string Error, string Message, string CurrentStatus);
+public sealed record TesterCeilingErrorResponse(string Error, long? Ceiling, long? CurrentCount);

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using MongoDB.Bson;
@@ -56,14 +57,10 @@ public static class AuthEndpoints
 
         // GET /api/v1/auth/providers
         // REQ-AUTH-011: always returns all three providers unconditionally.
-        auth.MapGet("/providers", () => Results.Ok(new
-        {
-            providers = SupportedProviders.Select(p => new
-            {
-                name = p,
-                loginUrl = $"/api/v1/auth/login/{p}"
-            })
-        }));
+        auth.MapGet("/providers", () => Results.Ok(new AuthProvidersResponse(
+            SupportedProviders.Select(p => new AuthProvider(
+                p, $"/api/v1/auth/login/{p}"))
+        )));
 
         // GET /api/v1/auth/login/{provider}
         // Initiates the OAuth redirect for the named provider.
@@ -73,7 +70,7 @@ public static class AuthEndpoints
         auth.MapGet("/login/{provider}", async (string provider, HttpContext context) =>
         {
             if (!ProviderSchemeMap.TryGetValue(provider, out var scheme))
-                return Results.BadRequest(new { error = "unknown_provider" });
+                return Results.BadRequest(new AuthErrorResponse("unknown_provider"));
 
             var props = new AuthenticationProperties
             {
@@ -114,7 +111,7 @@ public static class AuthEndpoints
             IConfiguration configuration) =>
         {
             if (!ProviderSchemeMap.ContainsKey(provider))
-                return Results.BadRequest(new { error = "unknown_provider" });
+                return Results.BadRequest(new AuthErrorResponse("unknown_provider"));
 
             // The OAuth handler already consumed the provider callback in the middleware
             // and signed the principal into the OAuthTemp cookie (the SignInScheme).
@@ -329,7 +326,7 @@ public static class AuthEndpoints
         auth.MapGet("/csrf", (IAntiforgery antiforgery, HttpContext context) =>
         {
             var tokens = antiforgery.GetAndStoreTokens(context);
-            return Results.Ok(new { csrfToken = tokens.RequestToken });
+            return Results.Ok(new CsrfTokenResponse(tokens.RequestToken!));
         }).RequireAuthorization();
 
         // GET /api/v1/auth/me
@@ -337,15 +334,14 @@ public static class AuthEndpoints
         auth.MapGet("/me", (HttpContext context) =>
         {
             var user = context.User;
-            return Results.Ok(new
-            {
-                sub = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            return Results.Ok(new AuthMeResponse(
+                user.FindFirst(ClaimTypes.NameIdentifier)?.Value
                     ?? user.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value,
-                email = user.FindFirst(ClaimTypes.Email)?.Value
+                user.FindFirst(ClaimTypes.Email)?.Value
                     ?? user.FindFirst("email")?.Value,
-                name = user.FindFirst(ClaimTypes.Name)?.Value
+                user.FindFirst(ClaimTypes.Name)?.Value
                     ?? user.FindFirst("name")?.Value
-            });
+            ));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/me
@@ -354,7 +350,7 @@ public static class AuthEndpoints
         {
             var sub = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
                 ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Results.Ok(new { sub });
+            return Results.Ok(new AuthMePostResponse(sub));
         }).RequireAuthorization();
 
         // GET /api/v1/auth/session/status
@@ -387,23 +383,21 @@ public static class AuthEndpoints
             // REQ-ROLE-004 / REQ-SESSION-012: unapproved users see the approval-pending screen.
             if (user is null || user.Status == UserApprovalState.PendingApproval)
             {
-                return Results.Ok(new
-                {
-                    state = "pending_approval",
-                    role = user?.Role ?? UserRole.User,
-                    expires_at = session.ExpiresAt.ToString("o")
-                });
+                return Results.Ok(new SessionStatusResponse(
+                    "pending_approval",
+                    (user?.Role ?? UserRole.User).ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    null));
             }
 
             // REQ-SESSION-013: deactivated users are locked out and see the deactivated screen.
             if (user.Status == UserApprovalState.Deactivated)
             {
-                return Results.Ok(new
-                {
-                    state = "deactivated",
-                    role = user?.Role ?? UserRole.User,
-                    expires_at = session.ExpiresAt.ToString("o")
-                });
+                return Results.Ok(new SessionStatusResponse(
+                    "deactivated",
+                    (user?.Role ?? UserRole.User).ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    null));
             }
 
             // REQ-LEGAL-004/008, REQ-PRIVACY-003/007: legal acceptance check.
@@ -420,12 +414,11 @@ public static class AuthEndpoints
 
             if (!tosMatch || !privacyMatch || !ackMatch || !minorDeclared)
             {
-                return Results.Ok(new
-                {
-                    state = "pending_acknowledgement",
-                    role = user.Role,
-                    expires_at = session.ExpiresAt.ToString("o")
-                });
+                return Results.Ok(new SessionStatusResponse(
+                    "pending_acknowledgement",
+                    user.Role.ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    null));
             }
 
             // REQ-AUTH-007/008/009: check FYERS token status for approved users.
@@ -442,90 +435,75 @@ public static class AuthEndpoints
 
                 if (hasActive)
                 {
-                    return Results.Ok(new
-                    {
-                        state = "active",
-                        role = user.Role,
-                        expires_at = session.ExpiresAt.ToString("o"),
-                        step_up = new
-                        {
-                            valid = stepUpValid,
-                            authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
-                            expires_at = stepUpValid
+                    return Results.Ok(new SessionStatusResponse(
+                        "active",
+                        user.Role.ToString().ToLowerInvariant(),
+                        session.ExpiresAt.ToString("o"),
+                        new SessionStepUpInfo(
+                            stepUpValid,
+                            session.StepUpAuthenticatedAt?.ToString("o"),
+                            stepUpValid
                                 ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
-                                : null
-                        }
-                    });
+                                : null)));
                 }
 
                 if (dirtyToken is not null)
                 {
                     // REQ-SESSION-009: admin sees non-blocking warning, not a hard lock.
                     // Admin can still navigate while seeing the persistent warning.
-                    return Results.Ok(new
-                    {
-                        state = "fyers_dirty_admin",
-                        role = user.Role,
-                        expires_at = session.ExpiresAt.ToString("o"),
-                        step_up = new
-                        {
-                            valid = stepUpValid,
-                            authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
-                            expires_at = stepUpValid
+                    return Results.Ok(new SessionStatusResponse(
+                        "fyers_dirty_admin",
+                        user.Role.ToString().ToLowerInvariant(),
+                        session.ExpiresAt.ToString("o"),
+                        new SessionStepUpInfo(
+                            stepUpValid,
+                            session.StepUpAuthenticatedAt?.ToString("o"),
+                            stepUpValid
                                 ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
-                                : null
-                        }
-                    });
+                                : null)));
                 }
 
                 // Admin has no FYERS token at all.
-                return Results.Ok(new
-                {
-                    state = "fyers_required",
-                    role = user.Role,
-                    expires_at = session.ExpiresAt.ToString("o"),
-                    step_up = new
-                    {
-                        valid = stepUpValid,
-                        authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
-                        expires_at = stepUpValid
+                return Results.Ok(new SessionStatusResponse(
+                    "fyers_required",
+                    user.Role.ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    new SessionStepUpInfo(
+                        stepUpValid,
+                        session.StepUpAuthenticatedAt?.ToString("o"),
+                        stepUpValid
                             ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
-                            : null
-                    }
-                });
+                            : null)));
             }
 
             // Regular user path.
             if (hasActive)
             {
                 // REQ-SESSION-010: both OAuth and FYERS complete.
-                return Results.Ok(new
-                {
-                    state = "active",
-                    role = user.Role,
-                    expires_at = session.ExpiresAt.ToString("o")
-                });
+                return Results.Ok(new SessionStatusResponse(
+                    "active",
+                    user.Role.ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    null));
             }
 
             if (dirtyToken is not null)
             {
                 // REQ-AUTH-009: dirty token blocks access for regular users.
                 // Hard lock — user must reauthenticate with FYERS.
-                return Results.Ok(new
-                {
-                    state = "fyers_dirty",
-                    role = user.Role,
-                    expires_at = session.ExpiresAt.ToString("o")
-                });
+                return Results.Ok(new SessionStatusResponse(
+                    "fyers_dirty",
+                    user.Role.ToString().ToLowerInvariant(),
+                    session.ExpiresAt.ToString("o"),
+                    null));
             }
 
             // REQ-SESSION-010/011: approved user with no FYERS token on record.
-            return Results.Ok(new
-            {
-                state = "fyers_required",
-                role = user.Role,
-                expires_at = session.ExpiresAt.ToString("o")
-            });
+            return Results.Ok(new SessionStatusResponse(
+                "fyers_required",
+                user.Role.ToString().ToLowerInvariant(),
+                session.ExpiresAt.ToString("o"),
+                null));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/logout
@@ -541,7 +519,7 @@ public static class AuthEndpoints
                 await sessionRepo.InvalidateSessionAsync(jti, context.RequestAborted);
             }
 
-            return Results.Ok(new { logged_out = true });
+            return Results.Ok(new LogoutResponse(true));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/step-up/init
@@ -565,17 +543,13 @@ public static class AuthEndpoints
             // original sign-in provider.
             if (user.Provider == "facebook")
             {
-                return Results.BadRequest(new
-                {
-                    error = "admin_provider_restricted",
-                    message = "Admins cannot use Facebook. Use Google or Microsoft."
-                });
+                return Results.BadRequest(new AuthErrorResponse(
+                    "admin_provider_restricted",
+                    "Admins cannot use Facebook. Use Google or Microsoft."));
             }
 
-            return Results.Ok(new
-            {
-                step_up_url = $"/api/v1/auth/login/{user.Provider}?step_up=true"
-            });
+            return Results.Ok(new StepUpInitResponse(
+                $"/api/v1/auth/login/{user.Provider}?step_up=true"));
         }).RequireAuthorization();
 
         // GET /api/v1/auth/step-up/status
@@ -593,14 +567,12 @@ public static class AuthEndpoints
             var isValid = session.StepUpAuthenticatedAt.HasValue
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
 
-            return Results.Ok(new
-            {
-                step_up_valid = isValid,
-                authenticated_at = session.StepUpAuthenticatedAt?.ToString("o"),
-                expires_at = isValid
+            return Results.Ok(new StepUpStatusResponse(
+                isValid,
+                session.StepUpAuthenticatedAt?.ToString("o"),
+                isValid
                     ? session.StepUpAuthenticatedAt!.Value.Add(StepUpDuration).ToString("o")
-                    : null
-            });
+                    : null));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/link/init
@@ -626,10 +598,8 @@ public static class AuthEndpoints
             // than the primary; otherwise fall back to the primary's provider.
             var linkProvider = user.Provider == "google" ? "microsoft" : "google";
 
-            return Results.Ok(new
-            {
-                link_url = $"/api/v1/auth/login/{linkProvider}?link=true&nonce={nonce}"
-            });
+            return Results.Ok(new LinkInitResponse(
+                $"/api/v1/auth/login/{linkProvider}?link=true&nonce={nonce}"));
         }).RequireAuthorization();
 
         // GET /api/v1/auth/linked-identities
@@ -647,23 +617,19 @@ public static class AuthEndpoints
                 return Results.Forbid();
 
             var linked = user.LinkedIdentities?
-                .Select(i => new
-                {
-                    provider = i.Provider,
-                    email = EmailMask.Mask(i.Email),
-                    linked_at = i.LinkedAt.ToString("o")
-                })
+                .Select(i => new LinkedIdentity(
+                    i.Provider,
+                    EmailMask.Mask(i.Email),
+                    i.LinkedAt.ToString("o")))
                 .ToList() ?? [];
 
-            return Results.Ok(new
-            {
-                primary_provider = user.Provider,
-                primary_email = EmailMask.Mask(user.Email),
-                linked_identities = linked,
-                total_count = linked.Count,
-                max_allowed = 2,
-                single_warning = linked.Count == 0
-            });
+            return Results.Ok(new LinkedIdentitiesResponse(
+                user.Provider,
+                EmailMask.Mask(user.Email),
+                linked,
+                linked.Count,
+                2,
+                linked.Count == 0));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/linked-identities/unlink
@@ -683,18 +649,16 @@ public static class AuthEndpoints
             if (body is null || string.IsNullOrWhiteSpace(body.Provider)
                 || string.IsNullOrWhiteSpace(body.ProviderKey))
             {
-                return Results.BadRequest(new { error = "provider_and_provider_key_required" });
+                return Results.BadRequest(new AuthErrorResponse("provider_and_provider_key_required"));
             }
 
             // REQ-RECOVERY-002: prevent unlinking the currently-active primary identity.
             if ($"{body.Provider}:{body.ProviderKey}" == userId)
             {
-                return Results.BadRequest(new
-                {
-                    error = "cannot_unlink_primary",
-                    message = "Cannot unlink the identity currently used for this session. " +
-                              "Sign in with your alternate identity first, then unlink."
-                });
+                return Results.BadRequest(new AuthErrorResponse(
+                    "cannot_unlink_primary",
+                    "Cannot unlink the identity currently used for this session. " +
+                    "Sign in with your alternate identity first, then unlink."));
             }
 
             await userRepo.UnlinkIdentityAsync(
@@ -710,7 +674,7 @@ public static class AuthEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { unlinked = true });
+            return Results.Ok(new UnlinkResponse(true));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/admin/recover
@@ -739,7 +703,7 @@ public static class AuthEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required" },
+                    new AuthErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
@@ -749,13 +713,13 @@ public static class AuthEndpoints
                 || string.IsNullOrWhiteSpace(body.NewProvider)
                 || string.IsNullOrWhiteSpace(body.NewProviderKey))
             {
-                return Results.BadRequest(new { error = "target_user_id_provider_and_key_required" });
+                return Results.BadRequest(new AuthErrorResponse("target_user_id_provider_and_key_required"));
             }
 
             var beforeUser = await userRepo.FindByUserIdAsync(
                 body.TargetUserId, context.RequestAborted);
             if (beforeUser is null)
-                return Results.NotFound(new { error = "target_user_not_found" });
+                return Results.NotFound(new AuthErrorResponse("target_user_not_found"));
 
             // Capture before state for audit.
             var beforeState = new Dictionary<string, object?>
@@ -790,12 +754,10 @@ public static class AuthEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                recovered = true,
-                new_user_id = updated.UserId,
-                note = "User must complete FYERS re-authentication on next sign-in."
-            });
+            return Results.Ok(new AdminRecoverResponse(
+                true,
+                updated.UserId,
+                "User must complete FYERS re-authentication on next sign-in."));
         }).RequireAuthorization();
 
         // GET /api/v1/auth/legal/versions
@@ -812,12 +774,10 @@ public static class AuthEndpoints
             var privacy = await GetSysConfigStringAsync(configRepo, "legal.privacy.current_version", ct);
             var testerAck = await GetSysConfigStringAsync(configRepo, "legal.tester_acknowledgement.current_version", ct);
 
-            return Results.Ok(new
-            {
-                tos_version = tos ?? "v1",
-                privacy_version = privacy ?? "v1",
-                tester_acknowledgement_version = testerAck ?? "v1"
-            });
+            return Results.Ok(new LegalVersionsResponse(
+                tos ?? "v1",
+                privacy ?? "v1",
+                testerAck ?? "v1"));
         }).RequireAuthorization();
 
         // POST /api/v1/auth/accept-legal
@@ -845,7 +805,7 @@ public static class AuthEndpoints
             var body = await context.Request.ReadFromJsonAsync<AcceptLegalRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AuthErrorResponse("invalid_body"));
 
             // Validate that submitted versions match sys_config.
             var ct = context.RequestAborted;
@@ -854,21 +814,21 @@ public static class AuthEndpoints
             var testerAckVersion = await GetSysConfigStringAsync(configRepo, "legal.tester_acknowledgement.current_version", ct);
 
             if (body.AcceptedTosVersion != (tosVersion ?? "v1"))
-                return Results.BadRequest(new { error = "tos_version_mismatch" });
+                return Results.BadRequest(new AuthErrorResponse("tos_version_mismatch"));
 
             if (body.AcceptedPrivacyVersion != (privacyVersion ?? "v1"))
-                return Results.BadRequest(new { error = "privacy_version_mismatch" });
+                return Results.BadRequest(new AuthErrorResponse("privacy_version_mismatch"));
 
             if (body.AcceptedTesterAcknowledgementVersion != (testerAckVersion ?? "v1"))
-                return Results.BadRequest(new { error = "tester_acknowledgement_version_mismatch" });
+                return Results.BadRequest(new AuthErrorResponse("tester_acknowledgement_version_mismatch"));
 
             // REQ-PRIVACY-003: privacy consent must be a distinct affirmative checkbox.
             if (string.IsNullOrWhiteSpace(body.AcceptedPrivacyVersion))
-                return Results.BadRequest(new { error = "privacy_consent_required" });
+                return Results.BadRequest(new AuthErrorResponse("privacy_consent_required"));
 
             // REQ-PRIVACY-007: minor self-declaration is required.
             if (!body.AcceptedMinorDeclaration)
-                return Results.BadRequest(new { error = "minor_declaration_required" });
+                return Results.BadRequest(new AuthErrorResponse("minor_declaration_required"));
 
             var now = DateTime.UtcNow;
 
@@ -919,7 +879,7 @@ public static class AuthEndpoints
                 now,
                 ct);
 
-            return Results.Ok(new { accepted = true });
+            return Results.Ok(new AcceptLegalResponse(true));
         }).RequireAuthorization();
 
         // Testing / development only: GET /api/v1/auth/test-token
@@ -961,7 +921,7 @@ public static class AuthEndpoints
                     userAgent: "test-client",
                     cancellationToken: context.RequestAborted);
 
-                return Results.Ok(new { token = jwt });
+                return Results.Ok(new TestTokenResponse(jwt));
             });
 
             // POST /api/v1/auth/test/users/{userId}/approve
@@ -975,15 +935,11 @@ public static class AuthEndpoints
                 if (!result.Success)
                 {
                     return result.Error == "tester_ceiling_reached"
-                        ? Results.UnprocessableEntity(new
-                        {
-                            error = result.Error,
-                            ceiling = result.Ceiling,
-                            current_count = result.CurrentCount
-                        })
-                        : Results.NotFound(new { error = result.Error });
+                        ? Results.UnprocessableEntity(new AuthCeilingErrorResponse(
+                            result.Error, result.Ceiling!.Value, result.CurrentCount!.Value))
+                        : Results.NotFound(new AuthErrorResponse(result.Error));
                 }
-                return Results.Ok(new { approved = true });
+                return Results.Ok(new TestApproveResponse(true));
             });
 
             // POST /api/v1/auth/test/users/{userId}/deactivate
@@ -994,7 +950,7 @@ public static class AuthEndpoints
                 HttpContext context) =>
             {
                 await approvalSvc.DeactivateAsync(userId, context.RequestAborted);
-                return Results.Ok(new { deactivated = true });
+                return Results.Ok(new TestDeactivateResponse(true));
             });
 
             // POST /api/v1/auth/test/users/{userId}/seed
@@ -1007,7 +963,7 @@ public static class AuthEndpoints
                 await userRepo.UpsertOnSignInAsync(
                     userId, $"{userId}@test.example.com", userId, "test",
                     context.RequestAborted);
-                return Results.Ok(new { seeded = true });
+                return Results.Ok(new TestSeedResponse(true));
             });
         }
 
@@ -1067,3 +1023,73 @@ internal sealed record AcceptLegalRequest(
     string AcceptedPrivacyVersion,
     string AcceptedTesterAcknowledgementVersion,
     bool AcceptedMinorDeclaration);
+
+// ── Named response types (replacing anonymous types for OpenAPI schema generation) ──
+// PascalCase property names are automatically converted to snake_case by the
+// global JsonNamingPolicy.SnakeCaseLower configured in Program.cs.
+
+public sealed record AuthProvider(string Name, string LoginUrl);
+public sealed record AuthProvidersResponse(IEnumerable<AuthProvider> Providers);
+
+public sealed record CsrfTokenResponse(string CsrfToken);
+
+public sealed record AuthMeResponse(string? Sub, string? Email, string? Name);
+
+public sealed record AuthMePostResponse(string? Sub);
+
+public sealed record SessionStepUpInfo(
+    bool Valid,
+    string? AuthenticatedAt,
+    string? ExpiresAt);
+
+public sealed record SessionStatusResponse(
+    string State,
+    string Role,
+    string ExpiresAt,
+    SessionStepUpInfo? StepUp);
+
+public sealed record LogoutResponse(bool LoggedOut);
+
+public sealed record StepUpInitResponse(string StepUpUrl);
+
+public sealed record StepUpStatusResponse(
+    bool StepUpValid,
+    string? AuthenticatedAt,
+    string? ExpiresAt);
+
+public sealed record LinkInitResponse(string LinkUrl);
+
+public sealed record LinkedIdentity(string Provider, string Email, string LinkedAt);
+public sealed record LinkedIdentitiesResponse(
+    string PrimaryProvider,
+    string PrimaryEmail,
+    List<LinkedIdentity> LinkedIdentities,
+    int TotalCount,
+    int MaxAllowed,
+    bool SingleWarning);
+
+public sealed record UnlinkResponse(bool Unlinked);
+
+public sealed record AdminRecoverResponse(bool Recovered, string NewUserId, string Note);
+
+public sealed record LegalVersionsResponse(
+    string TosVersion,
+    string PrivacyVersion,
+    string TesterAcknowledgementVersion);
+
+public sealed record AcceptLegalResponse(bool Accepted);
+
+public sealed record TestTokenResponse(string Token);
+public sealed record TestApproveResponse(bool Approved);
+public sealed record TestDeactivateResponse(bool Deactivated);
+public sealed record TestSeedResponse(bool Seeded);
+
+public sealed record AuthErrorResponse(
+    string? Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? Message = null);
+
+public sealed record AuthCeilingErrorResponse(
+    string Error,
+    long Ceiling,
+    long CurrentCount);

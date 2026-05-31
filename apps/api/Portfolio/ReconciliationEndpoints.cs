@@ -130,9 +130,9 @@ public static class ReconciliationEndpoints
                 return Results.Unauthorized();
 
             if (string.IsNullOrWhiteSpace(request.Symbol))
-                return Results.BadRequest(new { error = "symbol is required" });
+                return Results.BadRequest(new ReconciliationErrorResponse("symbol is required"));
             if (request.QuantityDelta == 0 && request.CostBasisDelta == 0m)
-                return Results.BadRequest(new { error = "at least one of quantity_delta or cost_basis_delta must be non-zero" });
+                return Results.BadRequest(new ReconciliationErrorResponse("at least one of quantity_delta or cost_basis_delta must be non-zero"));
 
             var now = DateTime.UtcNow;
 
@@ -342,3 +342,7 @@ public sealed record AdjustmentHistoryResponse(
 public sealed record AdjustmentHistoryListResponse(
     List<AdjustmentHistoryResponse> Adjustments
 );
+
+// ── Error DTOs ────────────────────────────────────────────────────────────
+
+public sealed record ReconciliationErrorResponse(string Error);

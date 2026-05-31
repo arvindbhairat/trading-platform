@@ -50,19 +50,19 @@ public static class AdminChaosExerciseEndpoints
             var body = await context.Request.ReadFromJsonAsync<RecordExerciseRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (!AllowedExerciseNumbers.Contains(body.ExerciseNumber))
-                return Results.BadRequest(new { error = "invalid_exercise_number", allowed = AllowedExerciseNumbers });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_exercise_number", AllowedExerciseNumbers));
 
             if (string.IsNullOrWhiteSpace(body.ExerciseName))
-                return Results.BadRequest(new { error = "exercise_name_required" });
+                return Results.BadRequest(new AdminErrorResponse("exercise_name_required"));
 
             if (string.IsNullOrWhiteSpace(body.ExecutionType) || !AllowedExecutionTypes.Contains(body.ExecutionType))
-                return Results.BadRequest(new { error = "invalid_execution_type", allowed = AllowedExecutionTypes });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_execution_type", AllowedExecutionTypes));
 
             if (string.IsNullOrWhiteSpace(body.Outcome) || !AllowedOutcomes.Contains(body.Outcome))
-                return Results.BadRequest(new { error = "invalid_outcome", allowed = AllowedOutcomes });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_outcome", AllowedOutcomes));
 
             // REQ-SEC-011: step-up required (legal category — part of Phase C gating).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -71,7 +71,7 @@ public static class AdminChaosExerciseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var now = DateTime.UtcNow;
@@ -105,17 +105,16 @@ public static class AdminChaosExerciseEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Created($"/api/v1/admin/chaos-exercises/{doc.Id}", new
-            {
-                id = doc.Id.ToString(),
-                exercise_number = doc.ExerciseNumber,
-                exercise_name = doc.ExerciseName,
-                execution_type = doc.ExecutionType,
-                outcome = doc.Outcome,
-                executed_at = doc.ExecutedAt.ToString("O"),
-                findings = doc.Findings,
-                remediation = doc.Remediation
-            });
+            return Results.Created($"/api/v1/admin/chaos-exercises/{doc.Id}",
+                new ChaosExerciseResponse(
+                    doc.Id.ToString(),
+                    doc.ExerciseNumber,
+                    doc.ExerciseName,
+                    doc.ExecutionType,
+                    doc.Outcome,
+                    doc.ExecutedAt.ToString("O"),
+                    doc.Findings,
+                    doc.Remediation));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -139,19 +138,19 @@ public static class AdminChaosExerciseEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var existing = await exerciseRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (existing is null)
-                return Results.NotFound(new { error = "exercise_not_found" });
+                return Results.NotFound(new AdminErrorResponse("exercise_not_found"));
 
             var body = await context.Request.ReadFromJsonAsync<UpdateExerciseRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_body"));
 
             if (body.Outcome is not null && !AllowedOutcomes.Contains(body.Outcome))
-                return Results.BadRequest(new { error = "invalid_outcome", allowed = AllowedOutcomes });
+                return Results.BadRequest(new AdminAllowedValuesError("invalid_outcome", AllowedOutcomes));
 
             // REQ-SEC-011: step-up required.
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -160,7 +159,7 @@ public static class AdminChaosExerciseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             await exerciseRepo.UpdateAsync(
@@ -180,7 +179,7 @@ public static class AdminChaosExerciseEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { success = true, id });
+            return Results.Ok(new ChaosExerciseUpdatedResponse(true, id));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -197,22 +196,21 @@ public static class AdminChaosExerciseEndpoints
 
             var exercises = await exerciseRepo.ListAllAsync(context.RequestAborted);
 
-            var result = exercises.Select(e => new
-            {
-                id = e.Id.ToString(),
-                exercise_number = e.ExerciseNumber,
-                exercise_name = e.ExerciseName,
-                execution_type = e.ExecutionType,
-                outcome = e.Outcome,
-                executed_at = e.ExecutedAt.ToString("O"),
-                findings = e.Findings,
-                remediation = e.Remediation,
-                actor_id = e.ActorId,
-                created_at = e.CreatedAt.ToString("O"),
-                updated_at = e.UpdatedAt.ToString("O")
-            }).ToList();
+            var result = exercises.Select(e => new ChaosExerciseDetailResponse(
+                e.Id.ToString(),
+                e.ExerciseNumber,
+                e.ExerciseName,
+                e.ExecutionType,
+                e.Outcome,
+                e.ExecutedAt.ToString("O"),
+                e.Findings,
+                e.Remediation,
+                e.ActorId,
+                e.CreatedAt.ToString("O"),
+                e.UpdatedAt.ToString("O")
+            )).ToList();
 
-            return Results.Ok(new { chaos_exercises = result });
+            return Results.Ok(new ChaosExerciseListResponse(result));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -228,26 +226,25 @@ public static class AdminChaosExerciseEndpoints
                 return Results.Forbid();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id_format" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_id_format"));
 
             var exercise = await exerciseRepo.GetByIdAsync(objectId, context.RequestAborted);
             if (exercise is null)
-                return Results.NotFound(new { error = "exercise_not_found" });
+                return Results.NotFound(new AdminErrorResponse("exercise_not_found"));
 
-            return Results.Ok(new
-            {
-                id = exercise.Id.ToString(),
-                exercise_number = exercise.ExerciseNumber,
-                exercise_name = exercise.ExerciseName,
-                execution_type = exercise.ExecutionType,
-                outcome = exercise.Outcome,
-                executed_at = exercise.ExecutedAt.ToString("O"),
-                findings = exercise.Findings,
-                remediation = exercise.Remediation,
-                actor_id = exercise.ActorId,
-                created_at = exercise.CreatedAt.ToString("O"),
-                updated_at = exercise.UpdatedAt.ToString("O")
-            });
+            return Results.Ok(new ChaosExerciseDetailResponse(
+                exercise.Id.ToString(),
+                exercise.ExerciseNumber,
+                exercise.ExerciseName,
+                exercise.ExecutionType,
+                exercise.Outcome,
+                exercise.ExecutedAt.ToString("O"),
+                exercise.Findings,
+                exercise.Remediation,
+                exercise.ActorId,
+                exercise.CreatedAt.ToString("O"),
+                exercise.UpdatedAt.ToString("O")
+            ));
         }).RequireAuthorization();
 
         // ────────────────────────────────────────────────────────────────────
@@ -277,20 +274,18 @@ public static class AdminChaosExerciseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             // Verify all five exercises have been passed at least once.
             var allPassed = await exerciseRepo.AllFiveExercisesPassedOnceAsync(context.RequestAborted);
             if (!allPassed)
             {
-                return Results.UnprocessableEntity(new
-                {
-                    error = "incomplete_exercises",
-                    message = "Cannot mark chaos exercises gate as complete: not all five " +
-                              "exercises (1–5) have been executed with a 'pass' or 'walkthrough' outcome. " +
-                              "Execute and pass each exercise before marking the gate."
-                });
+                return Results.UnprocessableEntity(new AdminErrorResponse(
+                    "incomplete_exercises",
+                    "Cannot mark chaos exercises gate as complete: not all five " +
+                    "exercises (1–5) have been executed with a 'pass' or 'walkthrough' outcome. " +
+                    "Execute and pass each exercise before marking the gate."));
             }
 
             await gateSvc.SetGateAsync(
@@ -298,12 +293,8 @@ public static class AdminChaosExerciseEndpoints
                 "All five chaos/failure-injection exercises executed with pass/walkthrough outcome.",
                 context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                success = true,
-                gate = PhaseGateService.GateChaosExercises,
-                passed = true
-            });
+            return Results.Ok(new ChaosExerciseGateResponse(
+                true, PhaseGateService.GateChaosExercises, true));
         }).RequireAuthorization();
 
         return app;
@@ -339,3 +330,35 @@ public sealed record UpdateExerciseRequest(
     string? Outcome,
     string? Findings,
     string? Remediation);
+
+// ── Response DTOs ────────────────────────────────────────────────────────────
+
+public sealed record ChaosExerciseResponse(
+    string Id,
+    int ExerciseNumber,
+    string? ExerciseName,
+    string? ExecutionType,
+    string? Outcome,
+    string ExecutedAt,
+    string? Findings,
+    string? Remediation);
+
+public sealed record ChaosExerciseDetailResponse(
+    string Id,
+    int ExerciseNumber,
+    string? ExerciseName,
+    string? ExecutionType,
+    string? Outcome,
+    string ExecutedAt,
+    string? Findings,
+    string? Remediation,
+    string? ActorId,
+    string CreatedAt,
+    string UpdatedAt);
+
+public sealed record ChaosExerciseListResponse(IEnumerable<ChaosExerciseDetailResponse> ChaosExercises);
+
+public sealed record ChaosExerciseGateResponse(bool Success, string Gate, bool Passed);
+
+public sealed record ChaosExerciseUpdatedResponse(bool Success, string Id);
+

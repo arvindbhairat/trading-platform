@@ -72,29 +72,21 @@ public static class AdminLegalPostureEndpoints
             var (authoredCount, _) = GetAuthoredRunbookCount();
             var reviewedIn90Days = await CountRunbookReviewsAsync(database, ct);
 
-            return Results.Ok(new
-            {
-                current_phase = currentPhase,
-                approved_user_count = approvedUserCount,
-                tester_ceiling = testerCeiling,
-                fyers_app_type = isCommercialFyers ? "commercial" : "personal",
-                tos_version = tosVersion,
-                privacy_version = privacyVersion,
-                disclaimer_version = disclaimerVersion,
-                tester_acknowledgement_version = testerAckVersion,
-                sebi_opinion = new
-                {
-                    received = sebiReceived,
-                    received_date = string.IsNullOrEmpty(sebiReceivedDate) ? null : sebiReceivedDate,
-                },
-                legal_review_received = legalReviewReceived,
-                runbook_catalog = new
-                {
-                    total = TotalRunbookCatalog,
-                    authored = authoredCount,
-                    reviewed_in_90_days = reviewedIn90Days,
-                },
-            });
+            return Results.Ok(new LegalPostureResponse(
+                currentPhase,
+                approvedUserCount,
+                testerCeiling,
+                isCommercialFyers ? "commercial" : "personal",
+                tosVersion,
+                privacyVersion,
+                disclaimerVersion,
+                testerAckVersion,
+                new SebiOpinionResponse(
+                    sebiReceived,
+                    string.IsNullOrEmpty(sebiReceivedDate) ? null : sebiReceivedDate),
+                legalReviewReceived,
+                new RunbookCatalogResponse(TotalRunbookCatalog, authoredCount, reviewedIn90Days)
+            ));
         }).RequireAuthorization();
 
         return app;
@@ -173,3 +165,21 @@ public static class AdminLegalPostureEndpoints
         return user is not null && user.Role == UserRole.Admin;
     }
 }
+
+public sealed record SebiOpinionResponse(bool Received, string? ReceivedDate);
+
+public sealed record RunbookCatalogResponse(int Total, int Authored, int ReviewedIn90Days);
+
+public sealed record LegalPostureResponse(
+    string CurrentPhase,
+    long ApprovedUserCount,
+    long TesterCeiling,
+    string FyersAppType,
+    string TosVersion,
+    string PrivacyVersion,
+    string DisclaimerVersion,
+    string TesterAcknowledgementVersion,
+    SebiOpinionResponse SebiOpinion,
+    bool LegalReviewReceived,
+    RunbookCatalogResponse RunbookCatalog
+);

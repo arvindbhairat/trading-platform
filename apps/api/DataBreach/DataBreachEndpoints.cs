@@ -53,12 +53,8 @@ public static class DataBreachEndpoints
                 details: details,
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                recorded = true,
-                action_type = "breach_suspected",
-                recorded_at = now.ToString("o"),
-            });
+            return Results.Ok(new BreachRecordedResponse(
+                true, "breach_suspected", now.ToString("o")));
         }).RequireAuthorization();
 
         // ── POST /api/v1/admin/breach/exercise — record annual breach exercise drill ──
@@ -88,12 +84,8 @@ public static class DataBreachEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                recorded = true,
-                action_type = "breach_exercise",
-                recorded_at = now.ToString("o"),
-            });
+            return Results.Ok(new BreachRecordedResponse(
+                true, "breach_exercise", now.ToString("o")));
         }).RequireAuthorization();
 
         return app;
@@ -135,4 +127,12 @@ public sealed record RecordExerciseRequest(
     string Outcome,
     string ReviewNotes,
     DateTime? ExerciseDate = null
+);
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record BreachRecordedResponse(
+    bool Recorded,
+    string ActionType,
+    string RecordedAt
 );

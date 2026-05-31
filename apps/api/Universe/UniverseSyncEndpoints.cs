@@ -45,7 +45,7 @@ public static class UniverseSyncEndpoints
                 var form = await context.Request.ReadFormAsync(ct);
                 file = form.Files.GetFile("file");
                 if (file is null || file.Length == 0)
-                    return Results.BadRequest(new { error = "CSV file is required." });
+                    return Results.BadRequest(new ErrorResponse("CSV file is required."));
 
                 using var reader = new StreamReader(file.OpenReadStream());
                 csvContent = await reader.ReadToEndAsync(ct);
@@ -56,7 +56,7 @@ public static class UniverseSyncEndpoints
                 using var reader = new StreamReader(context.Request.Body);
                 csvContent = await reader.ReadToEndAsync(ct);
                 if (string.IsNullOrWhiteSpace(csvContent))
-                    return Results.BadRequest(new { error = "CSV content is required." });
+                    return Results.BadRequest(new ErrorResponse("CSV content is required."));
             }
 
             try
@@ -66,50 +66,44 @@ public static class UniverseSyncEndpoints
                 // Determine if archive-confirm threshold is triggered. REQ-UNIV-018.
                 // We need the active count to compute threshold here for the client.
                 // The client will handle the threshold check before commit.
-                return Results.Ok(new
-                {
-                    file_hash = preview.FileHash,
-                    total_rows = preview.TotalRows,
-                    accepted_rows = preview.AcceptedRows,
-                    adds = preview.Adds.Select(a => new
-                    {
-                        symbol = a.Symbol,
-                        company_name = a.CompanyName,
-                        industry = a.Industry,
-                        isin = a.Isin,
-                        sql_table_name_suffix = a.SqlTableNameSuffix
-                    }),
-                    archives = preview.Archives.Select(a => new
-                    {
-                        symbol = a.Symbol,
-                        company_name = a.CompanyName,
-                        isin = a.Isin
-                    }),
-                    industry_changes = preview.IndustryChanges.Select(c => new
-                    {
-                        symbol = c.Symbol,
-                        previous_industry = c.PreviousIndustry,
-                        new_industry = c.NewIndustry
-                    }),
-                    skipped = preview.Skipped.Select(s => new
-                    {
-                        symbol = s.Symbol,
-                        company_name = s.CompanyName,
-                        series = s.Series
-                    }),
-                    rename_candidates = preview.RenameCandidates.Select(r => new
-                    {
-                        old_symbol = r.OldSymbol,
-                        new_symbol = r.NewSymbol,
-                        isin = r.Isin,
-                        company_name = r.CompanyName,
-                        industry = r.Industry
-                    })
-                });
+                return Results.Ok(new UploadPreviewResponse(
+                    preview.FileHash,
+                    preview.TotalRows,
+                    preview.AcceptedRows,
+                    preview.Adds.Select(a => new PreviewAddEntry(
+                        a.Symbol,
+                        a.CompanyName,
+                        a.Industry,
+                        a.Isin,
+                        a.SqlTableNameSuffix
+                    )).ToList(),
+                    preview.Archives.Select(a => new PreviewArchiveEntry(
+                        a.Symbol,
+                        a.CompanyName,
+                        a.Isin
+                    )).ToList(),
+                    preview.IndustryChanges.Select(c => new PreviewIndustryChange(
+                        c.Symbol,
+                        c.PreviousIndustry,
+                        c.NewIndustry
+                    )).ToList(),
+                    preview.Skipped.Select(s => new PreviewSkippedEntry(
+                        s.Symbol,
+                        s.CompanyName,
+                        s.Series
+                    )).ToList(),
+                    preview.RenameCandidates.Select(r => new PreviewRenameCandidate(
+                        r.OldSymbol,
+                        r.NewSymbol,
+                        r.Isin,
+                        r.CompanyName,
+                        r.Industry
+                    )).ToList()
+                ));
             }
             catch (InvalidDataException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new ErrorResponse(ex.Message));
             }
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
@@ -175,7 +169,7 @@ public static class UniverseSyncEndpoints
             var result = await syncService.CommitAsync(commitRequest, ct);
 
             if (!result.Success)
-                return Results.BadRequest(new { error = result.Error });
+                return Results.BadRequest(new ErrorResponse(result.Error!));
 
             // Auto-trigger HDS for net-new symbols (REQ-UNIV-014).
             string? hdsJobRunId = null;
@@ -255,14 +249,13 @@ public static class UniverseSyncEndpoints
                     result.ArchivedSymbols, notifDb, notifWriter, notifLogger, ct);
             }
 
-            return Results.Ok(new
-            {
-                upload_id = result.UploadId!.ToString(),
-                new_symbols = result.NewSymbols,
-                archived_symbols = result.ArchivedSymbols,
-                hds_triggered = result.NewSymbols.Count > 0,
-                hds_job_run_id = hdsJobRunId
-            });
+            return Results.Ok(new UploadCommitResponse(
+                result.UploadId!.ToString()!,
+                result.NewSymbols,
+                result.ArchivedSymbols,
+                result.NewSymbols.Count > 0,
+                hdsJobRunId
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -274,26 +267,24 @@ public static class UniverseSyncEndpoints
             CancellationToken ct) =>
         {
             var uploads = await uploadRepo.GetAllAsync(ct);
-            return Results.Ok(new
-            {
-                uploads = uploads.Select(u => new
-                {
-                    id = u.Id.ToString(),
-                    uploaded_by = u.UploadedBy,
-                    uploaded_at = u.UploadedAt,
-                    file_hash = u.FileHash,
-                    total_rows = u.TotalRows,
-                    rows_accepted = u.RowsAccepted,
-                    rows_archived = u.RowsArchived,
-                    rows_excluded = u.RowsExcluded,
-                    new_symbols = u.NewSymbols,
-                    archived_symbols = u.ArchivedSymbols,
-                    hds_triggered = u.HdsTriggered,
-                    rolled_back = u.RolledBack,
-                    rolled_back_at = u.RolledBackAt,
-                    rolled_back_by = u.RolledBackBy
-                })
-            });
+            return Results.Ok(new UploadListResponse(
+                uploads.Select(u => new UploadListItem(
+                    u.Id.ToString(),
+                    u.UploadedBy,
+                    u.UploadedAt,
+                    u.FileHash,
+                    u.TotalRows,
+                    u.RowsAccepted,
+                    u.RowsArchived,
+                    u.RowsExcluded,
+                    u.NewSymbols,
+                    u.ArchivedSymbols,
+                    u.HdsTriggered,
+                    u.RolledBack,
+                    u.RolledBackAt,
+                    u.RolledBackBy
+                )).ToList()
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -313,7 +304,7 @@ public static class UniverseSyncEndpoints
                 return Results.Unauthorized();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "Invalid upload ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid upload ID."));
 
             // Read retention period from sys_config (default 30).
             var retentionDays = 30;
@@ -324,7 +315,7 @@ public static class UniverseSyncEndpoints
             var result = await syncService.RollbackAsync(objectId, adminId, retentionDays, ct);
 
             if (!result.Success)
-                return Results.BadRequest(new { error = result.Error });
+                return Results.BadRequest(new ErrorResponse(result.Error!));
 
             // Record audit event.
             await auditRepo.RecordAsync(adminId, "universe_sync_rollback", DateTime.UtcNow,
@@ -335,7 +326,7 @@ public static class UniverseSyncEndpoints
                     ["retention_days"] = retentionDays
                 }, ct);
 
-            return Results.Ok(new { status = "rolled_back", upload_id = id });
+            return Results.Ok(new UploadRollbackResponse("rolled_back", id));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -351,7 +342,7 @@ public static class UniverseSyncEndpoints
         {
             var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
             if (symbols.Count == 0)
-                return Results.Ok(new { symbols = Array.Empty<object>(), out_of_sync_count = 0 });
+                return Results.Ok(new SyncHealthEmptyResponse(Array.Empty<object>(), 0));
 
             // Get the most recent completed trading session from the calendar.
             var sessions = await calendarRepo.GetSessionsAsync(
@@ -382,28 +373,26 @@ public static class UniverseSyncEndpoints
                     outOfSync = DateOnly.FromDateTime(lastCandleDate.Value) < mostRecentSession.Value;
                 }
 
-                return new
-                {
-                    symbol = s.Symbol,
-                    company_name = s.CompanyName,
-                    is_archived = s.IsArchived,
-                    scan_excluded = s.ScanExcluded,
-                    sql_table_name_suffix = s.SqlTableNameSuffix,
-                    last_candle_date = lastCandleDate?.ToString("yyyy-MM-dd"),
-                    most_recent_session = mostRecentSession?.ToString("yyyy-MM-dd"),
-                    out_of_sync = outOfSync
-                };
+                return new SymbolHealthItem(
+                    s.Symbol,
+                    s.CompanyName,
+                    s.IsArchived,
+                    s.ScanExcluded,
+                    s.SqlTableNameSuffix,
+                    lastCandleDate?.ToString("yyyy-MM-dd"),
+                    mostRecentSession?.ToString("yyyy-MM-dd"),
+                    outOfSync
+                );
             }).ToList();
 
-            var outOfSyncCount = symbolHealthList.Count(s => s.out_of_sync);
+            var outOfSyncCount = symbolHealthList.Count(s => s.OutOfSync);
 
-            return Results.Ok(new
-            {
-                symbols = symbolHealthList,
-                out_of_sync_count = outOfSyncCount,
-                total_active = symbols.Count,
-                most_recent_session = mostRecentSession?.ToString("yyyy-MM-dd")
-            });
+            return Results.Ok(new SyncHealthResponse(
+                symbolHealthList,
+                outOfSyncCount,
+                symbols.Count,
+                mostRecentSession?.ToString("yyyy-MM-dd")
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -426,7 +415,7 @@ public static class UniverseSyncEndpoints
             // Find out-of-sync symbols (same logic as sync-health endpoint).
             var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
             if (symbols.Count == 0)
-                return Results.Ok(new { status = "no_symbols", symbols_reseeded = 0 });
+                return Results.Ok(new ReseedSimpleResponse("no_symbols", 0));
 
             var sessions = await calendarRepo.GetSessionsAsync(
                 fromDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-90)).ToString("yyyy-MM-dd"),
@@ -448,7 +437,7 @@ public static class UniverseSyncEndpoints
             }).ToList();
 
             if (outOfSyncSymbols.Count == 0)
-                return Results.Ok(new { status = "all_synced", symbols_reseeded = 0 });
+                return Results.Ok(new ReseedSimpleResponse("all_synced", 0));
 
             var symbolNames = outOfSyncSymbols.Select(s => s.Symbol).ToList();
             var symbolSuffixes = outOfSyncSymbols.Select(s => s.SqlTableNameSuffix).ToList();
@@ -467,12 +456,11 @@ public static class UniverseSyncEndpoints
                     BsonDateTime bdt => bdt.ToUniversalTime(),
                     _ => (DateTime?)null
                 };
-                return Results.Conflict(new
-                {
-                    error = "An HDS job is already running.",
-                    job_run_id = activeRunId.ToString(),
-                    started_at = activeStartedAt?.ToString("o")
-                });
+                return Results.Conflict(new HdsConflictResponse(
+                    "An HDS job is already running.",
+                    activeRunId.ToString(),
+                    activeStartedAt?.ToString("o")
+                ));
             }
 
             var now = DateTime.UtcNow;
@@ -500,13 +488,12 @@ public static class UniverseSyncEndpoints
                 "HDS reseed triggered by admin {Admin} for {Count} out-of-sync symbols: {Symbols}",
                 adminId, outOfSyncSymbols.Count, string.Join(", ", symbolNames));
 
-            return Results.Ok(new
-            {
-                status = "reseed_triggered",
-                job_run_id = jobRunDoc["_id"].AsObjectId.ToString(),
-                symbols_reseeded = outOfSyncSymbols.Count,
-                symbols = symbolNames
-            });
+            return Results.Ok(new ReseedTriggeredResponse(
+                "reseed_triggered",
+                jobRunDoc["_id"].AsObjectId.ToString(),
+                outOfSyncSymbols.Count,
+                symbolNames
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -531,43 +518,41 @@ public static class UniverseSyncEndpoints
                 .Limit(5)
                 .ToListAsync(ct);
 
-            var mapped = latest.Select(r => new
-            {
-                id = r["_id"].AsObjectId.ToString(),
-                job_type = r.GetValue("job_type", "").AsString,
-                triggered_by = r.GetValue("triggered_by", "").AsString,
-                started_at = r.GetValue("started_at", BsonNull.Value) switch
+            var mapped = latest.Select(r => new HdsRunItem(
+                r["_id"].AsObjectId.ToString(),
+                r.GetValue("job_type", "").AsString,
+                r.GetValue("triggered_by", "").AsString,
+                r.GetValue("started_at", BsonNull.Value) switch
                 {
                     BsonDateTime bdt => bdt.ToUniversalTime().ToString("o"),
                     _ => null
                 },
-                ended_at = r.GetValue("ended_at", BsonNull.Value) switch
+                r.GetValue("ended_at", BsonNull.Value) switch
                 {
                     BsonDateTime bdt => bdt.ToUniversalTime().ToString("o"),
                     _ => null
                 },
-                outcome = r.GetValue("outcome", "").AsString,
-                symbols_processed = r.GetValue("symbols_processed", BsonNull.Value)?.AsInt32 ?? 0,
-                symbols = r.GetValue("symbols", BsonNull.Value) switch
+                r.GetValue("outcome", "").AsString,
+                r.GetValue("symbols_processed", BsonNull.Value)?.AsInt32 ?? 0,
+                r.GetValue("symbols", BsonNull.Value) switch
                 {
                     BsonArray arr => arr.Select(s => s.AsString).ToList(),
                     _ => new List<string>()
                 },
-                errors = r.GetValue("errors", BsonNull.Value) switch
+                r.GetValue("errors", BsonNull.Value) switch
                 {
                     BsonArray arr => arr.Select(e => e.AsString).ToList(),
                     _ => new List<string>()
                 }
-            }).ToList();
+            )).ToList();
 
-            var currentRun = mapped.FirstOrDefault(r => r.outcome == "started" || r.outcome == "running");
+            var currentRun = mapped.FirstOrDefault(r => r.Outcome == "started" || r.Outcome == "running");
 
-            return Results.Ok(new
-            {
-                current_run = currentRun,
-                recent_runs = mapped,
-                is_running = currentRun is not null
-            });
+            return Results.Ok(new HdsStatusResponse(
+                currentRun,
+                mapped,
+                currentRun is not null
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -595,7 +580,7 @@ public static class UniverseSyncEndpoints
             // Get all active symbols — check for probe flags.
             var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
 
-            var items = new List<object>();
+            var items = new List<WorkQueueItem>();
 
             foreach (var sym in symbols.Where(s => s.ConsecutiveFailureCount >= flagThreshold))
             {
@@ -605,27 +590,25 @@ public static class UniverseSyncEndpoints
                 var hadRenameFlag = latestUpload?.RenameResolutions
                     .Any(r => r.OldSymbol == sym.Symbol) ?? false;
 
-                items.Add(new
-                {
-                    id = sym.Id.ToString(),
-                    type = "probe_flag",
-                    symbol = sym.Symbol,
-                    company_name = sym.CompanyName,
-                    isin = sym.Isin,
-                    details = new
-                    {
-                        consecutive_failure_count = sym.ConsecutiveFailureCount,
-                        flag_threshold = flagThreshold,
-                        last_successful_probe_at = sym.LastSuccessfulProbeAt?.ToString("o"),
-                        last_unknown_symbol_at = sym.LastUnknownSymbolAt?.ToString("o")
-                    },
-                    created_at = sym.LastUnknownSymbolAt?.ToString("o")
+                items.Add(new WorkQueueItem(
+                    sym.Id.ToString(),
+                    "probe_flag",
+                    sym.Symbol,
+                    sym.CompanyName,
+                    sym.Isin,
+                    new WorkQueueItemDetail(
+                        sym.ConsecutiveFailureCount,
+                        flagThreshold,
+                        sym.LastSuccessfulProbeAt?.ToString("o"),
+                        sym.LastUnknownSymbolAt?.ToString("o")
+                    ),
+                    sym.LastUnknownSymbolAt?.ToString("o")
                         ?? sym.UpdatedAt.ToString("o"),
-                    high_confidence = hadRenameFlag
-                });
+                    hadRenameFlag
+                ));
             }
 
-            return Results.Ok(new { items, probe_enabled = probeEnabled });
+            return Results.Ok(new WorkQueueResponse(items, probeEnabled));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -645,17 +628,17 @@ public static class UniverseSyncEndpoints
                 return Results.Unauthorized();
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "Invalid symbol ID." });
+                return Results.BadRequest(new ErrorResponse("Invalid symbol ID."));
 
             var symbol = await symbolRepo.FindBySymbolAsync(request.Symbol, ct);
             if (symbol is null)
-                return Results.NotFound(new { error = "Symbol not found." });
+                return Results.NotFound(new ErrorResponse("Symbol not found."));
 
             switch (request.Resolution)
             {
                 case "approve_rename":
                     if (string.IsNullOrWhiteSpace(request.NewSymbol))
-                        return Results.BadRequest(new { error = "new_symbol is required for approve_rename." });
+                        return Results.BadRequest(new ErrorResponse("new_symbol is required for approve_rename."));
 
                     await symbolRepo.RenameSymbolAsync(symbol.Id, request.NewSymbol, ct);
                     await symbolRepo.UpdateSymbolHealthAsync(
@@ -670,7 +653,7 @@ public static class UniverseSyncEndpoints
                             ["previous_failure_count"] = symbol.ConsecutiveFailureCount
                         }, ct);
 
-                    return Results.Ok(new { status = "renamed", symbol = request.Symbol, new_symbol = request.NewSymbol });
+                    return Results.Ok(new ResolveRenameResponse("renamed", request.Symbol, request.NewSymbol!));
 
                 case "mark_delisting":
                     await symbolRepo.UpdateMetadataAsync(symbol.Id, isArchived: true, ct: ct);
@@ -693,7 +676,7 @@ public static class UniverseSyncEndpoints
                     await NotifyArchivedSymbolOpenPositionsAsync(
                         [request.Symbol], notifDbSymbol, notifWriterSymbol, notifLoggerSymbol, ct);
 
-                    return Results.Ok(new { status = "archived", symbol = request.Symbol });
+                    return Results.Ok(new ResolveResponse("archived", request.Symbol));
 
                 case "dismiss":
                     await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
@@ -705,13 +688,12 @@ public static class UniverseSyncEndpoints
                             ["failure_count_not_reset"] = true
                         }, ct);
 
-                    return Results.Ok(new { status = "dismissed", symbol = request.Symbol });
+                    return Results.Ok(new ResolveResponse("dismissed", request.Symbol));
 
                 default:
-                    return Results.BadRequest(new
-                    {
-                        error = "Invalid resolution. Must be 'approve_rename', 'mark_delisting', or 'dismiss'."
-                    });
+                    return Results.BadRequest(new ErrorResponse(
+                        "Invalid resolution. Must be 'approve_rename', 'mark_delisting', or 'dismiss'."
+                    ));
             }
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
@@ -731,21 +713,19 @@ public static class UniverseSyncEndpoints
             var summary = await probeService.RunProbeAsync("manual", adminId, ct);
 
             if (summary is null)
-                return Results.Ok(new
-                {
-                    status = "disabled",
-                    message = "Symbol probe is disabled. Enable via operations.universe.symbol_probe_enabled in sys_config."
-                });
+                return Results.Ok(new ProbeDisabledResponse(
+                    "disabled",
+                    "Symbol probe is disabled. Enable via operations.universe.symbol_probe_enabled in sys_config."
+                ));
 
-            return Results.Ok(new
-            {
-                status = "completed",
-                job_run_id = summary.JobRunId,
-                total_symbols = summary.TotalSymbols,
-                success_count = summary.SuccessCount,
-                transient_count = summary.TransientCount,
-                unknown_count = summary.UnknownCount
-            });
+            return Results.Ok(new ProbeCompletedResponse(
+                "completed",
+                summary.JobRunId!,
+                summary.TotalSymbols,
+                summary.SuccessCount,
+                summary.TransientCount,
+                summary.UnknownCount
+            ));
         })
         .RequireAuthorization(policy => policy.RequireRole("admin"))
         .WithTags(Tag);
@@ -913,3 +893,51 @@ public sealed record WorkQueueResolveRequest
     /// <summary>Operator-supplied reason (required for dismiss, optional for others).</summary>
     public string? Reason { get; init; }
 }
+
+// ── Response Records ───────────────────────────────────────────────────────
+
+internal sealed record HdsConflictResponse(string Error, string JobRunId, string? StartedAt);
+
+// Upload preview
+internal sealed record PreviewAddEntry(string Symbol, string CompanyName, string Industry, string Isin, string SqlTableNameSuffix);
+internal sealed record PreviewArchiveEntry(string Symbol, string CompanyName, string Isin);
+internal sealed record PreviewIndustryChange(string Symbol, string PreviousIndustry, string NewIndustry);
+internal sealed record PreviewSkippedEntry(string Symbol, string CompanyName, string Series);
+internal sealed record PreviewRenameCandidate(string OldSymbol, string NewSymbol, string Isin, string CompanyName, string Industry);
+internal sealed record UploadPreviewResponse(string FileHash, int TotalRows, int AcceptedRows, List<PreviewAddEntry> Adds, List<PreviewArchiveEntry> Archives, List<PreviewIndustryChange> IndustryChanges, List<PreviewSkippedEntry> Skipped, List<PreviewRenameCandidate> RenameCandidates);
+
+// Upload commit
+internal sealed record UploadCommitResponse(string UploadId, List<string> NewSymbols, List<string> ArchivedSymbols, bool HdsTriggered, string? HdsJobRunId);
+
+// Upload list
+internal sealed record UploadListItem(string Id, string UploadedBy, DateTime UploadedAt, string FileHash, int TotalRows, int RowsAccepted, int RowsArchived, int RowsExcluded, List<string> NewSymbols, List<string> ArchivedSymbols, bool HdsTriggered, bool RolledBack, DateTime? RolledBackAt, string? RolledBackBy);
+internal sealed record UploadListResponse(List<UploadListItem> Uploads);
+
+// Rollback
+internal sealed record UploadRollbackResponse(string Status, string UploadId);
+
+// Sync health
+internal sealed record SyncHealthEmptyResponse(object[] Symbols, int OutOfSyncCount);
+internal sealed record SymbolHealthItem(string Symbol, string CompanyName, bool IsArchived, bool ScanExcluded, string SqlTableNameSuffix, string? LastCandleDate, string? MostRecentSession, bool OutOfSync);
+internal sealed record SyncHealthResponse(List<SymbolHealthItem> Symbols, int OutOfSyncCount, int TotalActive, string? MostRecentSession);
+
+// Reseed
+internal sealed record ReseedSimpleResponse(string Status, int SymbolsReseeded);
+internal sealed record ReseedTriggeredResponse(string Status, string JobRunId, int SymbolsReseeded, List<string> Symbols);
+
+// HDS status
+internal sealed record HdsRunItem(string Id, string JobType, string TriggeredBy, string? StartedAt, string? EndedAt, string Outcome, int SymbolsProcessed, List<string> Symbols, List<string> Errors);
+internal sealed record HdsStatusResponse(HdsRunItem? CurrentRun, List<HdsRunItem> RecentRuns, bool IsRunning);
+
+// Work queue
+internal sealed record WorkQueueItemDetail(int ConsecutiveFailureCount, int FlagThreshold, string? LastSuccessfulProbeAt, string? LastUnknownSymbolAt);
+internal sealed record WorkQueueItem(string Id, string Type, string Symbol, string CompanyName, string Isin, WorkQueueItemDetail Details, string? CreatedAt, bool HighConfidence);
+internal sealed record WorkQueueResponse(List<WorkQueueItem> Items, bool ProbeEnabled);
+
+// Work queue resolve
+internal sealed record ResolveResponse(string Status, string Symbol);
+internal sealed record ResolveRenameResponse(string Status, string Symbol, string NewSymbol);
+
+// Probe
+internal sealed record ProbeDisabledResponse(string Status, string Message);
+internal sealed record ProbeCompletedResponse(string Status, string JobRunId, int TotalSymbols, int SuccessCount, int TransientCount, int UnknownCount);

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
@@ -42,11 +43,10 @@ public static class TelegramBotEndpoints
 
             var status = await botService.GetActiveBotStatusAsync(context.RequestAborted);
             if (status is null)
-                return Results.Ok(new { bot_provisioned = false });
+                return Results.Ok(new BotNotProvisionedResponse(false));
 
-            return Results.Ok(new
-            {
-                bot_provisioned = true,
+            return Results.Ok(new BotStatusResponse(
+                true,
                 status.BotId,
                 status.BotUsername,
                 status.IsActive,
@@ -57,8 +57,7 @@ public static class TelegramBotEndpoints
                 status.LastTokenReplacedAt,
                 status.LastSuccessfulDeliveryAt,
                 status.LastDeliveryCheckAt,
-                status.ProvisionedAt,
-            });
+                status.ProvisionedAt));
         }).RequireAuthorization();
 
         // PUT /api/v1/admin/telegram-bot/token — replace bot token
@@ -81,7 +80,7 @@ public static class TelegramBotEndpoints
             var body = await context.Request.ReadFromJsonAsync<ReplaceTokenRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null || string.IsNullOrWhiteSpace(body.Token))
-                return Results.BadRequest(new { error = "token_required" });
+                return Results.BadRequest(new ErrorResponse("token_required"));
 
             // REQ-SEC-011: step-up re-authentication required for token replacement.
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -92,7 +91,7 @@ public static class TelegramBotEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required", action = "replace_telegram_bot_token" },
+                    new StepUpRequiredResponse("step_up_required", "replace_telegram_bot_token"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
@@ -101,19 +100,15 @@ public static class TelegramBotEndpoints
 
             if (!result.Success)
             {
-                return Results.BadRequest(new
-                {
-                    error = result.ErrorCode,
-                    detail = result.ErrorDetail
-                });
+                return Results.BadRequest(new BotProvisionErrorResponse(
+                    result.ErrorCode,
+                    result.ErrorDetail));
             }
 
-            return Results.Ok(new
-            {
-                success = true,
+            return Results.Ok(new BotProvisionSuccessResponse(
+                true,
                 result.BotId,
-                result.BotUsername
-            });
+                result.BotUsername));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/telegram-bot/test-send — send test message
@@ -133,14 +128,12 @@ public static class TelegramBotEndpoints
 
             if (!result.Success)
             {
-                return Results.BadRequest(new
-                {
-                    error = "test_send_failed",
-                    detail = result.ErrorDetail
-                });
+                return Results.BadRequest(new TestSendErrorResponse(
+                    "test_send_failed",
+                    result.ErrorDetail));
             }
 
-            return Results.Ok(new { success = true });
+            return Results.Ok(new SuccessResponse(true));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/telegram-bot/rotation — token rotation info
@@ -171,3 +164,41 @@ public static class TelegramBotEndpoints
 }
 
 public sealed record ReplaceTokenRequest(string Token);
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record BotNotProvisionedResponse(bool BotProvisioned);
+
+public sealed record BotStatusResponse(
+    bool BotProvisioned,
+    string BotId,
+    string BotUsername,
+    bool IsActive,
+    bool HasTokenConfigured,
+    int TokenAgeDays,
+    int RotationDueDays,
+    bool RotationOverdue,
+    DateTime? LastTokenReplacedAt,
+    DateTime? LastSuccessfulDeliveryAt,
+    DateTime? LastDeliveryCheckAt,
+    DateTime ProvisionedAt
+);
+
+public sealed record ErrorResponse(string Error);
+
+public sealed record StepUpRequiredResponse(string Error, string Action);
+
+public sealed record BotProvisionErrorResponse(
+    string? Error,
+    string? Detail
+);
+
+public sealed record BotProvisionSuccessResponse(
+    bool Success,
+    string? BotId,
+    string? BotUsername
+);
+
+public sealed record TestSendErrorResponse(string Error, string? Detail);
+
+public sealed record SuccessResponse(bool Success);

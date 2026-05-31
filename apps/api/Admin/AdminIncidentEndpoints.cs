@@ -55,13 +55,12 @@ public static class AdminIncidentEndpoints
 
             var totalCount = await incidents.CountDocumentsAsync(filter);
 
-            return Results.Ok(new
-            {
-                incidents = results.Select(MapIncident),
-                total_count = totalCount,
-                limit = take,
-                skip = offset,
-            });
+            return Results.Ok(new IncidentListResponse(
+                Incidents: results.Select(MapIncident),
+                TotalCount: totalCount,
+                Limit: take,
+                Skip: offset
+            ));
         }).RequireAuthorization();
 
         // GET /api/v1/admin/incidents/{id}
@@ -71,7 +70,7 @@ public static class AdminIncidentEndpoints
             IMongoDatabase database) =>
         {
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_incident_id" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_incident_id"));
 
             var incidents = database.GetCollection<BsonDocument>("rme_incidents");
             var incident = await incidents
@@ -79,7 +78,7 @@ public static class AdminIncidentEndpoints
                 .FirstOrDefaultAsync();
 
             if (incident is null)
-                return Results.NotFound(new { error = "incident_not_found" });
+                return Results.NotFound(new AdminErrorResponse("incident_not_found"));
 
             return Results.Ok(MapIncident(incident));
         }).RequireAuthorization();
@@ -99,7 +98,7 @@ public static class AdminIncidentEndpoints
             if (result is not null) return result;
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_incident_id" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_incident_id"));
 
             var incidents = database.GetCollection<BsonDocument>("rme_incidents");
             var ct = context.RequestAborted;
@@ -109,17 +108,16 @@ public static class AdminIncidentEndpoints
                 .FirstOrDefaultAsync(ct);
 
             if (incident is null)
-                return Results.NotFound(new { error = "incident_not_found" });
+                return Results.NotFound(new AdminErrorResponse("incident_not_found"));
 
             var currentStatus = incident.GetValue("status", "").AsString;
             if (currentStatus != "open")
             {
-                return Results.BadRequest(new
-                {
-                    error = "invalid_status",
-                    message = $"Only open incidents can be acknowledged. Current status: {currentStatus}",
-                    current_status = currentStatus,
-                });
+                return Results.BadRequest(new InvalidStatusResponse(
+                    Error: "invalid_status",
+                    Message: $"Only open incidents can be acknowledged. Current status: {currentStatus}",
+                    CurrentStatus: currentStatus
+                ));
             }
 
             var now = DateTime.UtcNow;
@@ -149,19 +147,17 @@ public static class AdminIncidentEndpoints
 
             if (updateResult.MatchedCount == 0)
             {
-                return Results.BadRequest(new
-                {
-                    error = "concurrent_update",
-                    message = "Incident was already acknowledged or modified by another admin.",
-                });
+                return Results.BadRequest(new AdminErrorResponse(
+                    "concurrent_update",
+                    Message: "Incident was already acknowledged or modified by another admin."
+                ));
             }
 
-            return Results.Ok(new
-            {
-                incident_id = id,
-                status = "acknowledged",
-                message = "Incident acknowledged.",
-            });
+            return Results.Ok(new IncidentAcknowledgedResponse(
+                IncidentId: id,
+                Status: "acknowledged",
+                Message: "Incident acknowledged."
+            ));
         }).RequireAuthorization();
 
         // PUT /api/v1/admin/incidents/{id}/resolve
@@ -194,12 +190,12 @@ public static class AdminIncidentEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required" },
+                    new AdminErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
             if (!ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_incident_id" });
+                return Results.BadRequest(new AdminErrorResponse("invalid_incident_id"));
 
             var incidents = database.GetCollection<BsonDocument>("rme_incidents");
             var ct = context.RequestAborted;
@@ -209,17 +205,16 @@ public static class AdminIncidentEndpoints
                 .FirstOrDefaultAsync(ct);
 
             if (incident is null)
-                return Results.NotFound(new { error = "incident_not_found" });
+                return Results.NotFound(new AdminErrorResponse("incident_not_found"));
 
             var currentStatus = incident.GetValue("status", "").AsString;
             if (currentStatus is "resolved")
             {
-                return Results.BadRequest(new
-                {
-                    error = "already_resolved",
-                    message = "Incident is already resolved.",
-                    current_status = currentStatus,
-                });
+                return Results.BadRequest(new InvalidStatusResponse(
+                    Error: "already_resolved",
+                    Message: "Incident is already resolved.",
+                    CurrentStatus: currentStatus
+                ));
             }
 
             var incidentType = incident.GetValue("incident_type", BsonNull.Value)?.AsString;
@@ -311,18 +306,17 @@ public static class AdminIncidentEndpoints
                 },
                 cancellationToken: ct);
 
-            return Results.Ok(new
-            {
-                incident_id = id,
-                status = "resolved",
-                incident_type = incidentType,
-                position_id = positionId,
-                position_transitioned = restoredState is not null,
-                restored_state = restoredState,
-                message = restoredState is not null
+            return Results.Ok(new IncidentResolvedResponse(
+                IncidentId: id,
+                Status: "resolved",
+                IncidentType: incidentType,
+                PositionId: positionId,
+                PositionTransitioned: restoredState is not null,
+                RestoredState: restoredState,
+                Message: restoredState is not null
                     ? $"Incident resolved. Position restored to {restoredState}."
-                    : "Incident resolved.",
-            });
+                    : "Incident resolved."
+            ));
         }).RequireAuthorization();
 
         return app;
@@ -352,7 +346,7 @@ public static class AdminIncidentEndpoints
         if (!stepUpValid)
         {
             return Results.Json(
-                new { error = "step_up_required" },
+                new AdminErrorResponse("step_up_required"),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
 
@@ -367,22 +361,79 @@ public static class AdminIncidentEndpoints
     /// <summary>
     /// Maps a raw BSON incident document to a response-safe anonymous shape.
     /// </summary>
-    private static object MapIncident(BsonDocument doc)
+    private static IncidentResponse MapIncident(BsonDocument doc)
     {
         var id = doc.GetValue("_id", BsonNull.Value);
-        return new
-        {
-            id = id.IsBsonNull ? null : id.AsObjectId.ToString(),
-            position_id = doc.GetValue("position_id", BsonNull.Value)?.AsString,
-            user_id = doc.GetValue("user_id", BsonNull.Value)?.AsString,
-            incident_type = doc.GetValue("incident_type", BsonNull.Value)?.AsString,
-            severity = doc.GetValue("severity", BsonNull.Value)?.AsString,
-            status = doc.GetValue("status", BsonNull.Value)?.AsString ?? "unknown",
-            detail = doc.GetValue("detail", BsonNull.Value)?.AsBsonDocument?.ToDictionary(),
-            created_at = doc.GetValue("created_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            updated_at = doc.GetValue("updated_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            resolved_at = doc.GetValue("resolved_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            resolved_by = doc.GetValue("resolved_by", BsonNull.Value)?.AsString,
-        };
+        return new IncidentResponse(
+            Id: id.IsBsonNull ? null : id.AsObjectId.ToString(),
+            PositionId: doc.GetValue("position_id", BsonNull.Value)?.AsString,
+            UserId: doc.GetValue("user_id", BsonNull.Value)?.AsString,
+            IncidentType: doc.GetValue("incident_type", BsonNull.Value)?.AsString,
+            Severity: doc.GetValue("severity", BsonNull.Value)?.AsString,
+            Status: doc.GetValue("status", BsonNull.Value)?.AsString ?? "unknown",
+            Detail: doc.GetValue("detail", BsonNull.Value)?.AsBsonDocument?.ToDictionary(),
+            CreatedAt: doc.GetValue("created_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            UpdatedAt: doc.GetValue("updated_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            ResolvedAt: doc.GetValue("resolved_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            ResolvedBy: doc.GetValue("resolved_by", BsonNull.Value)?.AsString
+        );
     }
 }
+
+/// <summary>
+/// Maps a raw BSON incident document to a response-safe shape.
+/// </summary>
+public sealed record IncidentResponse(
+    string? Id,
+    string? PositionId,
+    string? UserId,
+    string? IncidentType,
+    string? Severity,
+    string Status,
+    object? Detail,
+    DateTime? CreatedAt,
+    DateTime? UpdatedAt,
+    DateTime? ResolvedAt,
+    string? ResolvedBy
+);
+
+/// <summary>
+/// Response shape for the GET /incidents endpoint.
+/// </summary>
+public sealed record IncidentListResponse(
+    IEnumerable<IncidentResponse> Incidents,
+    long TotalCount,
+    int Limit,
+    int Skip
+);
+
+/// <summary>
+/// Response shape for acknowledging an incident.
+/// </summary>
+public sealed record IncidentAcknowledgedResponse(
+    string IncidentId,
+    string Status,
+    string Message
+);
+
+/// <summary>
+/// Response shape for resolving an incident.
+/// </summary>
+public sealed record IncidentResolvedResponse(
+    string IncidentId,
+    string Status,
+    string? IncidentType,
+    string? PositionId,
+    bool PositionTransitioned,
+    string? RestoredState,
+    string Message
+);
+
+/// <summary>
+/// Error response for invalid status transitions.
+/// </summary>
+public sealed record InvalidStatusResponse(
+    string Error,
+    string Message,
+    string CurrentStatus
+);

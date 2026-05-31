@@ -51,10 +51,7 @@ public static class FyersEndpoints
             FyersOAuthStates[state] = new FyersOAuthState(userId, DateTime.UtcNow);
             var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase, state);
 
-            return Results.Ok(new
-            {
-                auth_url = authUrl
-            });
+            return Results.Ok(new FyersAuthInitResponse(authUrl));
         }).RequireAuthorization();
 
         // GET /api/v1/fyers/auth/callback
@@ -176,18 +173,15 @@ public static class FyersEndpoints
 
             var status = await fyersAuth.GetTokenStatusAsync(userId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                has_token = status.HasToken,
-                status = status.Status,
-                fyers_user_id = status.FyersUserId,
-                expires_at = status.ExpiresAt?.ToString("o"),
-                is_expired = status.IsExpired,
-                is_admin = user.Role == UserRole.Admin,
-                // REQ-SESSION-009: admin sees a non-blocking warning when dirty.
-                // The frontend uses this to show a banner instead of a hard lock.
-                is_admin_dirty = user.Role == UserRole.Admin && status.Status == "dirty"
-            });
+            return Results.Ok(new FyersStatusResponse(
+                HasToken: status.HasToken,
+                Status: status.Status,
+                FyersUserId: status.FyersUserId,
+                ExpiresAt: status.ExpiresAt?.ToString("o"),
+                IsExpired: status.IsExpired,
+                IsAdmin: user.Role == UserRole.Admin,
+                IsAdminDirty: user.Role == UserRole.Admin && status.Status == "dirty"
+            ));
         }).RequireAuthorization();
 
         // POST /api/v1/fyers/reauth
@@ -215,10 +209,7 @@ public static class FyersEndpoints
             FyersOAuthStates[state] = new FyersOAuthState(userId, DateTime.UtcNow);
             var authUrl = fyersAuth.BuildAuthInitUrl(userId, redirectBase, state);
 
-            return Results.Ok(new
-            {
-                auth_url = authUrl
-            });
+            return Results.Ok(new FyersAuthInitResponse(authUrl));
         }).RequireAuthorization();
 
         // GET /api/v1/fyers/token
@@ -240,18 +231,10 @@ public static class FyersEndpoints
 
             if (token is null)
             {
-                return Results.Ok(new
-                {
-                    has_token = false,
-                    access_token = (string?)null
-                });
+                return Results.Ok(new FyersTokenResponse(HasToken: false, AccessToken: null));
             }
 
-            return Results.Ok(new
-            {
-                has_token = true,
-                access_token = token
-            });
+            return Results.Ok(new FyersTokenResponse(HasToken: true, AccessToken: token));
         }).RequireAuthorization();
 
         // GET /api/v1/fyers/quotes?symbols=NSE:SBIN-EQ,NSE:RELIANCE-EQ
@@ -273,22 +256,18 @@ public static class FyersEndpoints
             var symbols = context.Request.Query["symbols"].ToString();
             if (string.IsNullOrWhiteSpace(symbols))
             {
-                return Results.BadRequest(new
-                {
-                    error = "symbols_required",
-                    message = "The 'symbols' query parameter is required."
-                });
+                return Results.BadRequest(new FyersErrorResponse(
+                    Error: "symbols_required",
+                    Message: "The 'symbols' query parameter is required."));
             }
 
             var token = await fyersAuth.GetAccessTokenAsync(userId, context.RequestAborted);
             if (token is null)
             {
-                return Results.Ok(new
-                {
-                    s = "error",
-                    code = 401,
-                    message = "No active FYERS token available."
-                });
+                return Results.Ok(new FyersQuotesErrorResponse(
+                    S: "error",
+                    Code: 401,
+                    Message: "No active FYERS token available."));
             }
 
             var appId = configuration["Fyers:AppId"]
@@ -310,12 +289,10 @@ public static class FyersEndpoints
             }
             catch (HttpRequestException ex)
             {
-                return Results.Ok(new
-                {
-                    s = "error",
-                    code = 503,
-                    message = $"FYERS quotes API unreachable: {ex.Message}"
-                });
+                return Results.Ok(new FyersQuotesErrorResponse(
+                    S: "error",
+                    Code: 503,
+                    Message: $"FYERS quotes API unreachable: {ex.Message}"));
             }
         }).RequireAuthorization();
 
@@ -329,3 +306,30 @@ public static class FyersEndpoints
         return authCode[..4] + "..." + authCode[^4..];
     }
 }
+
+// ── Response record types ──────────────────────────────────────────────
+// PascalCase properties are serialized to snake_case by the global
+// JsonNamingPolicy.SnakeCaseLower (configured in Program.cs).
+
+/// <summary>Response returned by POST /auth/init and POST /reauth.</summary>
+public sealed record FyersAuthInitResponse(string AuthUrl);
+
+/// <summary>Response returned by GET /status.</summary>
+public sealed record FyersStatusResponse(
+    bool HasToken,
+    string Status,
+    string? FyersUserId,
+    string? ExpiresAt,
+    bool IsExpired,
+    bool IsAdmin,
+    bool IsAdminDirty
+);
+
+/// <summary>Response returned by GET /token.</summary>
+public sealed record FyersTokenResponse(bool HasToken, string? AccessToken);
+
+/// <summary>Generic error response with optional message.</summary>
+public sealed record FyersErrorResponse(string Error, string? Message = null);
+
+/// <summary>Error-shaped response returned by GET /quotes (mimics FYERS API error envelope).</summary>
+public sealed record FyersQuotesErrorResponse(string S, int Code, string Message);

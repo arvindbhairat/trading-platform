@@ -90,11 +90,7 @@ public static class NotificationEndpoints
             var totalUnread = await repo.CountUnreadByUserAsync(user.Id, context.RequestAborted);
             var criticalUnread = await repo.CountUnreadCriticalByUserAsync(user.Id, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                total_unread = totalUnread,
-                critical_unread = criticalUnread,
-            });
+            return Results.Ok(new UnreadCountResponse(totalUnread, criticalUnread));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── POST /api/v1/notifications/{id}/read ───────────────────────────
@@ -113,10 +109,10 @@ public static class NotificationEndpoints
                 return Results.Unauthorized();
 
             if (!ObjectId.TryParse(id, out var oid))
-                return Results.BadRequest(new { error = "Invalid notification ID." });
+                return Results.BadRequest(new NotificationErrorResponse("Invalid notification ID."));
 
             await repo.MarkAsReadAsync(oid, context.RequestAborted);
-            return Results.Ok(new { status = "read" });
+            return Results.Ok(new MarkReadResponse("read"));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── POST /api/v1/notifications/mark-all-read ───────────────────────
@@ -134,7 +130,7 @@ public static class NotificationEndpoints
                 return Results.Unauthorized();
 
             var count = await repo.MarkAllAsReadAsync(user.Id, context.RequestAborted);
-            return Results.Ok(new { status = "all_read", count });
+            return Results.Ok(new MarkAllReadResponse("all_read", count));
         }).RequireAuthorization().WithTags(Tag);
 
         // ── GET /api/v1/notifications/types ────────────────────────────────
@@ -206,3 +202,14 @@ public sealed record NotificationTypeResponse(
     string Label,
     bool IsCritical
 );
+
+public sealed record UnreadCountResponse(
+    long TotalUnread,
+    long CriticalUnread
+);
+
+public sealed record MarkReadResponse(string Status);
+
+public sealed record MarkAllReadResponse(string Status, long Count);
+
+public sealed record NotificationErrorResponse(string Error);

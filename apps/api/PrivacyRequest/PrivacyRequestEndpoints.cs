@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
@@ -27,10 +28,8 @@ public static class PrivacyRequestEndpoints
 
             var tickets = await repo.ListAsync(context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                tickets = tickets.Select(MapToEntry).ToList()
-            });
+            return Results.Ok(new TicketListResponse(
+                tickets.Select(MapToEntry).ToList()));
         }).RequireAuthorization();
 
         // ── POST /api/v1/admin/privacy/requests — create a DSAR ticket (email intake) ──
@@ -78,7 +77,7 @@ public static class PrivacyRequestEndpoints
                 cancellationToken: context.RequestAborted);
 
             return Results.Created($"/api/v1/admin/privacy/requests/{ticketId}",
-                new { ticket_id = ticketId });
+                new CreateTicketResponse(ticketId));
         }).RequireAuthorization();
 
         // ── GET /api/v1/admin/privacy/requests/{ticketId} — get ticket details ──
@@ -93,7 +92,7 @@ public static class PrivacyRequestEndpoints
 
             var ticket = await repo.FindByTicketIdAsync(ticketId, context.RequestAborted);
             if (ticket is null)
-                return Results.NotFound(new { error = "ticket_not_found" });
+                return Results.NotFound(new ErrorResponse("ticket_not_found"));
 
             return Results.Ok(MapToDetail(ticket));
         }).RequireAuthorization();
@@ -114,11 +113,9 @@ public static class PrivacyRequestEndpoints
             var now = DateTime.UtcNow;
             var ok = await repo.AcknowledgeAsync(ticketId, now, context.RequestAborted);
             if (!ok)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "ticket_not_open",
-                    message = "Only tickets in 'open' status can be acknowledged."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "ticket_not_open",
+                    "Only tickets in 'open' status can be acknowledged."));
 
             await auditRepo.RecordAsync(
                 userId,
@@ -130,7 +127,7 @@ public static class PrivacyRequestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { acknowledged = true, acknowledged_at = now.ToString("o") });
+            return Results.Ok(new AcknowledgeResponse(true, now.ToString("o")));
         }).RequireAuthorization();
 
         // ── POST /api/v1/admin/privacy/requests/{ticketId}/process-access ──────
@@ -148,14 +145,12 @@ public static class PrivacyRequestEndpoints
 
             var ticket = await repo.FindByTicketIdAsync(ticketId, context.RequestAborted);
             if (ticket is null)
-                return Results.NotFound(new { error = "ticket_not_found" });
+                return Results.NotFound(new ErrorResponse("ticket_not_found"));
 
             if (ticket.Type != RequestType.Access)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "wrong_type",
-                    message = "This action is only valid for access-type requests."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "wrong_type",
+                    "This action is only valid for access-type requests."));
 
             // Mark as in_progress.
             await repo.UpdateStatusAsync(ticketId, RequestStatus.InProgress, context.RequestAborted);
@@ -201,14 +196,12 @@ public static class PrivacyRequestEndpoints
 
             var ticket = await repo.FindByTicketIdAsync(ticketId, context.RequestAborted);
             if (ticket is null)
-                return Results.NotFound(new { error = "ticket_not_found" });
+                return Results.NotFound(new ErrorResponse("ticket_not_found"));
 
             if (ticket.Type != RequestType.Correction)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "wrong_type",
-                    message = "This action is only valid for correction-type requests."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "wrong_type",
+                    "This action is only valid for correction-type requests."));
 
             // Find the user.
             UserDocument? user = null;
@@ -218,11 +211,9 @@ public static class PrivacyRequestEndpoints
                 user = await userRepo.FindByEmailAsync(ticket.RequesterEmail, context.RequestAborted);
 
             if (user is null)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "user_not_found",
-                    message = "No platform account found for this requester."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "user_not_found",
+                    "No platform account found for this requester."));
 
             var now = DateTime.UtcNow;
             var updatedFields = new List<string>();
@@ -250,14 +241,11 @@ public static class PrivacyRequestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                processed = true,
-                fields_updated = updatedFields,
-                message = updatedFields.Count > 0
-                    ? $"Corrected {string.Join(", ", updatedFields)}."
-                    : "No changes were needed.",
-            });
+            var message = updatedFields.Count > 0
+                ? $"Corrected {string.Join(", ", updatedFields)}."
+                : "No changes were needed.";
+            return Results.Ok(new CorrectionProcessedResponse(
+                true, updatedFields, message));
         }).RequireAuthorization();
 
         // ── POST /api/v1/admin/privacy/requests/{ticketId}/process-erasure ─────
@@ -276,14 +264,12 @@ public static class PrivacyRequestEndpoints
 
             var ticket = await repo.FindByTicketIdAsync(ticketId, context.RequestAborted);
             if (ticket is null)
-                return Results.NotFound(new { error = "ticket_not_found" });
+                return Results.NotFound(new ErrorResponse("ticket_not_found"));
 
             if (ticket.Type != RequestType.Erasure)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "wrong_type",
-                    message = "This action is only valid for erasure-type requests."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "wrong_type",
+                    "This action is only valid for erasure-type requests."));
 
             // Find the user by user ID or email.
             UserDocument? user = null;
@@ -293,11 +279,9 @@ public static class PrivacyRequestEndpoints
                 user = await userRepo.FindByEmailAsync(ticket.RequesterEmail, context.RequestAborted);
 
             if (user is null)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "user_not_found",
-                    message = "No platform account found for this requester."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "user_not_found",
+                    "No platform account found for this requester."));
 
             var now = DateTime.UtcNow;
 
@@ -323,12 +307,9 @@ public static class PrivacyRequestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                erased = true,
-                target_user_id = user.UserId,
-                message = "Personal identifiers redacted. Audit and trade records preserved.",
-            });
+            return Results.Ok(new ErasureResponse(
+                true, user.UserId,
+                "Personal identifiers redacted. Audit and trade records preserved."));
         }).RequireAuthorization();
 
         // ── POST /api/v1/admin/privacy/requests/{ticketId}/complete ────────────
@@ -347,16 +328,14 @@ public static class PrivacyRequestEndpoints
 
             var ticket = await repo.FindByTicketIdAsync(ticketId, context.RequestAborted);
             if (ticket is null)
-                return Results.NotFound(new { error = "ticket_not_found" });
+                return Results.NotFound(new ErrorResponse("ticket_not_found"));
 
             var now = DateTime.UtcNow;
             var ok = await repo.CompleteAsync(ticketId, request.ResolutionNotes, now, context.RequestAborted);
             if (!ok)
-                return Results.UnprocessableEntity(new
-                {
-                    error = "cannot_complete",
-                    message = "Could not complete the ticket. It may already be completed."
-                });
+                return Results.UnprocessableEntity(new ErrorResponse(
+                    "cannot_complete",
+                    "Could not complete the ticket. It may already be completed."));
 
             await auditRepo.RecordAsync(
                 userId,
@@ -369,7 +348,7 @@ public static class PrivacyRequestEndpoints
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { completed = true, completed_at = now.ToString("o") });
+            return Results.Ok(new CompleteResponse(true, now.ToString("o")));
         }).RequireAuthorization();
 
         return app;
@@ -423,58 +402,46 @@ public static class PrivacyRequestEndpoints
         );
     }
 
-    private static object BuildDataExport(
+    private static DataExportResponse BuildDataExport(
         PrivacyRequestDocument ticket, UserDocument? user, DateTime exportedAt)
     {
         if (user is null)
         {
-            return new
-            {
-                exported_at = exportedAt.ToString("o"),
-                ticket_id = ticket.TicketId,
-                data = new
-                {
-                    message = "No platform account found for this requester.",
-                    requester_email = ticket.RequesterEmail,
-                },
-                disclaimer = "This export has been generated in response to your data access request " +
-                             "under the DPDP Act 2023. It contains the personal data held by Signal Stack."
-            };
+            return new DataExportResponse(
+                exportedAt.ToString("o"),
+                ticket.TicketId,
+                new DataExportEmptyData(
+                    "No platform account found for this requester.",
+                    ticket.RequesterEmail),
+                "This export has been generated in response to your data access request " +
+                "under the DPDP Act 2023. It contains the personal data held by Signal Stack."
+            );
         }
 
-        return new
-        {
-            exported_at = exportedAt.ToString("o"),
-            ticket_id = ticket.TicketId,
-            data = new
-            {
-                profile = new
-                {
-                    user_id = user.UserId,
-                    email = user.Email,
-                    display_name = user.DisplayName,
-                    provider = user.Provider,
-                    role = user.Role,
-                    linked_identities = user.LinkedIdentities?.Select(li => new
-                    {
-                        provider = li.Provider,
-                        email = li.Email,
-                        linked_at = li.LinkedAt.ToString("o"),
-                    }),
-                    created_at = user.CreatedAt.ToString("o"),
-                },
-                consent_history = new
-                {
-                    accepted_tos_version = user.AcceptedTosVersion,
-                    accepted_privacy_version = user.AcceptedPrivacyVersion,
-                    accepted_tester_acknowledgement_version = user.AcceptedTesterAcknowledgementVersion,
-                    accepted_minor_declaration = user.AcceptedMinorDeclaration,
-                    legal_accepted_at = user.LegalAcceptedAt?.ToString("o"),
-                },
-            },
-            disclaimer = "This export has been generated in response to your data access request " +
-                         "under the DPDP Act 2023. It contains the personal data held by Signal Stack."
-        };
+        return new DataExportResponse(
+            exportedAt.ToString("o"),
+            ticket.TicketId,
+            new DataExportUserData(
+                new DataExportProfile(
+                    user.UserId,
+                    user.Email,
+                    user.DisplayName,
+                    user.Provider,
+                    user.Role,
+                    user.LinkedIdentities?.Select(li => new DataExportLinkedIdentity(
+                        li.Provider,
+                        li.Email,
+                        li.LinkedAt.ToString("o"))),
+                    user.CreatedAt.ToString("o")),
+                new DataExportConsentHistory(
+                    user.AcceptedTosVersion,
+                    user.AcceptedPrivacyVersion,
+                    user.AcceptedTesterAcknowledgementVersion,
+                    user.AcceptedMinorDeclaration,
+                    user.LegalAcceptedAt?.ToString("o"))),
+            "This export has been generated in response to your data access request " +
+            "under the DPDP Act 2023. It contains the personal data held by Signal Stack."
+        );
     }
 }
 
@@ -518,4 +485,71 @@ public sealed record PrivacyRequestDetail(
     string? ResolutionNotes,
     string CreatedAt,
     string UpdatedAt
+);
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record TicketListResponse(
+    IReadOnlyList<PrivacyRequestEntry> Tickets
+);
+
+public sealed record CreateTicketResponse(string TicketId);
+
+public sealed record ErrorResponse(
+    string Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? Message = null
+);
+
+public sealed record AcknowledgeResponse(bool Acknowledged, string AcknowledgedAt);
+
+public sealed record CorrectionProcessedResponse(
+    bool Processed,
+    IReadOnlyList<string> FieldsUpdated,
+    string Message
+);
+
+public sealed record ErasureResponse(bool Erased, string TargetUserId, string Message);
+
+public sealed record CompleteResponse(bool Completed, string CompletedAt);
+
+public sealed record DataExportResponse(
+    string ExportedAt,
+    string TicketId,
+    object Data,
+    string Disclaimer
+);
+
+public sealed record DataExportProfile(
+    string UserId,
+    string Email,
+    string DisplayName,
+    string Provider,
+    string Role,
+    IEnumerable<DataExportLinkedIdentity>? LinkedIdentities,
+    string CreatedAt
+);
+
+public sealed record DataExportLinkedIdentity(
+    string Provider,
+    string Email,
+    string LinkedAt
+);
+
+public sealed record DataExportConsentHistory(
+    string? AcceptedTosVersion,
+    string? AcceptedPrivacyVersion,
+    string? AcceptedTesterAcknowledgementVersion,
+    bool AcceptedMinorDeclaration,
+    string? LegalAcceptedAt
+);
+
+public sealed record DataExportUserData(
+    DataExportProfile Profile,
+    DataExportConsentHistory ConsentHistory
+);
+
+public sealed record DataExportEmptyData(
+    string Message,
+    string RequesterEmail
 );

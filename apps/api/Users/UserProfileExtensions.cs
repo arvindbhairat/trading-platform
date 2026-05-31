@@ -36,7 +36,7 @@ public static class UserProfileExtensions
                 .FirstOrDefaultAsync(context.RequestAborted);
 
             if (user is null)
-                return Results.NotFound(new { error = "User not found." });
+                return Results.NotFound(new UserProfileErrorResponse("User not found."));
 
             // Read FYERS total from portfolio_snapshots
             var snapshots = database.GetCollection<BsonDocument>("portfolio_snapshots");
@@ -132,19 +132,18 @@ public static class UserProfileExtensions
                 hasDivergence = gapPct > divergenceThresholdPct;
             }
 
-            return Results.Ok(new
-            {
-                equity_base_override = user.EquityBaseOverride,
-                equity_base_override_updated_at = user.EquityBaseOverrideUpdatedAt,
-                fyers_total_account_value = fyersTotal,
-                platform_visible_equity = platformVisible,
-                external_holdings_excluded = externalHoldings,
-                platform_visible_override_max = maxOverride,
-                override_is_active = user.EquityBaseOverride.HasValue,
-                has_divergence = hasDivergence,
-                divergence_gap_pct = divergenceGapPct,
-                external_divergence_warn_pct = divergenceThresholdPct,
-            });
+            return Results.Ok(new EquityBaseResponse(
+                EquityBaseOverride: user.EquityBaseOverride,
+                EquityBaseOverrideUpdatedAt: user.EquityBaseOverrideUpdatedAt,
+                FyersTotalAccountValue: fyersTotal,
+                PlatformVisibleEquity: platformVisible,
+                ExternalHoldingsExcluded: externalHoldings,
+                PlatformVisibleOverrideMax: maxOverride,
+                OverrideIsActive: user.EquityBaseOverride.HasValue,
+                HasDivergence: hasDivergence,
+                DivergenceGapPct: divergenceGapPct,
+                ExternalDivergenceWarnPct: divergenceThresholdPct
+            ));
         });
 
         // ── PUT /api/v1/user/profile/equity/override ────────────────────────
@@ -162,10 +161,8 @@ public static class UserProfileExtensions
                 return Results.Unauthorized();
 
             if (request.OverrideValue <= 0)
-                return Results.BadRequest(new
-                {
-                    error = "Override value must be greater than zero."
-                });
+                return Results.BadRequest(new UserProfileErrorResponse(
+                    "Override value must be greater than zero."));
 
             // Read FYERS total from portfolio_snapshots for cap calculation
             var snapshots = database.GetCollection<BsonDocument>("portfolio_snapshots");
@@ -187,11 +184,9 @@ public static class UserProfileExtensions
 
             if (fyersTotal <= 0)
             {
-                return Results.BadRequest(new
-                {
-                    error = "Cannot set an equity override until a portfolio snapshot " +
-                            "is available. Please wait for your first account sync to complete."
-                });
+                return Results.BadRequest(new UserProfileErrorResponse(
+                    "Cannot set an equity override until a portfolio snapshot " +
+                    "is available. Please wait for your first account sync to complete."));
             }
 
             // S-10 cap: min(FYERS_total × 1.5, FYERS_total + ₹10,00,000)
@@ -201,13 +196,11 @@ public static class UserProfileExtensions
 
             if (request.OverrideValue > maxAllowed)
             {
-                return Results.BadRequest(new
-                {
-                    error = $"Override value ₹{request.OverrideValue:N0} exceeds the maximum " +
-                            $"permitted value of ₹{maxAllowed:N0}. " +
-                            $"Your current FYERS total account value is ₹{fyersTotal:N0}. " +
-                            $"The cap is min(FYERS_total × 1.5, FYERS_total + ₹10,00,000)."
-                });
+                return Results.BadRequest(new UserProfileErrorResponse(
+                    $"Override value ₹{request.OverrideValue:N0} exceeds the maximum " +
+                    $"permitted value of ₹{maxAllowed:N0}. " +
+                    $"Your current FYERS total account value is ₹{fyersTotal:N0}. " +
+                    $"The cap is min(FYERS_total × 1.5, FYERS_total + ₹10,00,000)."));
             }
 
             await userRepo.SetEquityOverrideAsync(userId, request.OverrideValue, context.RequestAborted);
@@ -225,12 +218,11 @@ public static class UserProfileExtensions
                 },
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                message = $"Equity override set to ₹{request.OverrideValue:N0}.",
-                equity_base_override = request.OverrideValue,
-                equity_base_override_max = maxAllowed,
-            });
+            return Results.Ok(new OverrideSetResponse(
+                Message: $"Equity override set to ₹{request.OverrideValue:N0}.",
+                EquityBaseOverride: request.OverrideValue,
+                EquityBaseOverrideMax: maxAllowed
+            ));
         });
 
         // ── DELETE /api/v1/user/profile/equity/override ─────────────────────
@@ -254,7 +246,7 @@ public static class UserProfileExtensions
                 DateTime.UtcNow,
                 cancellationToken: context.RequestAborted);
 
-            return Results.Ok(new { message = "Equity override cleared. Using auto-derived equity base." });
+            return Results.Ok(new MessageResponse("Equity override cleared. Using auto-derived equity base."));
         });
 
         return app;
@@ -268,3 +260,28 @@ public sealed record SetOverrideRequest
 {
     public decimal OverrideValue { get; init; }
 }
+
+// ── Response DTOs ────────────────────────────────────────────────────────
+
+public sealed record UserProfileErrorResponse(string Error);
+
+public sealed record EquityBaseResponse(
+    decimal? EquityBaseOverride,
+    DateTime? EquityBaseOverrideUpdatedAt,
+    decimal? FyersTotalAccountValue,
+    decimal? PlatformVisibleEquity,
+    decimal? ExternalHoldingsExcluded,
+    decimal? PlatformVisibleOverrideMax,
+    bool OverrideIsActive,
+    bool HasDivergence,
+    decimal? DivergenceGapPct,
+    decimal ExternalDivergenceWarnPct
+);
+
+public sealed record OverrideSetResponse(
+    string Message,
+    decimal EquityBaseOverride,
+    decimal EquityBaseOverrideMax
+);
+
+public sealed record MessageResponse(string Message);

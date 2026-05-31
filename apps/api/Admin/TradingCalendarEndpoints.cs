@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -33,7 +34,7 @@ public static class TradingCalendarEndpoints
             CancellationToken ct) =>
         {
             var entries = await repo.GetAllAsync(from, to, sessionType, ct);
-            return Results.Ok(new { entries });
+            return Results.Ok(new CalendarEntriesResponse(entries));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -45,10 +46,10 @@ public static class TradingCalendarEndpoints
             CancellationToken ct) =>
         {
             if (!DateOnly.TryParse(date, out _))
-                return Results.BadRequest(new { error = "invalid_date_format" });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_date_format"));
 
             var entries = await repo.FindByDateAsync(date, ct);
-            return Results.Ok(new { entries });
+            return Results.Ok(new CalendarEntriesResponse(entries));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -64,43 +65,43 @@ public static class TradingCalendarEndpoints
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.SessionDate))
-                return Results.BadRequest(new { error = "session_date_required" });
+                return Results.BadRequest(new CalendarErrorResponse("session_date_required"));
 
             if (!DateOnly.TryParse(request.SessionDate, out _))
-                return Results.BadRequest(new { error = "invalid_session_date_format" });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_session_date_format"));
 
             if (string.IsNullOrWhiteSpace(request.SessionType))
-                return Results.BadRequest(new { error = "session_type_required" });
+                return Results.BadRequest(new CalendarErrorResponse("session_type_required"));
 
             var validTypes = new[] { "normal", "special", "muhurat", "non_trading_day" };
             if (!validTypes.Contains(request.SessionType))
-                return Results.BadRequest(new { error = "invalid_session_type", validTypes });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_session_type", ValidTypes: validTypes));
 
             // REQ-CALENDAR-002: validate based on type
             if (request.SessionType == "non_trading_day")
             {
                 // Non-trading-day markers must NOT have session times; only optional holiday name.
                 if (request.SessionStartTime is not null || request.SessionEndTime is not null)
-                    return Results.BadRequest(new { error = "non_trading_day_must_not_have_session_times" });
+                    return Results.BadRequest(new CalendarErrorResponse("non_trading_day_must_not_have_session_times"));
             }
             else
             {
                 // Session records require start and end times.
                 if (string.IsNullOrWhiteSpace(request.SessionStartTime))
-                    return Results.BadRequest(new { error = "session_start_time_required" });
+                    return Results.BadRequest(new CalendarErrorResponse("session_start_time_required"));
                 if (string.IsNullOrWhiteSpace(request.SessionEndTime))
-                    return Results.BadRequest(new { error = "session_end_time_required" });
+                    return Results.BadRequest(new CalendarErrorResponse("session_end_time_required"));
 
                 if (!TimeOnly.TryParse(request.SessionStartTime, out _))
-                    return Results.BadRequest(new { error = "invalid_session_start_time_format" });
+                    return Results.BadRequest(new CalendarErrorResponse("invalid_session_start_time_format"));
                 if (!TimeOnly.TryParse(request.SessionEndTime, out _))
-                    return Results.BadRequest(new { error = "invalid_session_end_time_format" });
+                    return Results.BadRequest(new CalendarErrorResponse("invalid_session_end_time_format"));
             }
 
             // Check for duplicate: same date + same type
             var existing = await repo.FindByDateAndTypeAsync(request.SessionDate, request.SessionType, ct);
             if (existing is not null)
-                return Results.Conflict(new { error = "duplicate_calendar_entry", sessionDate = request.SessionDate, sessionType = request.SessionType });
+                return Results.Conflict(new CalendarErrorResponse("duplicate_calendar_entry", SessionDate: request.SessionDate, SessionType: request.SessionType));
 
             // Check: for non-session types, only one entry per date is allowed
             // (since the concept of "two different non-trading-day markers on same date" doesn't add value)
@@ -108,7 +109,7 @@ public static class TradingCalendarEndpoints
             {
                 var dateEntries = await repo.FindByDateAsync(request.SessionDate, ct);
                 if (dateEntries.Count > 0)
-                    return Results.Conflict(new { error = "date_already_has_entry", sessionDate = request.SessionDate });
+                    return Results.Conflict(new CalendarErrorResponse("date_already_has_entry", SessionDate: request.SessionDate));
             }
 
             var now = DateTime.UtcNow;
@@ -143,11 +144,11 @@ public static class TradingCalendarEndpoints
             CancellationToken ct) =>
         {
             if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id" });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_id"));
 
             var validTypes = new[] { "normal", "special", "muhurat", "non_trading_day" };
             if (request.SessionType is not null && !validTypes.Contains(request.SessionType))
-                return Results.BadRequest(new { error = "invalid_session_type", validTypes });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_session_type", ValidTypes: validTypes));
 
             await repo.UpdateAsync(
                 objectId,
@@ -160,7 +161,7 @@ public static class TradingCalendarEndpoints
             // REQ-STOP-003a: trigger Time Stop recompute after calendar edit.
             recomputeService.Trigger();
 
-            return Results.Ok(new { status = "updated" });
+            return Results.Ok(new CalendarUpdateResponse("updated"));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -202,14 +203,13 @@ public static class TradingCalendarEndpoints
                 }
             }
 
-            return Results.Ok(new
-            {
-                unconfirmed_count = unconfirmedDates.Count,
-                earliest_unconfirmed_date = unconfirmedDates.FirstOrDefault(),
-                unconfirmed_dates = unconfirmedDates,
-                checked_from = fromDate,
-                checked_to = toDate
-            });
+            return Results.Ok(new CalendarCoverageResponse(
+                UnconfirmedCount: unconfirmedDates.Count,
+                EarliestUnconfirmedDate: unconfirmedDates.FirstOrDefault(),
+                UnconfirmedDates: unconfirmedDates,
+                CheckedFrom: fromDate,
+                CheckedTo: toDate
+            ));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -223,14 +223,14 @@ public static class TradingCalendarEndpoints
             CancellationToken ct) =>
         {
             if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
-                return Results.BadRequest(new { error = "invalid_id" });
+                return Results.BadRequest(new CalendarErrorResponse("invalid_id"));
 
             await repo.DeleteAsync(objectId, ct);
 
             // REQ-STOP-003a: trigger Time Stop recompute after calendar edit.
             recomputeService.Trigger();
 
-            return Results.Ok(new { status = "deleted" });
+            return Results.Ok(new CalendarDeleteResponse("deleted"));
         })
         .RequireAuthorization()
         .WithTags(Tag);
@@ -273,3 +273,35 @@ public sealed record UpdateCalendarEntryRequest
     /// <summary>New holiday name. Null = no change.</summary>
     public string? HolidayName { get; init; }
 }
+
+/// <summary>Response for GET / and GET /{date} calendar endpoints.</summary>
+public sealed record CalendarEntriesResponse(IEnumerable<TradingCalendarDocument> Entries);
+
+/// <summary>Response for PUT calendar endpoint.</summary>
+public sealed record CalendarUpdateResponse(string Status);
+
+/// <summary>Response for GET /coverage calendar coverage check.</summary>
+public sealed record CalendarCoverageResponse(
+    int UnconfirmedCount,
+    string? EarliestUnconfirmedDate,
+    List<string> UnconfirmedDates,
+    string CheckedFrom,
+    string CheckedTo
+);
+
+/// <summary>Response for DELETE calendar endpoint.</summary>
+public sealed record CalendarDeleteResponse(string Status);
+
+/// <summary>Error response for calendar endpoints.
+/// Optional properties use JsonIgnore to maintain identical JSON output
+/// across different error shapes (simple errors, validation errors with
+/// ValidTypes, and conflict errors with SessionDate/SessionType).</summary>
+public sealed record CalendarErrorResponse(
+    string Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string[]? ValidTypes = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SessionDate = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SessionType = null
+);

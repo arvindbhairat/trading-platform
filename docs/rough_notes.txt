@@ -1,4 +1,18 @@
 
+Grafana - https://arvind.grafana.net
+Instance ID: 1673519
+OTLP URL: https://otlp-gateway-prod-ap-south-1.grafana.net/otlp
+Token: glc_eyJvIjoiMTc5NDg1NCIsIm4iOiJzdGFjay0xNjczNTE5LW90bHAtd3JpdGUtc2lnbmFsX3N0YWNrIiwiayI6Ilk3QjhDTHFaMzY4VTQ3UjloTzBmR1lYOCIsIm0iOnsiciI6InByb2QtYXAtc291dGgtMSJ9fQ==
+Scopes: metrics:write metrics:import logs:write traces:write alerts:write rules:write profiles:write
+1673519:glc_eyJvIjoiMTc5NDg1NCIsIm4iOiJzdGFjay0xNjczNTE5LW90bHAtd3JpdGUtc2lnbmFsX3N0YWNrIiwiayI6Ilk3QjhDTHFaMzY4VTQ3UjloTzBmR1lYOCIsIm0iOnsiciI6InByb2QtYXAtc291dGgtMSJ9fQ==
+MTY3MzUxOTpnbGNfZXlKdklqb2lNVGM1TkRnMU5DSXNJbTRpT2lKemRHRmpheTB4Tmpjek5URTVMVzkwYkhBdGQzSnBkR1V0YzJsbmJtRnNYM04wWVdOcklpd2lheUk2SWxrM1FqaERUSEZhTXpZNFZUUTNVamxvVHpCbVIxbFlPQ0lzSW0waU9uc2ljaUk2SW5CeWIyUXRZWEF0YzI5MWRHZ3RNU0o5ZlE9PQ==
+
+
+eu01xcd83ae386b02bfbb70153de0eed186fNRAL
+https://otlp.eu01.nr-data.net:443
+
+
+
 new relic
 url: https://otlp.eu01.nr-data.net
 ports: 443, 4317, 4318

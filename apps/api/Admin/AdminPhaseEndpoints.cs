@@ -38,10 +38,10 @@ public static class AdminPhaseEndpoints
                 return Results.Forbid();
 
             if (target is not ("B" or "C"))
-                return Results.BadRequest(new { error = "target must be 'B' or 'C'" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("target must be 'B' or 'C'"));
 
             var gates = await gateSvc.GetGatesAsync(target, context.RequestAborted);
-            return Results.Ok(new { target_phase = target, gates });
+            return Results.Ok(new PhaseGatesResponse(target, gates));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/phase/transition
@@ -68,14 +68,14 @@ public static class AdminPhaseEndpoints
             var body = await context.Request.ReadFromJsonAsync<PhaseTransitionRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("invalid_body"));
 
             if (string.IsNullOrWhiteSpace(body.TargetPhase) ||
                 body.TargetPhase is not ("B" or "C"))
-                return Results.BadRequest(new { error = "target_phase must be 'B' or 'C'" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("target_phase must be 'B' or 'C'"));
 
             if (string.IsNullOrWhiteSpace(body.Justification))
-                return Results.BadRequest(new { error = "justification_required" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("justification_required"));
 
             // REQ-SEC-011: step-up required for operations category.
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -84,7 +84,7 @@ public static class AdminPhaseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "operations" },
+                    new AdminStepUpRequiredResponse("step_up_required", "operations"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var currentPhase = await configRepo.GetCurrentPhaseAsync(context.RequestAborted);
@@ -95,17 +95,11 @@ public static class AdminPhaseEndpoints
 
             if (!result.Allowed)
             {
-                return Results.UnprocessableEntity(new
-                {
-                    error = "phase_transition_blocked",
-                    message = result.Message,
-                    failed_gates = result.FailedGates.Select(g => new
-                    {
-                        config_key = g.ConfigKey,
-                        label = g.Label,
-                        passed = g.Passed
-                    })
-                });
+                return Results.UnprocessableEntity(new PhaseTransitionBlockedResponse(
+                    "phase_transition_blocked",
+                    result.Message,
+                    result.FailedGates.Select(g => (object)new GateStatus(g.ConfigKey, g.Label, g.Passed))
+                ));
             }
 
             // Record audit event BEFORE mutation (REQ-CONFIG-005a pattern).
@@ -126,12 +120,7 @@ public static class AdminPhaseEndpoints
             await configRepo.UpdateAsync(
                 "operations.phase.current", body.TargetPhase, userId, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                success = true,
-                from_phase = currentPhase,
-                to_phase = body.TargetPhase
-            });
+            return Results.Ok(new PhaseTransitionResponse(true, currentPhase, body.TargetPhase));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/phase/sebi-opinion
@@ -155,14 +144,14 @@ public static class AdminPhaseEndpoints
             var body = await context.Request.ReadFromJsonAsync<SebiOpinionRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("invalid_body"));
 
             if (string.IsNullOrWhiteSpace(body.DocumentRef))
-                return Results.BadRequest(new { error = "document_ref_required" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("document_ref_required"));
             if (string.IsNullOrWhiteSpace(body.LawyerName))
-                return Results.BadRequest(new { error = "lawyer_name_required" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("lawyer_name_required"));
             if (string.IsNullOrWhiteSpace(body.LawyerSebiReg))
-                return Results.BadRequest(new { error = "lawyer_sebi_reg_required" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("lawyer_sebi_reg_required"));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -171,7 +160,7 @@ public static class AdminPhaseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             var receivedDate = body.ReceivedDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -180,13 +169,11 @@ public static class AdminPhaseEndpoints
                 userId, body.DocumentRef, body.LawyerName,
                 body.LawyerSebiReg, receivedDate, context.RequestAborted);
 
-            return Results.Ok(new
-            {
-                success = true,
-                document_ref = body.DocumentRef,
-                lawyer_name = body.LawyerName,
-                received_date = receivedDate.ToString("yyyy-MM-dd")
-            });
+            return Results.Ok(new SebiOpinionRecordedResponse(
+                true,
+                body.DocumentRef ?? "",
+                body.LawyerName ?? "",
+                receivedDate.ToString("yyyy-MM-dd")));
         }).RequireAuthorization();
 
         // PATCH /api/v1/admin/phase/gates/{configKey}
@@ -211,7 +198,7 @@ public static class AdminPhaseEndpoints
             var body = await context.Request.ReadFromJsonAsync<GateUpdateRequest>(
                 cancellationToken: context.RequestAborted);
             if (body is null)
-                return Results.BadRequest(new { error = "invalid_body" });
+                return Results.BadRequest(new AdminSimpleErrorResponse("invalid_body"));
 
             // REQ-SEC-011: step-up required (legal category).
             var jti = context.User.FindFirst("jti")?.Value ?? "";
@@ -220,13 +207,13 @@ public static class AdminPhaseEndpoints
                 && session.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
                 return Results.Json(
-                    new { error = "step_up_required", category = "legal" },
+                    new AdminStepUpRequiredResponse("step_up_required", "legal"),
                     statusCode: StatusCodes.Status401Unauthorized);
 
             await gateSvc.SetGateAsync(
                 userId, configKey, body.Passed, body.Justification, context.RequestAborted);
 
-            return Results.Ok(new { success = true, config_key = configKey, passed = body.Passed });
+            return Results.Ok(new GateUpdateSuccessResponse(true, configKey, body.Passed));
         }).RequireAuthorization();
 
         return app;
@@ -260,3 +247,18 @@ public sealed record SebiOpinionRequest(
 public sealed record GateUpdateRequest(
     bool Passed,
     string? Justification);
+
+public sealed record PhaseGatesResponse(string TargetPhase, object Gates);
+
+public sealed record GateStatus(string ConfigKey, string Label, bool Passed);
+
+public sealed record PhaseTransitionBlockedResponse(
+    string Error, string Message, IEnumerable<object> FailedGates);
+
+public sealed record PhaseTransitionResponse(bool Success, string FromPhase, string ToPhase);
+
+public sealed record SebiOpinionRecordedResponse(
+    bool Success, string DocumentRef, string LawyerName, string ReceivedDate);
+
+public sealed record GateUpdateSuccessResponse(bool Success, string ConfigKey, bool Passed);
+

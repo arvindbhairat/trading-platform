@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Audit;
@@ -85,12 +86,12 @@ public static class AdminPositionEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required" },
+                    new ErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
             if (!Guid.TryParse(positionId, out var posGuid))
-                return Results.BadRequest(new { error = "invalid_position_id" });
+                return Results.BadRequest(new ErrorResponse("invalid_position_id"));
 
             var positions = database.GetCollection<BsonDocument>("positions");
             var ct = context.RequestAborted;
@@ -101,17 +102,15 @@ public static class AdminPositionEndpoints
                 .FirstOrDefaultAsync(ct);
 
             if (current is null)
-                return Results.NotFound(new { error = "position_not_found" });
+                return Results.NotFound(new ErrorResponse("position_not_found"));
 
             var currentState = current.GetValue("state", "").AsString;
             if (currentState != StateSuspended)
             {
-                return Results.BadRequest(new
-                {
-                    error = "not_suspended",
-                    message = "Only suspended positions can be released.",
-                    current_state = currentState
-                });
+                return Results.BadRequest(new PositionStateErrorResponse(
+                    "not_suspended",
+                    "Only suspended positions can be released.",
+                    currentState));
             }
 
             var suspensionReason = current.GetValue("suspension_reason", BsonNull.Value)?.AsString;
@@ -122,14 +121,12 @@ public static class AdminPositionEndpoints
             // have their own resolution flows (REQ-PLC-002a rows 20, 22–25).
             if (suspensionSource is not null && suspensionSource != "ADMIN")
             {
-                return Results.BadRequest(new
-                {
-                    error = "non_admin_suspension",
-                    message = $"Position was suspended by '{suspensionSource}', not ADMIN. " +
-                              "Use the appropriate resolution flow for this suspension source.",
-                    suspension_source = suspensionSource,
-                    suspension_reason = suspensionReason
-                });
+                return Results.BadRequest(new NonAdminSuspensionErrorResponse(
+                    "non_admin_suspension",
+                    $"Position was suspended by '{suspensionSource}', not ADMIN. " +
+                    "Use the appropriate resolution flow for this suspension source.",
+                    suspensionSource,
+                    suspensionReason));
             }
 
             // Determine the restoration state.
@@ -170,13 +167,11 @@ public static class AdminPositionEndpoints
 
             await positions.UpdateOneAsync(filter, update, cancellationToken: ct);
 
-            return Results.Ok(new
-            {
-                position_id = positionId,
-                previous_state = currentState,
-                restored_state = restoreState,
-                message = $"Position released from ADMIN suspension. Restored to {restoreState}."
-            });
+            return Results.Ok(new PositionReleasedResponse(
+                positionId,
+                currentState,
+                restoreState,
+                $"Position released from ADMIN suspension. Restored to {restoreState}."));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/positions/{positionId}/force-close
@@ -232,12 +227,12 @@ public static class AdminPositionEndpoints
             if (!stepUpValid)
             {
                 return Results.Json(
-                    new { error = "step_up_required" },
+                    new ErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
             if (!Guid.TryParse(positionId, out var posGuid))
-                return Results.BadRequest(new { error = "invalid_position_id" });
+                return Results.BadRequest(new ErrorResponse("invalid_position_id"));
 
             var positions = database.GetCollection<BsonDocument>("positions");
             var incidents = database.GetCollection<BsonDocument>("rme_incidents");
@@ -249,17 +244,15 @@ public static class AdminPositionEndpoints
                 .FirstOrDefaultAsync(ct);
 
             if (current is null)
-                return Results.NotFound(new { error = "position_not_found" });
+                return Results.NotFound(new ErrorResponse("position_not_found"));
 
             var currentState = current.GetValue("state", "").AsString;
             if (currentState != StateSuspended)
             {
-                return Results.BadRequest(new
-                {
-                    error = "not_suspended",
-                    message = "Only suspended positions can be re-anchored.",
-                    current_state = currentState
-                });
+                return Results.BadRequest(new PositionStateErrorResponse(
+                    "not_suspended",
+                    "Only suspended positions can be re-anchored.",
+                    currentState));
             }
 
             // Verify there is an open rme_incidents record for a corporate action suspension.
@@ -272,13 +265,11 @@ public static class AdminPositionEndpoints
 
             if (caIncident is null)
             {
-                return Results.BadRequest(new
-                {
-                    error = "not_corporate_action_suspension",
-                    message = "Position is suspended but no open corporate_action_suspension " +
-                              "incident record exists. Use the standard release endpoint " +
-                              "for non-CA suspensions."
-                });
+                return Results.BadRequest(new ErrorResponse(
+                    "not_corporate_action_suspension",
+                    "Position is suspended but no open corporate_action_suspension " +
+                    "incident record exists. Use the standard release endpoint " +
+                    "for non-CA suspensions."));
             }
 
             var now = DateTime.UtcNow;
@@ -322,16 +313,14 @@ public static class AdminPositionEndpoints
 
             await incidents.UpdateOneAsync(incidentFilter, incidentUpdate, cancellationToken: ct);
 
-            return Results.Ok(new
-            {
-                position_id = positionId,
-                previous_state = currentState,
-                restored_state = restoreState,
-                quantity = body.Quantity,
-                entry_price = body.EntryPrice,
-                message = $"Position re-anchored and released from CA suspension. " +
-                          $"Restored to {restoreState} with qty={body.Quantity}, entryPrice={body.EntryPrice}."
-            });
+            return Results.Ok(new PositionReanchoredResponse(
+                positionId,
+                currentState,
+                restoreState,
+                body.Quantity,
+                body.EntryPrice,
+                $"Position re-anchored and released from CA suspension. " +
+                $"Restored to {restoreState} with qty={body.Quantity}, entryPrice={body.EntryPrice}."));
         }).RequireAuthorization();
 
         return app;
@@ -378,7 +367,7 @@ public static class AdminPositionEndpoints
         }
 
         if (!Guid.TryParse(positionId, out var posGuid))
-            return Results.BadRequest(new { error = "invalid_position_id" });
+            return Results.BadRequest(new ErrorResponse("invalid_position_id"));
 
         var positions = database.GetCollection<BsonDocument>("positions");
         var ct = context.RequestAborted;
@@ -389,7 +378,7 @@ public static class AdminPositionEndpoints
             .FirstOrDefaultAsync(ct);
 
         if (current is null)
-            return Results.NotFound(new { error = "position_not_found" });
+            return Results.NotFound(new ErrorResponse("position_not_found"));
 
         var currentState = current.GetValue("state", "").AsString;
 
@@ -399,13 +388,11 @@ public static class AdminPositionEndpoints
             // Can suspend from PendingEntry or Open.
             if (currentState != StatePendingEntry && currentState != StateOpen)
             {
-                return Results.BadRequest(new
-                {
-                    error = "invalid_transition",
-                    message = $"Cannot suspend position in state '{currentState}'. " +
-                              "Only PendingEntry and Open positions can be suspended.",
-                    current_state = currentState
-                });
+                return Results.BadRequest(new PositionStateErrorResponse(
+                    "invalid_transition",
+                    $"Cannot suspend position in state '{currentState}'. " +
+                    "Only PendingEntry and Open positions can be suspended.",
+                    currentState));
             }
         }
         else if (targetState == StateClosed)
@@ -413,13 +400,11 @@ public static class AdminPositionEndpoints
             // Can force-close from Open or Suspended.
             if (currentState != StateOpen && currentState != StateSuspended)
             {
-                return Results.BadRequest(new
-                {
-                    error = "invalid_transition",
-                    message = $"Cannot force-close position in state '{currentState}'. " +
-                              "Only Open and Suspended positions can be force-closed.",
-                    current_state = currentState
-                });
+                return Results.BadRequest(new PositionStateErrorResponse(
+                    "invalid_transition",
+                    $"Cannot force-close position in state '{currentState}'. " +
+                    "Only Open and Suspended positions can be force-closed.",
+                    currentState));
             }
         }
 
@@ -460,13 +445,56 @@ public static class AdminPositionEndpoints
 
         await positions.UpdateOneAsync(filter, update, cancellationToken: ct);
 
-        return Results.Ok(new
-        {
-            position_id = positionId,
-            previous_state = currentState,
-            new_state = targetState,
-            action = actionType,
-            reason_code = reasonCode,
-        });
+        return Results.Ok(new PositionStateChangeResponse(
+            positionId,
+            currentState,
+            targetState,
+            actionType,
+            reasonCode));
     }
 }
+
+// ── Response records ───────────────────────────────────────────────────────
+
+public sealed record ErrorResponse(
+    string Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? Message = null
+);
+
+public sealed record PositionStateErrorResponse(
+    string Error,
+    string Message,
+    string CurrentState
+);
+
+public sealed record NonAdminSuspensionErrorResponse(
+    string Error,
+    string Message,
+    string SuspensionSource,
+    string? SuspensionReason
+);
+
+public sealed record PositionReleasedResponse(
+    string PositionId,
+    string PreviousState,
+    string RestoredState,
+    string Message
+);
+
+public sealed record PositionReanchoredResponse(
+    string PositionId,
+    string PreviousState,
+    string RestoredState,
+    decimal Quantity,
+    decimal EntryPrice,
+    string Message
+);
+
+public sealed record PositionStateChangeResponse(
+    string PositionId,
+    string PreviousState,
+    string NewState,
+    string Action,
+    string? ReasonCode
+);

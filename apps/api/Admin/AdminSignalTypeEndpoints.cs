@@ -66,14 +66,13 @@ public static class AdminSignalTypeEndpoints
                 }
             }
 
-            var result = KnownSignalTypes.Select(id => new
-            {
-                signal_type_id = id,
-                name = SignalTypeNames.GetValueOrDefault(id, id),
-                enabled = enabledMap.TryGetValue(id, out var e) ? e : true,
-            });
+            var result = KnownSignalTypes.Select(id => new SignalTypeEntry(
+                id,
+                SignalTypeNames.GetValueOrDefault(id, id),
+                enabledMap.TryGetValue(id, out var e) ? e : true
+            ));
 
-            return Results.Ok(new { signal_types = result });
+            return Results.Ok(new SignalTypeListResponse(result));
         }).RequireAuthorization();
 
         // POST /api/v1/admin/signal-types/{signalTypeId}/disable
@@ -136,12 +135,10 @@ public static class AdminSignalTypeEndpoints
         // Validate signal type ID.
         if (!KnownSignalTypes.Contains(signalTypeId))
         {
-            return Results.BadRequest(new
-            {
-                error = "unknown_signal_type",
-                message = $"Signal type '{signalTypeId}' is not recognised.",
-                known_types = KnownSignalTypes
-            });
+            return Results.BadRequest(new UnknownSignalTypeResponse(
+                "unknown_signal_type",
+                $"Signal type '{signalTypeId}' is not recognised.",
+                KnownSignalTypes));
         }
 
         // REQ-SEC-011: validate step-up re-authentication within 5 minutes.
@@ -152,7 +149,7 @@ public static class AdminSignalTypeEndpoints
         if (!stepUpValid)
         {
             return Results.Json(
-                new { error = "step_up_required" },
+                new AdminErrorResponse("step_up_required"),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
 
@@ -209,14 +206,23 @@ public static class AdminSignalTypeEndpoints
 
         var displayName = SignalTypeNames.GetValueOrDefault(signalTypeId, signalTypeId);
 
-        return Results.Ok(new
-        {
-            signal_type_id = signalTypeId,
-            name = displayName,
-            enabled = enable,
-            message = enable
+        return Results.Ok(new SignalTypeToggleResponse(
+            signalTypeId,
+            displayName,
+            enable,
+            enable
                 ? $"Signal type '{displayName}' re-enabled. Suspended positions remain suspended until admin release."
                 : $"Signal type '{displayName}' disabled. Positions will be suspended on next RME cycle."
-        });
+        ));
     }
 }
+
+// ── Response DTOs ────────────────────────────────────────────────────────────
+
+public sealed record SignalTypeEntry(string SignalTypeId, string Name, bool Enabled);
+
+public sealed record SignalTypeListResponse(IEnumerable<SignalTypeEntry> SignalTypes);
+
+public sealed record SignalTypeToggleResponse(string SignalTypeId, string Name, bool Enabled, string Message);
+
+public sealed record UnknownSignalTypeResponse(string Error, string Message, HashSet<string> KnownTypes);
