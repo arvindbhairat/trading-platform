@@ -111,12 +111,13 @@ async function ensureCsrfToken(): Promise<string> {
       csrfFetchPromise = null;
       throw new Error(`Failed to obtain CSRF token: ${res.status}`);
     }
-    const data = (await res.json()) as { csrfToken?: string };
-    if (!data.csrfToken) {
+    const data = (await res.json()) as { csrf_token?: string; csrfToken?: string };
+    const token = data.csrf_token ?? data.csrfToken;
+    if (!token) {
       csrfFetchPromise = null;
       throw new Error("CSRF token response missing token field");
     }
-    csrfTokenCache = data.csrfToken;
+    csrfTokenCache = token;
     csrfFetchPromise = null;
     return csrfTokenCache;
   })();
