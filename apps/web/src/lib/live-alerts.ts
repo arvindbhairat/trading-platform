@@ -8,7 +8,7 @@
  * unavailable (REQ-DATA-006a(c)(i): degradation banner + polling fallback).
  */
 
-import { getToken, apiFetch } from "./auth";
+import { getToken, apiFetch, resolveWsUrl } from "./auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,7 +97,7 @@ export class LiveAlertsClient {
 
   async start(): Promise<void> {
     await this.fetchUnreadCount(); // Initial fetch.
-    this.connect();
+    await this.connect();
   }
 
   stop(): void {
@@ -115,7 +115,7 @@ export class LiveAlertsClient {
   // WebSocket connection
   // -----------------------------------------------------------------------
 
-  private connect(): void {
+  private async connect(): Promise<void> {
     this.closeWs();
     this.clearReconnect();
 
@@ -126,7 +126,8 @@ export class LiveAlertsClient {
       return;
     }
 
-    const url = `${this.pushUrl}?token=${encodeURIComponent(jwt)}`;
+    const resolvedUrl = await resolveWsUrl(this.pushUrl);
+    const url = `${resolvedUrl}?token=${encodeURIComponent(jwt)}`;
 
     try {
       this.setStatus("connecting");

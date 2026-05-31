@@ -152,3 +152,12 @@ export async function resolveApiUrl(path: string): Promise<string> {
   const base = await getApiBase();
   return `${base}${path}`;
 }
+
+// Resolves a relative WebSocket path to a wss:// URL using the runtime API base URL.
+// Derives the WebSocket origin from the same `getApiBase()` that HTTP calls use,
+// ensuring all requests — AJAX and WebSocket — target the same API backend.
+export async function resolveWsUrl(path: string): Promise<string> {
+  const base = await getApiBase();
+  const wsBase = base.replace(/^http/, "ws");
+  return `${wsBase}${path}`;
+}

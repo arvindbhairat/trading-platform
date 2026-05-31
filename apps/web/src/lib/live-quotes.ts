@@ -12,7 +12,7 @@
  * persistent indicator is surfaced. With FYERS (default), quotes are real-time.
  */
 
-import { getToken, apiFetch } from "./auth";
+import { getToken, apiFetch, resolveWsUrl } from "./auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,7 +159,7 @@ export class LiveQuotesClient {
     this.fyersToken = tokenData.access_token;
 
     // Step 2: connect to PLD WebSocket for lease.
-    this.connectPld();
+    await this.connectPld();
 
     // Step 3: connect to FYERS Data WebSocket.
     this.connectFyersWs();
@@ -179,11 +179,12 @@ export class LiveQuotesClient {
   // PLD lease monitoring (REQ-SESSION-014 / P2-T8)
   // -----------------------------------------------------------------------
 
-  private connectPld(): void {
+  private async connectPld(): Promise<void> {
     const jwt = getToken();
     if (!jwt) return;
 
-    const url = `${this.config.pldUrl}?token=${encodeURIComponent(jwt)}`;
+    const resolvedUrl = await resolveWsUrl(this.config.pldUrl);
+    const url = `${resolvedUrl}?token=${encodeURIComponent(jwt)}`;
 
     try {
       this.pldWs = new WebSocket(url);
