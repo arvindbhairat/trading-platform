@@ -18,15 +18,15 @@ import { getToken, apiFetch, resolveApiUrl } from "@/lib/auth";
 // ── Types ──────────────────────────────────────────────────────────────
 
 interface UserEntry {
-  userId: string;
+  user_id: string;
   email: string;
-  displayName: string;
+  display_name: string;
   provider: string;
   role: string;
   status: string;
-  signalsSuspended: boolean;
-  createdAt: string;
-  updatedAt: string;
+  signals_suspended: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 type StatusTab = "all" | "pending_approval" | "approved" | "deactivated";
@@ -363,7 +363,7 @@ export default function AdminApprovalsPage() {
               <tbody>
                 {users.map((entry) => (
                   <tr
-                    key={entry.userId}
+                    key={entry.user_id}
                     style={{
                       borderBottom: "1px solid var(--border-1)",
                       verticalAlign: "middle",
@@ -382,7 +382,7 @@ export default function AdminApprovalsPage() {
                       <span className="t-body-sm">{entry.email}</span>
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
-                      <span className="t-body-sm">{entry.displayName}</span>
+                      <span className="t-body-sm">{entry.display_name}</span>
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                       <Pill tone="info">{entry.provider}</Pill>
@@ -396,7 +396,7 @@ export default function AdminApprovalsPage() {
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                       {entry.role !== "admin" && entry.status === "approved" && (
-                        entry.signalsSuspended ? (
+                        entry.signals_suspended ? (
                           <Pill tone="warn">Suspended</Pill>
                         ) : (
                           <Pill tone="up">Active</Pill>
@@ -408,7 +408,7 @@ export default function AdminApprovalsPage() {
                         className="t-body-sm"
                         style={{ color: "var(--t-2)", whiteSpace: "nowrap" }}
                       >
-                        {formatDate(entry.createdAt)}
+                        {formatDate(entry.created_at)}
                       </span>
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
@@ -425,7 +425,7 @@ export default function AdminApprovalsPage() {
                           variant="primary"
                           onClick={() =>
                             setConfirmAction({
-                              userId: entry.userId,
+                              userId: entry.user_id,
                               email: entry.email,
                               action: "approve",
                             })
@@ -435,11 +435,11 @@ export default function AdminApprovalsPage() {
                         </Btn>
                       ) : entry.status === "approved" ? (
                         <div style={{ display: "flex", gap: "var(--s-1)", flexWrap: "wrap" }}>
-                          {entry.signalsSuspended ? (
+                          {entry.signals_suspended ? (
                             <Btn
                               size="sm"
                               variant="secondary"
-                              onClick={() => handleSignalEnable(entry.userId)}
+                              onClick={() => handleSignalEnable(entry.user_id)}
                             >
                               Enable signals
                             </Btn>
@@ -447,7 +447,7 @@ export default function AdminApprovalsPage() {
                             <Btn
                               size="sm"
                               variant="secondary"
-                              onClick={() => handleSignalSuspend(entry.userId)}
+                              onClick={() => handleSignalSuspend(entry.user_id)}
                             >
                               Suspend signals
                             </Btn>
@@ -457,7 +457,7 @@ export default function AdminApprovalsPage() {
                             variant="danger"
                             onClick={() =>
                               setConfirmAction({
-                                userId: entry.userId,
+                                userId: entry.user_id,
                                 email: entry.email,
                                 action: "deactivate",
                               })
@@ -472,7 +472,7 @@ export default function AdminApprovalsPage() {
                           variant="primary"
                           onClick={() =>
                             setConfirmAction({
-                              userId: entry.userId,
+                              userId: entry.user_id,
                               email: entry.email,
                               action: "reactivate",
                             })

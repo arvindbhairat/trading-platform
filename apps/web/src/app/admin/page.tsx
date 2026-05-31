@@ -33,19 +33,19 @@ interface CoverageData {
 }
 
 interface FailedJobEntry {
-  jobType: string;
-  scheduledRunTime: string;
+  job_type: string;
+  scheduled_run_time: string;
   outcome: string;
   errors: string[];
-  runId: string;
+  run_id: string;
 }
 
 interface TransferRecoverySummary {
-  needsReview: boolean;
-  jobCount: number;
-  failedJobs: FailedJobEntry[];
-  tokenMissing: boolean;
-  fyersAuthUrl: string | null;
+  needs_review: boolean;
+  job_count: number;
+  failed_jobs: FailedJobEntry[];
+  token_missing: boolean;
+  fyers_auth_url: string | null;
   dismissed: boolean;
 }
 
@@ -234,7 +234,7 @@ export default function AdminHomePage() {
 
       setNotification({ type: "success", message: "Transfer recovery summary dismissed." });
       setSummary((prev) =>
-        prev ? { ...prev, needsReview: false, dismissed: true } : prev
+        prev ? { ...prev, needs_review: false, dismissed: true } : prev
       );
     } catch (err) {
       setNotification({
@@ -397,7 +397,7 @@ export default function AdminHomePage() {
 
   // ── Render ───────────────────────────────────────────────────────────
 
-  const needsRecovery = summary?.needsReview && !summary.dismissed;
+  const needsRecovery = summary?.needs_review && !summary.dismissed;
 
   return (
     <>
@@ -475,10 +475,10 @@ export default function AdminHomePage() {
                 <p className="t-body-sm" style={{ marginBottom: "var(--s-4)" }}>
                   The following items require your attention following the admin transfer.
                 </p>
-                {summary!.jobCount > 0 && (
+                {summary!.job_count > 0 && (
                   <div style={{ marginBottom: "var(--s-5)" }}>
                     <h3 style={{ marginBottom: "var(--s-3)" }}>
-                      {summary!.jobCount} failed or skipped job run{summary!.jobCount === 1 ? "" : "s"}
+                      {summary!.job_count} failed or skipped job run{summary!.job_count === 1 ? "" : "s"}
                     </h3>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-sm)" }}>
@@ -491,21 +491,21 @@ export default function AdminHomePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {summary!.failedJobs.map((job) => (
-                            <tr key={job.runId} style={{ borderBottom: "1px solid var(--border-1)", verticalAlign: "middle" }}>
+                          {summary!.failed_jobs.map((job) => (
+                            <tr key={job.run_id} style={{ borderBottom: "1px solid var(--border-1)", verticalAlign: "middle" }}>
                               <td style={{ padding: "var(--s-2) var(--s-3)" }}>
-                                <span className="t-body-sm">{jobTypeLabel[job.jobType] ?? job.jobType}</span>
+                                <span className="t-body-sm">{jobTypeLabel[job.job_type] ?? job.job_type}</span>
                               </td>
                               <td style={{ padding: "var(--s-2) var(--s-3)" }}>
                                 <span className="t-body-sm" style={{ color: "var(--t-2)", whiteSpace: "nowrap" }}>
-                                  {formatDateTime(job.scheduledRunTime)}
+                                  {formatDateTime(job.scheduled_run_time)}
                                 </span>
                               </td>
                               <td style={{ padding: "var(--s-2) var(--s-3)" }}>
                                 <Pill tone={outcomeTone[job.outcome] ?? "info"}>{job.outcome}</Pill>
                               </td>
                               <td style={{ padding: "var(--s-2) var(--s-3)" }}>
-                                <Btn size="sm" variant="secondary" onClick={() => handleRetryJob(job.jobType)}>
+                                <Btn size="sm" variant="secondary" onClick={() => handleRetryJob(job.job_type)}>
                                   Retry
                                 </Btn>
                               </td>
@@ -516,7 +516,7 @@ export default function AdminHomePage() {
                     </div>
                   </div>
                 )}
-                {summary!.tokenMissing && (
+                {summary!.token_missing && (
                   <div style={{ padding: "var(--s-4)", background: "var(--bg-1)", border: "1px solid var(--border-1)", borderRadius: "var(--r-2)", marginBottom: "var(--s-5)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", marginBottom: "var(--s-2)" }}>
                       <Icon name="lock" size={16} />

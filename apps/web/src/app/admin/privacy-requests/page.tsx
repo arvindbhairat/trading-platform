@@ -20,21 +20,21 @@ import { getToken, apiFetch } from "@/lib/auth";
 // ── Types ──────────────────────────────────────────────────────────────
 
 interface PrivacyRequestEntry {
-  ticketId: string;
+  ticket_id: string;
   type: string;
-  requesterEmail: string;
+  requester_email: string;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface PrivacyRequestDetail extends PrivacyRequestEntry {
-  requesterUserId?: string;
+  requester_user_id?: string;
   subject?: string;
   description?: string;
-  acknowledgedAt?: string;
-  completedAt?: string;
-  resolutionNotes?: string;
+  acknowledged_at?: string;
+  completed_at?: string;
+  resolution_notes?: string;
 }
 
 interface DataExportResponse {
@@ -136,7 +136,7 @@ export default function AdminPrivacyRequestsPage() {
     setSubmitting(true);
     try {
       const res = await apiFetch(
-        `/api/v1/admin/privacy/requests/${selectedTicket.ticketId}/acknowledge`,
+        `/api/v1/admin/privacy/requests/${selectedTicket.ticket_id}/acknowledge`,
         { method: "POST" }
       );
       if (!res.ok) {
@@ -145,7 +145,7 @@ export default function AdminPrivacyRequestsPage() {
         return;
       }
       setNotification({ type: "success", message: "Ticket acknowledged." });
-      await loadTicket(selectedTicket.ticketId);
+      await loadTicket(selectedTicket.ticket_id);
     } catch (err) {
       setNotification({ type: "error", message: err instanceof Error ? err.message : "Failed" });
     } finally {
@@ -158,7 +158,7 @@ export default function AdminPrivacyRequestsPage() {
     setSubmitting(true);
     try {
       const res = await apiFetch(
-        `/api/v1/admin/privacy/requests/${selectedTicket.ticketId}/process-access`,
+        `/api/v1/admin/privacy/requests/${selectedTicket.ticket_id}/process-access`,
         { method: "POST" }
       );
       if (!res.ok) {
@@ -169,7 +169,7 @@ export default function AdminPrivacyRequestsPage() {
       const data = await res.json();
       setExportData(data);
       setView("export");
-      await loadTicket(selectedTicket.ticketId);
+      await loadTicket(selectedTicket.ticket_id);
     } catch (err) {
       setNotification({ type: "error", message: err instanceof Error ? err.message : "Failed" });
     } finally {
@@ -182,7 +182,7 @@ export default function AdminPrivacyRequestsPage() {
     setSubmitting(true);
     try {
       const res = await apiFetch(
-        `/api/v1/admin/privacy/requests/${selectedTicket.ticketId}/process-erasure`,
+        `/api/v1/admin/privacy/requests/${selectedTicket.ticket_id}/process-erasure`,
         { method: "POST" }
       );
       if (!res.ok) {
@@ -205,7 +205,7 @@ export default function AdminPrivacyRequestsPage() {
     setSubmitting(true);
     try {
       const res = await apiFetch(
-        `/api/v1/admin/privacy/requests/${selectedTicket.ticketId}/complete`,
+        `/api/v1/admin/privacy/requests/${selectedTicket.ticket_id}/complete`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -269,7 +269,7 @@ export default function AdminPrivacyRequestsPage() {
   function getSlaStatus(ticket: PrivacyRequestEntry): { tone: "warn" | "up" | "down" | "info"; label: string } | null {
     if (ticket.status === "completed" || ticket.status === "rejected") return null;
 
-    const created = new Date(ticket.createdAt);
+    const created = new Date(ticket.created_at);
     const now = new Date();
     const daysSinceCreation = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -364,12 +364,12 @@ export default function AdminPrivacyRequestsPage() {
                   const sla = getSlaStatus(ticket);
                   return (
                     <tr
-                      key={ticket.ticketId}
+                      key={ticket.ticket_id}
                       style={{ borderBottom: "1px solid var(--border-1)", verticalAlign: "middle" }}
                     >
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                         <span className="t-body-sm" style={{ fontFamily: "var(--font-mono)" }}>
-                          {ticket.ticketId}
+                          {ticket.ticket_id}
                         </span>
                       </td>
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
@@ -378,7 +378,7 @@ export default function AdminPrivacyRequestsPage() {
                         </Pill>
                       </td>
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
-                        <span className="t-body-sm">{ticket.requesterEmail}</span>
+                        <span className="t-body-sm">{ticket.requester_email}</span>
                       </td>
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                         <Pill tone={STATUS_PILL_TONE[ticket.status] ?? "neutral"}>
@@ -390,11 +390,11 @@ export default function AdminPrivacyRequestsPage() {
                       </td>
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                         <span className="t-body-sm" style={{ color: "var(--t-2)", whiteSpace: "nowrap" }}>
-                          {formatDate(ticket.createdAt)}
+                          {formatDate(ticket.created_at)}
                         </span>
                       </td>
                       <td style={{ padding: "var(--s-3) var(--s-4)" }}>
-                        <Btn size="sm" variant="ghost" onClick={() => loadTicket(ticket.ticketId)}>
+                        <Btn size="sm" variant="ghost" onClick={() => loadTicket(ticket.ticket_id)}>
                           View
                         </Btn>
                       </td>
@@ -512,7 +512,7 @@ export default function AdminPrivacyRequestsPage() {
             Back
           </Btn>
           <h1 style={{ margin: 0 }}>
-            <span style={{ fontFamily: "var(--font-mono)" }}>{selectedTicket.ticketId}</span>
+            <span style={{ fontFamily: "var(--font-mono)" }}>{selectedTicket.ticket_id}</span>
           </h1>
           <Pill tone={STATUS_PILL_TONE[selectedTicket.status] ?? "neutral"}>
             {STATUS_LABELS[selectedTicket.status] ?? selectedTicket.status}
@@ -537,10 +537,10 @@ export default function AdminPrivacyRequestsPage() {
         <Card style={{ padding: "var(--s-6)", marginBottom: "var(--s-5)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-5)" }}>
             <Field label="Requester Email">
-              <span className="t-body-sm">{selectedTicket.requesterEmail}</span>
+              <span className="t-body-sm">{selectedTicket.requester_email}</span>
             </Field>
             <Field label="Platform User ID">
-              <span className="t-body-sm">{selectedTicket.requesterUserId ?? "—"}</span>
+              <span className="t-body-sm">{selectedTicket.requester_user_id ?? "—"}</span>
             </Field>
             {selectedTicket.subject && (
               <Field label="Subject" full>
@@ -553,24 +553,24 @@ export default function AdminPrivacyRequestsPage() {
               </Field>
             )}
             <Field label="Created">
-              <span className="t-body-sm">{formatDate(selectedTicket.createdAt)}</span>
+              <span className="t-body-sm">{formatDate(selectedTicket.created_at)}</span>
             </Field>
             <Field label="Updated">
-              <span className="t-body-sm">{formatDate(selectedTicket.updatedAt)}</span>
+              <span className="t-body-sm">{formatDate(selectedTicket.updated_at)}</span>
             </Field>
-            {selectedTicket.acknowledgedAt && (
+            {selectedTicket.acknowledged_at && (
               <Field label="Acknowledged">
-                <span className="t-body-sm">{formatDate(selectedTicket.acknowledgedAt)}</span>
+                <span className="t-body-sm">{formatDate(selectedTicket.acknowledged_at)}</span>
               </Field>
             )}
-            {selectedTicket.completedAt && (
+            {selectedTicket.completed_at && (
               <Field label="Completed">
-                <span className="t-body-sm">{formatDate(selectedTicket.completedAt)}</span>
+                <span className="t-body-sm">{formatDate(selectedTicket.completed_at)}</span>
               </Field>
             )}
-            {selectedTicket.resolutionNotes && (
+            {selectedTicket.resolution_notes && (
               <Field label="Resolution Notes" full>
-                <span className="t-body-sm">{selectedTicket.resolutionNotes}</span>
+                <span className="t-body-sm">{selectedTicket.resolution_notes}</span>
               </Field>
             )}
           </div>
@@ -663,13 +663,13 @@ export default function AdminPrivacyRequestsPage() {
 
           <p className="t-body-sm" style={{ marginBottom: "var(--s-4)", lineHeight: 1.6 }}>
             This will permanently redact personal identifiers for{" "}
-            <strong>{selectedTicket.requesterEmail}</strong>:
+            <strong>{selectedTicket.requester_email}</strong>:
           </p>
 
           <ul className="t-body-sm" style={{ marginBottom: "var(--s-5)", lineHeight: 1.8 }}>
             <li>Account will be deactivated (status → deactivated)</li>
-            <li>Email → <code>redacted-{selectedTicket.ticketId}@dsar.local</code></li>
-            <li>Display name → <code>[REDACTED PER {selectedTicket.ticketId}]</code></li>
+            <li>Email → <code>redacted-{selectedTicket.ticket_id}@dsar.local</code></li>
+            <li>Display name → <code>[REDACTED PER {selectedTicket.ticket_id}]</code></li>
             <li>Provider information redacted</li>
             <li>Linked identities cleared</li>
             <li style={{ marginTop: "var(--s-2)" }}><strong>Preserved:</strong> Audit events, trade ledger records, consent/ToS acceptance facts</li>

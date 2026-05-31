@@ -23,16 +23,16 @@ import { fetchSessionStatus, type SessionStatus } from "@/lib/session";
 interface ConfigEntry {
   key: string;
   category: string;
-  valueType: string;
+  value_type: string;
   value: unknown;
-  defaultValue: unknown;
+  default_value: unknown;
   description: string;
-  appliesTo: string[];
-  isEditable: boolean;
-  requiresRestart: boolean;
+  applies_to: string[];
+  is_editable: boolean;
+  requires_restart: boolean;
   status: string;
-  updatedAt: string;
-  updatedByUserId: string;
+  updated_at: string;
+  updated_by_user_id: string;
   version: number;
 }
 
@@ -169,11 +169,11 @@ export default function AdminConfigPage() {
   // ── Edit handlers ────────────────────────────────────────────────────
 
   function startEdit(entry: ConfigEntry) {
-    if (!entry.isEditable) return;
+    if (!entry.is_editable) return;
     setEdit({
       key: entry.key,
       category: entry.category,
-      valueType: entry.valueType,
+      valueType: entry.value_type,
       currentValue: formatValue(entry.value),
       originalValue: formatValue(entry.value),
       justification: "",
@@ -437,14 +437,14 @@ export default function AdminConfigPage() {
                       </code>
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
-                      <ValueDisplay value={entry.value} valueType={entry.valueType} />
+                      <ValueDisplay value={entry.value} valueType={entry.value_type} />
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
-                      <ValueDisplay value={entry.defaultValue} valueType={entry.valueType} />
+                      <ValueDisplay value={entry.default_value} valueType={entry.value_type} />
                     </td>
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                       <span className="t-body-sm">{entry.description}</span>
-                      {entry.requiresRestart && (
+                      {entry.requires_restart && (
                         <span style={{ marginLeft: "var(--s-2)" }}>
                           <Pill tone="info">restart</Pill>
                         </span>
@@ -453,23 +453,23 @@ export default function AdminConfigPage() {
                     <td style={{ padding: "var(--s-3) var(--s-4)" }}>
                       <div style={{ display: "flex", gap: "var(--s-2)" }}>
                         <button
-                          disabled={!entry.isEditable}
+                          disabled={!entry.is_editable}
                           onClick={() => startEdit(entry)}
                           aria-label="Edit"
                           style={{
-                            background: entry.isEditable ? "var(--bg-3)" : "transparent",
+                            background: entry.is_editable ? "var(--bg-3)" : "transparent",
                             border: "none",
                             borderRadius: "var(--rad-1)",
-                            color: entry.isEditable ? "var(--t-0)" : "var(--t-3)",
-                            cursor: entry.isEditable ? "pointer" : "default",
+                            color: entry.is_editable ? "var(--t-0)" : "var(--t-3)",
+                            cursor: entry.is_editable ? "pointer" : "default",
                             padding: "var(--s-1)",
-                            opacity: entry.isEditable ? 1 : 0.4,
+                            opacity: entry.is_editable ? 1 : 0.4,
                           }}
                         >
-                          <Icon name={entry.isEditable ? "settings" : "lock"} size={16} />
+                          <Icon name={entry.is_editable ? "settings" : "lock"} size={16} />
                         </button>
                         <button
-                          disabled={!entry.isEditable}
+                          disabled={!entry.is_editable}
                           onClick={() => {
                             setResetKey(entry.key);
                             setResetCategory(entry.category);
@@ -480,10 +480,10 @@ export default function AdminConfigPage() {
                             background: "var(--bg-3)",
                             border: "none",
                             borderRadius: "var(--rad-1)",
-                            color: entry.isEditable ? "var(--t-0)" : "var(--t-3)",
-                            cursor: entry.isEditable ? "pointer" : "default",
+                            color: entry.is_editable ? "var(--t-0)" : "var(--t-3)",
+                            cursor: entry.is_editable ? "pointer" : "default",
                             padding: "var(--s-1)",
-                            opacity: entry.isEditable ? 1 : 0.4,
+                            opacity: entry.is_editable ? 1 : 0.4,
                           }}
                         >
                           <Icon name="refresh" size={16} />
