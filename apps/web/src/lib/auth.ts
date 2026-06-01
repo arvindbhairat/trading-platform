@@ -1,3 +1,5 @@
+import { telemetry, generateCorrelationId } from "./telemetry";
+
 // Auth helpers: token storage in sessionStorage and Bearer / CSRF header attachment.
 // REQ-AUTH-002: portal OAuth must complete before FYERS auth starts.
 // engineering-standards § CSRF model: Bearer JWT in Authorization header;
@@ -138,13 +140,33 @@ export async function apiFetch(
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  const correlationId = generateCorrelationId();
+  headers.set("X-Correlation-Id", correlationId);
+
   if (isMutation) {
     const csrf = await ensureCsrfToken();
     headers.set("X-XSRF-TOKEN", csrf);
   }
 
   const base = await getApiBase();
-  return fetch(`${base}${path}`, { ...init, headers, credentials: "include" });
+  const start = performance.now();
+
+  try {
+    const response = await fetch(`${base}${path}`, {
+      ...init,
+      headers,
+      credentials: "include",
+    });
+
+    const duration = performance.now() - start;
+    telemetry.trackApiCall(path, response.status, duration, correlationId);
+
+    return response;
+  } catch (err) {
+    const duration = performance.now() - start;
+    telemetry.trackApiCall(path, 0, duration, correlationId, err);
+    throw err;
+  }
 }
 
 // Resolves a relative API path to an absolute URL using the runtime API base URL.

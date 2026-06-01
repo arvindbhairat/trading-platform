@@ -330,6 +330,16 @@ app.UseMiddleware<SessionValidationMiddleware>();
 // so CSRF validation would reject all test mutation requests with 403 Forbidden.
 if (!app.Environment.IsEnvironment("Testing"))
   app.UseMiddleware<CsrfMiddleware>();
+// Propagate browser correlation ID (X-Correlation-Id) onto the OpenTelemetry
+// span so frontend API calls can be joined with backend traces in Honeycomb.
+app.Use(async (context, next) =>
+{
+  if (context.Request.Headers.TryGetValue("X-Correlation-Id", out var cid))
+  {
+    Activity.Current?.SetTag("web.correlation_id", cid.ToString());
+  }
+  await next();
+});
 
 // Admin impersonation write-rejection middleware — REQ-ADMIN-015.
 // Must run after SessionValidationMiddleware so the session is loaded,
