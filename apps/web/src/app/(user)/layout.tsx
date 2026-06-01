@@ -51,10 +51,12 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   }, [hasToken, fetchUnreadCount]);
 
   // Subscribe to push events to refresh badge count in real time.
+  // The LiveAlertsClient singleton is already started by PushAlertProvider
+  // at the AppProviders level — calling start() here would kill that existing
+  // WebSocket and create a perpetual 10s reconnect cycle (REQ-NFR-013).
   useEffect(() => {
     if (!hasToken) return;
     const client = getLiveAlerts();
-    client.start();
     const unsub = client.onPushEvent(() => {
       fetchUnreadCount();
     });

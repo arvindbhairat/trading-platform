@@ -14,6 +14,11 @@ Telemetry__Otlp__ApiKey = MTY3MzUxOTpnbGNfZXlKdklqb2lNVGM1TkRnMU5DSXNJbTRpT2lKem
 Honeycomb
 hcaik_01ksz8mcnf6s4h45s1nzbnwpt5dwfmx46zygm3fkxgnbye18am6z86t3fr
 
+Honeycomb signalstack-mcp
+
+Key ID: hcamk_01kszasn4x77vf7wv5dta1jwae
+Secret: kdypg2f8kmws1f9gcewxq70gyfzte5qa
+
 
 
 
