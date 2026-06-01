@@ -7,18 +7,18 @@ Debug & fix production issues across the SignalStack trading platform. Approach 
 | Service | Stack | Logs |
 |---|---|---|
 | apps/web | Next.js 16 (client-rendered SPA) | Railway logs |
-| apps/api | ASP.NET Core 10 | OTLP/HTTP → New Relic |
-| apps/worker | .NET 10 Worker | OTLP/HTTP → New Relic |
+| apps/api | ASP.NET Core 10 | OTLP/HTTP → Honeycomb |
+| apps/worker | .NET 10 Worker | OTLP/HTTP → Honeycomb |
 
 - **Hosting:** Railway (direct GitHub integration — auto-deploys from `main` on push; Railway CI is disabled)
 - **Databases:** MongoDB (users, signals, portfolio, sys_config, intent_ledger) + PostgreSQL (OHLCV history, backtests)
-- **Observability:** Serilog → OpenTelemetry OTLP/HTTP → New Relic (`Telemetry__Otlp__Endpoint` + `ApiKey`)
+- **Observability:** Serilog → OpenTelemetry OTLP/HTTP → Honeycomb (`Telemetry__Otlp__Endpoint` + `ApiKey`)
 - **API base:** `https://api-production-b8b8f.up.railway.app` | Health: `/api/v1/healthz`, `/api/v1/readyz`
 
 ## Diagnostic Workflow
 
 1. **Which service?** HTTP errors → api. Stale jobs/no signals → worker. UI breakage → web + trace API calls.
-2. **NR logs.** Search: `level:Error`, `service:SignalStack.Api`, `singleton_violation`, `fyers_token`, `rate_limit`, `SessionValidationMiddleware`.
+2. **Honeycomb telemetry.** Search: `level:Error`, `service:SignalStack.Api`, `singleton_violation`, `fyers_token`, `rate_limit`, `SessionValidationMiddleware`.
 3. **Code trace:** api/ handler → packages/ service → storage/ (MongoDB) or historical/ (PostgreSQL). Worker: Jobs/ → Runners/. Web: app/ → features/ → lib/.
 4. **Find files:** grep `execution_plan/task_logs/*.md` for REQ-ID, or grep source by error text.
 5. **Config:** `.memory/railway_env_vars.md` for env vars, MongoDB `sys_config` for runtime settings.
@@ -43,9 +43,9 @@ When investigating any issue, rotate through these lenses:
 | No OHLCV/signals (DS/EODSR down) | DS success marker → EODSR gate, admin token |
 | 3× LADS abort (MongoDB failover) | `MongoConnectionException` logs |
 | 429s from FYERS | `rate_limit` logs, `docs/operations/fyers-api-budget.md` |
-| No telemetry in NR | `Telemetry__Otlp__*` env vars |
+| No telemetry in Honeycomb | `Telemetry__Otlp__*` env vars |
 | CORS failures | `Cors:AllowedOrigins`, Railway TLS termination |
-| Intent reconciliation gaps | NR `order_*_total` metrics, `intent_ledger` pending |
+| Intent reconciliation gaps | Honeycomb `order_*_total` metrics, `intent_ledger` pending |
 
 ## Key Env Vars
 `Telemetry__Otlp__Endpoint`, `Telemetry__Otlp__ApiKey`, `ConnectionStrings__MongoDb`, `ConnectionStrings__Redis`, `ConnectionStrings__SqlServer`, `FYERS_APP_ID`, `Auth__Jwt__Secret`, `Auth__SeedAdminEmail`, `TELEGRAM_BOT_TOKEN`, `API_BACKEND_URL`, `Cors__AllowedOrigins__0`
@@ -83,15 +83,14 @@ The following MCP servers are configured and available for direct query during i
   - `get({key:"some:cache:key"})` / `hgetall({name:"some:hash:key"})` → inspect cached state
 - **Config path:** `ConnectionStrings__Redis` env var
 
-### New Relic (OTLP telemetry)
-- Available via NR logs (search in NR dashboard or via NR API tools)
-- **Troubleshooting use cases:**
-  - Query `level:Error service:SignalStack.Api` for API-side errors
-  - Query `singleton_violation` for Worker crash-loop events
-  - Query `fyers_token` for token refresh failures
-  - Query `rate_limit` for FYERS API throttling
-  - Query `SessionValidationMiddleware` for auth middleware issues
-  - Query `order_*_total` or `intent_ledger.*` for intent reconciliation gaps
+### Honeycomb (OTLP telemetry) — NOT CONFIGURED IN THIS SESSION
+- The Honeycomb MCP server is **not currently configured** in this agent session.
+- **Troubleshooting use cases (requires Honeycomb MCP server):**
+  - `run_query({environment, dataset, calculations, time_range:3600})` for API-side metrics
+  - `list_spans` / `get_trace` for distributed trace analysis
+  - Query error rates, latency p95, span waterfalls
+- **To gain access:** configure the Honeycomb MCP server with your Honeycomb API key and environment in this agent's settings
+- **Fallback:** check Railway logs (`railway logs`) or query databases directly via MongoDB/PostgreSQL/Redis MCP tools
 - **Config path:** `Telemetry__Otlp__Endpoint` + `Telemetry__Otlp__ApiKey` env vars
 
 ### Web Search (`mcp__exa__*`)
