@@ -15,6 +15,7 @@ import {
   Pill,
 } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
+import { telemetry } from "@/lib/telemetry";
 import { getLiveQuotes, type LiveQuote, type ConnectionStatus } from "@/lib/live-quotes";
 import RmeAdvisoryPanel from "@/components/RmeAdvisoryPanel";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
@@ -303,7 +304,9 @@ export default function ChartPage() {
     } else {
       // No signed payload or error — just close the modal.
       // The user already saw the error in the modal UI.
-      console.warn("[ChartPage] Proceeding without valid signed payload:", params.signedPayloadError);
+      telemetry.trackCustom("chart_signed_payload_warn", {
+        error: params.signedPayloadError,
+      });
     }
     setModalAction(null);
   }, []);
@@ -316,7 +319,7 @@ export default function ChartPage() {
     // Intent record has been updated. Keep the result visible until
     // the user dismisses it. The onDismiss handler will clear state.
     // The intent status (matched/submission_failed) is shown in the widget.
-    console.debug("[ChartPage] FYERS order complete:", nonce, status);
+    telemetry.trackCustom("fyers_order_complete", { nonce, status });
   }, []);
 
   const handleSearch = () => {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using SignalStack.Domain.Admin;
@@ -7,6 +8,7 @@ using SignalStack.Storage.Historical;
 using SignalStack.Storage.Universe;
 using SignalStack.MarketData;
 using SignalStack.SqlMigrations;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.DataSync;
 
@@ -254,6 +256,8 @@ public sealed class DataSyncService
                 }
                 catch (Exception ex)
                 {
+                    Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    Activity.Current?.AddException(ex);
                     _logger.LogError(ex,
                         "DataSync: unexpected error syncing symbol {Symbol} for session {Session}.",
                         symbol, sessionDate);
@@ -261,6 +265,8 @@ public sealed class DataSyncService
                 }
             }
         }
+
+        WorkerTelemetry.DataSyncSymbolsProcessedTotal.Add(symbolsProcessed);
 
         // After all symbols for this session, recompute weekly and monthly
         // aggregates covering the affected date range.
@@ -270,6 +276,8 @@ public sealed class DataSyncService
         }
         catch (Exception ex)
         {
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             _logger.LogError(ex,
                 "DataSync: failed to recompute weekly/monthly aggregates for session {Session}. " +
                 "Daily data was written but W_/M_ tables may be stale.",
@@ -321,6 +329,8 @@ public sealed class DataSyncService
         }
         catch (Exception ex)
         {
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             _logger.LogWarning(ex,
                 "DataSync: failed to fetch data for {Symbol} on {Date} from {Provider}.",
                 symbol, sessionDate, _marketDataProvider.ProviderName);
@@ -377,6 +387,8 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
         }
         catch (Exception ex)
         {
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             _logger.LogError(ex,
                 "DataSync: failed to insert daily data for {Symbol} on {Date} into {Table}.",
                 symbol, sessionDate, dailyTableName);
@@ -608,6 +620,8 @@ ON CONFLICT (""Date"") DO UPDATE SET
         }
         catch (Exception ex)
         {
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             _logger.LogError(ex, "DataSync: failed to check admin token availability.");
             return TokenCheckResult.Absent;
         }

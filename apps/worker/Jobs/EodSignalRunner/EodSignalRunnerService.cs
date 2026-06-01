@@ -14,6 +14,7 @@ using SignalStack.Domain.Signals;
 using SignalStack.Storage.Signals;
 using SignalStack.Storage.Universe;
 using SignalStack.Worker.Jobs.EodSuccessMarker;
+using SignalStack.Worker.Observability;
 using SignalStack.Worker.Rme;
 
 namespace SignalStack.Worker.Jobs.EodSignalRunner;
@@ -377,6 +378,8 @@ public sealed class EodSignalRunnerService
             _logger.LogError(ex,
                 "EODSR run failed for session {Session}: {Message}",
                 sessionDate, ex.Message);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             return new EodSignalRunnerResult(OutcomeFailedForReview, 0, 0, null);
         }
     }
@@ -451,6 +454,8 @@ public sealed class EodSignalRunnerService
                     "EODSR: failed to create position for user {UserId}, symbol {Symbol}. " +
                     "Entry signal was persisted; position creation will be retried.",
                     userId, symbol);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
             }
         }
     }

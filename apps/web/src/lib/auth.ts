@@ -1,4 +1,4 @@
-import { telemetry, generateCorrelationId } from "./telemetry";
+import { telemetry, generateCorrelationId, generateTraceParent } from "./telemetry";
 
 // Auth helpers: token storage in sessionStorage and Bearer / CSRF header attachment.
 // REQ-AUTH-002: portal OAuth must complete before FYERS auth starts.
@@ -142,6 +142,7 @@ export async function apiFetch(
 
   const correlationId = generateCorrelationId();
   headers.set("X-Correlation-Id", correlationId);
+  headers.set("traceparent", generateTraceParent(correlationId));
 
   if (isMutation) {
     const csrf = await ensureCsrfToken();

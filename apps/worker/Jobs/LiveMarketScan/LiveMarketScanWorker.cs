@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
 using SignalStack.Worker.Integrations.Fyers;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.LiveMarketScan;
 
@@ -46,6 +48,9 @@ internal sealed class LiveMarketScanWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("LMDS.poll_cycle");
+            activity?.SetTag("job.type", "LMDS");
+            var sw = Stopwatch.StartNew();
             try
             {
                 // REQ-MARKET-016(a): shared-ingestion token loss → LMDS suspends.
@@ -93,8 +98,11 @@ internal sealed class LiveMarketScanWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "LMDS worker error during scan cycle.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.LmdsScanDurationMs.Record(sw.Elapsed.TotalMilliseconds);
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

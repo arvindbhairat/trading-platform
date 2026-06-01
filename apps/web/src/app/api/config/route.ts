@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { serverLogger } from "@/lib/server-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,10 @@ export function GET() {
       "utf-8"
     );
     const { apiBaseUrl } = JSON.parse(raw) as { apiBaseUrl: string };
-    console.log(`[api/config] apiBaseUrl=${apiBaseUrl || "(empty)"}`);
+    serverLogger.info("API config served", { apiBaseUrl: apiBaseUrl || "(empty)" });
     return NextResponse.json({ apiBaseUrl });
   } catch (err) {
-    console.log(`[api/config] failed to read config file: ${err}`);
+    serverLogger.warn("Failed to read API config file", { error: String(err) });
     return NextResponse.json({ apiBaseUrl: "" });
   }
 }

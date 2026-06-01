@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
 using MongoDB.Bson;
@@ -30,12 +31,24 @@ public static class ExecutionEndpoints
             PreFlightCheckService preFlightService,
             string? symbol) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("execution.pre_flight");
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("symbol", symbol);
+
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
             var result = await preFlightService.CheckAsync(
                 userId, symbol, context.RequestAborted);
+
+            activity?.SetTag("execution.can_execute", result.CanExecute);
+            activity?.SetTag("execution.blocking_count", result.Checks.Count(c => !c.Passed && c.Severity == "blocking"));
+            activity?.SetTag("execution.warning_count", result.Checks.Count(c => !c.Passed && c.Severity == "warning"));
+
+            ApiTelemetry.PreFlightCheckTotal.Add(1,
+                new KeyValuePair<string, object?>("outcome", result.CanExecute ? "pass" : "blocked"),
+                new KeyValuePair<string, object?>("symbol", symbol ?? "unspecified"));
 
             return Results.Ok(new PreFlightResponse(
                 result.CanExecute,
@@ -54,7 +67,12 @@ public static class ExecutionEndpoints
             string symbol,
             string action) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("execution.order_context");
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("symbol", symbol);
+            activity?.SetTag("action", action);
+
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
@@ -80,7 +98,12 @@ public static class ExecutionEndpoints
             IIntentSigningService signingService,
             SignedPayloadRequest request) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("execution.signed_payload");
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("symbol", request.Symbol);
+            activity?.SetTag("action", request.Action);
+
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
@@ -91,10 +114,20 @@ public static class ExecutionEndpoints
                 var result = await signingService.CreateSignedPayloadAsync(
                     userId, sessionId, request, context.RequestAborted);
 
+                activity?.SetTag("execution.outcome", "signed");
+                activity?.SetTag("execution.nonce", result.Nonce);
+
+                ApiTelemetry.SignedPayloadTotal.Add(1,
+                    new KeyValuePair<string, object?>("user_class", "production"));
+
                 return Results.Ok(result);
             }
             catch (SignedPayloadSigningException ex)
             {
+                activity?.SetTag("execution.outcome", "signing_failed");
+                activity?.SetTag("execution.error", ex.Error.Code);
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Error.Message);
+                Activity.Current?.AddException(ex);
                 return Results.UnprocessableEntity(new SignedPayloadErrorResponse(ex.Error));
             }
         });
@@ -108,7 +141,11 @@ public static class ExecutionEndpoints
             IIntentLedgerRepository intentLedger,
             IntentCallbackRequest request) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("execution.intent_callback");
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("execution.nonce", request.Nonce);
+
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
@@ -123,7 +160,14 @@ public static class ExecutionEndpoints
                 request.Nonce, request.Status, request.RequestToken, context.RequestAborted);
 
             if (updated is null)
+            {
+                activity?.SetTag("execution.outcome", "not_found");
+                activity?.SetStatus(ActivityStatusCode.Error, "Intent not found");
                 return Results.NotFound(new ApiErrorResponse("Intent not found for the given nonce or already updated."));
+            }
+
+            activity?.SetTag("execution.outcome", updated.Status);
+            activity?.SetTag("execution.action_type", updated.Action);
 
             // ── Emit callback reliability metric (REQ-ORDER-015d) ─────────
             // Tagged by status (matched / submission_failed) and user class.
@@ -152,7 +196,11 @@ public static class ExecutionEndpoints
             IMongoDatabase database,
             string? symbol) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("execution.pending_confirmations");
             var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("symbol", symbol);
+
             if (string.IsNullOrWhiteSpace(userId))
                 return Results.Unauthorized();
 
@@ -161,7 +209,10 @@ public static class ExecutionEndpoints
                 userId, symbol, context.RequestAborted);
 
             if (matchedIntents.Count == 0)
+            {
+                activity?.SetTag("execution.pending_count", 0);
                 return Results.Ok(new PendingConfirmationsResponse(Array.Empty<PendingConfirmationItem>()));
+            }
 
             // Get the user's last successful LADS sync timestamp
             var accountSync = database.GetCollection<BsonDocument>("fyers_account_sync");
@@ -178,6 +229,8 @@ public static class ExecutionEndpoints
             {
                 lastSyncAt = syncVal.ToUniversalTime();
             }
+
+            activity?.SetTag("execution.pending_count", matchedIntents.Count);
 
             var result = matchedIntents.Select(intent => new PendingConfirmationItem(
                 intent.Symbol,

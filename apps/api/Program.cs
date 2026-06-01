@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -332,13 +333,51 @@ if (!app.Environment.IsEnvironment("Testing"))
   app.UseMiddleware<CsrfMiddleware>();
 // Propagate browser correlation ID (X-Correlation-Id) onto the OpenTelemetry
 // span so frontend API calls can be joined with backend traces in Honeycomb.
+// Also tag the authenticated user identity on every span for trace filtering.
 app.Use(async (context, next) =>
 {
   if (context.Request.Headers.TryGetValue("X-Correlation-Id", out var cid))
   {
     Activity.Current?.SetTag("web.correlation_id", cid.ToString());
   }
+
+  // Enrich the auto-created HTTP span with authenticated user context
+  if (context.User?.Identity?.IsAuthenticated == true)
+  {
+    Activity.Current?.SetTag("enduser.id",
+        context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    Activity.Current?.SetTag("enduser.role",
+        context.User.FindFirst(ClaimTypes.Role)?.Value);
+  }
+
   await next();
+});
+
+// Record API request metrics (duration, status code) for all endpoints.
+// Uses ApiTelemetry meters registered with the OTLP exporter.
+app.Use(async (context, next) =>
+{
+  var sw = Stopwatch.StartNew();
+  try
+  {
+    await next();
+  }
+  finally
+  {
+    var elapsedMs = sw.Elapsed.TotalMilliseconds;
+    var method = context.Request.Method;
+    var statusCode = context.Response.StatusCode;
+    var path = context.Request.Path.Value ?? "/";
+
+    ApiTelemetry.RequestDurationMs.Record(elapsedMs,
+        new KeyValuePair<string, object?>("method", method),
+        new KeyValuePair<string, object?>("path", path),
+        new KeyValuePair<string, object?>("status_code", statusCode));
+
+    ApiTelemetry.RequestTotal.Add(1,
+        new KeyValuePair<string, object?>("method", method),
+        new KeyValuePair<string, object?>("status_code", statusCode));
+  }
 });
 
 // Admin impersonation write-rejection middleware — REQ-ADMIN-015.

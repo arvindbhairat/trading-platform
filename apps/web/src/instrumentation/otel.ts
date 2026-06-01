@@ -12,7 +12,7 @@
 //   Telemetry__Otlp__ExportTimeoutMilliseconds  — optional, default 5000
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { metrics } from "@opentelemetry/api";
+import { trace, metrics } from "@opentelemetry/api";
 import { logs } from "@opentelemetry/api-logs";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
@@ -30,6 +30,7 @@ import {
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
+import { serverLogger } from "@/lib/server-logger";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -90,8 +91,8 @@ export function initOpenTelemetry(): void {
   const config = parseOtlpConfig();
 
   if (!config) {
-    console.log(
-      "[otel] No Telemetry__Otlp__Endpoint configured — running without OTLP exporters",
+    serverLogger.info(
+      "No Telemetry__Otlp__Endpoint configured — running without OTLP exporters",
     );
     return;
   }
@@ -170,9 +171,7 @@ export function initOpenTelemetry(): void {
   process.on("SIGTERM", handler);
   process.on("SIGINT", handler);
 
-  console.log(
-    `[otel] OpenTelemetry initialized for SignalStack.Web → ${config.endpoint}`,
-  );
+  serverLogger.info("OpenTelemetry initialized", { endpoint: config.endpoint });
 }
 
 export { shutdownTelemetry };

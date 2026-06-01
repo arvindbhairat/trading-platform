@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,6 +7,7 @@ using MongoDB.Driver;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
 using SignalStack.Worker.Integrations.Fyers;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.DataSync;
 
@@ -58,18 +60,30 @@ internal sealed class DataSyncWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var sw = Stopwatch.StartNew();
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("datasync.poll_cycle");
+
             try
             {
                 await ProcessDataSyncCycleAsync(stoppingToken);
+
+                activity?.SetTag("datasync.outcome", "success");
+                WorkerTelemetry.DataSyncOutcomeTotal.Add(1, new("outcome", "success"));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
+                activity?.SetTag("datasync.outcome", "cancelled");
                 break;
             }
             catch (Exception ex)
             {
+                activity?.SetTag("datasync.outcome", "error");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
                 _logger.LogError(ex, "DataSyncWorker error during processing cycle.");
             }
+
+            WorkerTelemetry.DataSyncCycleDurationMs.Record(sw.Elapsed.TotalMilliseconds);
 
             await Task.Delay(pollInterval, stoppingToken);
         }
@@ -297,6 +311,8 @@ internal sealed class DataSyncWorker : BackgroundService
         // session date is used as the primary session_date marker.
         // REQ-MARKET-007: EOD Signal Runner checks for this marker.
         var sessionDate = result.LastSuccessfulSession?.ToString("yyyy-MM-dd");
+
+        Activity.Current?.SetTag("datasync.session_date", sessionDate);
 
         var finalUpdate = Builders<BsonDocument>.Update
             .Set("outcome", outcomeField)

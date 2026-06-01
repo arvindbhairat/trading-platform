@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.AccountSync;
 
@@ -42,6 +44,9 @@ internal sealed class LiveAccountDataSyncWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("LADS.poll_cycle");
+            activity?.SetTag("job.type", "LADS");
+            var sw = Stopwatch.StartNew();
             try
             {
                 using var scope = _serviceProvider.CreateScope();
@@ -59,8 +64,11 @@ internal sealed class LiveAccountDataSyncWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "LADS worker error during account sync cycle.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.LadsSyncDurationMs.Record(sw.Elapsed.TotalMilliseconds);
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Security.Claims;
+using SignalStack.Api.Observability;
 
 namespace SignalStack.Api.Sessions;
 
@@ -39,6 +41,12 @@ public sealed class SessionValidationMiddleware
         if (string.IsNullOrWhiteSpace(jti))
         {
             _logger.LogWarning("Authenticated request missing jti claim — rejecting.");
+
+            Activity.Current?.AddEvent(new ActivityEvent("session.missing_jti"));
+            Activity.Current?.SetTag("session.validation_result", "missing_jti");
+            ApiTelemetry.SessionValidationTotal.Add(1,
+                new KeyValuePair<string, object?>("result", "missing_jti"));
+
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             await context.Response.WriteAsJsonAsync(new
             {
@@ -52,6 +60,16 @@ public sealed class SessionValidationMiddleware
         if (session is null)
         {
             _logger.LogInformation("Session {Jti} not found — session revoked or expired.", jti);
+
+            Activity.Current?.AddEvent(new ActivityEvent("session.revoked",
+                tags: new ActivityTagsCollection
+                {
+                    ["jti"] = jti
+                }));
+            Activity.Current?.SetTag("session.validation_result", "revoked");
+            ApiTelemetry.SessionValidationTotal.Add(1,
+                new KeyValuePair<string, object?>("result", "revoked"));
+
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             await context.Response.WriteAsJsonAsync(new
             {
@@ -60,6 +78,9 @@ public sealed class SessionValidationMiddleware
             });
             return;
         }
+
+        ApiTelemetry.SessionValidationTotal.Add(1,
+            new KeyValuePair<string, object?>("result", "valid"));
 
         await _next(context);
     }

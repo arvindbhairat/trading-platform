@@ -83,6 +83,11 @@ internal static class TelemetryBootstrapExtensions
       builder.Configuration.GetValue<int>("EodSignalRunner:PollIntervalSeconds", 300),
       builder.Configuration.GetValue<int>("AdminFyersTokenCheck:PollIntervalSeconds", 60));
 
+    // Enable Npgsql built-in OpenTelemetry tracing (Npgsql 9.0+).
+    // Adds db.system, db.name, db.statement attributes to spans for every
+    // NpgsqlCommand execution with zero code changes.
+    AppContext.SetSwitch("Npgsql.EnableTelemetry", true);
+
     if (hasOtlpEndpoint)
     {
       otelBuilder

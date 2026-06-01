@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
@@ -7,6 +8,7 @@ using MongoDB.Bson;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Fyers;
+using SignalStack.Api.Observability;
 using SignalStack.Api.Sessions;
 using SignalStack.Storage.Fyers;
 using SignalStack.Storage.SysConfig;
@@ -110,14 +112,26 @@ public static class AuthEndpoints
             IAuditEventRepository auditRepo,
             IConfiguration configuration) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("auth.complete");
+            activity?.SetTag("auth.provider", provider);
+
             if (!ProviderSchemeMap.ContainsKey(provider))
+            {
+                activity?.SetTag("auth.outcome", "unknown_provider");
+                activity?.SetStatus(ActivityStatusCode.Error, "Unknown provider");
                 return Results.BadRequest(new AuthErrorResponse("unknown_provider"));
+            }
 
             // The OAuth handler already consumed the provider callback in the middleware
             // and signed the principal into the OAuthTemp cookie (the SignInScheme).
             var result = await context.AuthenticateAsync("OAuthTemp");
             if (!result.Succeeded)
             {
+                activity?.SetTag("auth.outcome", "auth_failed");
+                activity?.SetStatus(ActivityStatusCode.Error, "OAuth authentication failed");
+                ApiTelemetry.AuthLoginFailedTotal.Add(1,
+                    new KeyValuePair<string, object?>("provider", provider),
+                    new KeyValuePair<string, object?>("reason", "oauth_failed"));
                 var frontendBase = configuration["Auth:FrontendBaseUrl"] ?? "";
                 return Results.Redirect($"{frontendBase}/login?error=auth_failed");
             }
@@ -136,12 +150,20 @@ public static class AuthEndpoints
             var providerLower = provider.ToLowerInvariant();
             var frontend = configuration["Auth:FrontendBaseUrl"] ?? "";
 
+            activity?.SetTag("enduser.id", userId);
+            activity?.SetTag("auth.email", email);
+            activity?.SetTag("auth.is_seed_admin", !string.IsNullOrWhiteSpace(
+                configuration["Auth:SeedAdminEmail"] ?? configuration["SEED_ADMIN_EMAIL"])
+                && string.Equals(email, configuration["Auth:SeedAdminEmail"]
+                    ?? configuration["SEED_ADMIN_EMAIL"], StringComparison.OrdinalIgnoreCase));
+
             // REQ-SEC-011: step-up re-authentication flow.
             // When the OAuth Properties carry "step_up" = "true", we update the existing
             // session's step-up timestamp instead of creating a new JWT / session.
             if (result.Properties.Items.TryGetValue("step_up", out var isStepUp)
                 && isStepUp == "true")
             {
+                activity?.SetTag("auth.flow", "step_up");
                 var adminEmail = configuration["Auth:SeedAdminEmail"]
                     ?? configuration["SEED_ADMIN_EMAIL"]
                     ?? "";
@@ -150,12 +172,16 @@ public static class AuthEndpoints
 
                 if (!isAdmin)
                 {
+                    activity?.SetTag("auth.outcome", "step_up_non_admin");
+                    activity?.SetStatus(ActivityStatusCode.Error, "Step-up requires admin");
                     return Results.Redirect($"{frontend}/login?error=step_up_non_admin");
                 }
 
                 // REQ-ROLE-007: Facebook is blocked for admin step-up.
                 if (providerLower == "facebook")
                 {
+                    activity?.SetTag("auth.outcome", "admin_provider_restricted");
+                    activity?.SetStatus(ActivityStatusCode.Error, "Facebook blocked for admin step-up");
                     return Results.Redirect(
                         $"{frontend}/login?error=admin_provider_restricted");
                 }
@@ -195,6 +221,9 @@ public static class AuthEndpoints
                 await sessionRepo.UpdateStepUpAsync(
                     existingSession.SessionToken, now, stepUpEventId, context.RequestAborted);
 
+                activity?.SetTag("auth.outcome", "step_up_success");
+                activity?.SetTag("auth.step_up_event_id", stepUpEventId);
+
                 return Results.Redirect($"{frontend}/auth/callback?step_up=success");
             }
 
@@ -207,14 +236,19 @@ public static class AuthEndpoints
                 && nonceStr is not null
                 && _linkNonces.TryRemove(nonceStr, out var linkNonce))
             {
+                activity?.SetTag("auth.flow", "link");
+                activity?.SetTag("auth.link_target", linkNonce.UserId);
+
                 if (DateTime.UtcNow - linkNonce.CreatedAt > LinkNonceTtl)
                 {
+                    activity?.SetTag("auth.outcome", "link_expired");
                     return Results.Redirect($"{frontend}/settings?error=link_expired");
                 }
 
                 // Protect against linking the primary identity onto itself.
                 if ($"{providerLower}:{providerKey}" == linkNonce.UserId)
                 {
+                    activity?.SetTag("auth.outcome", "link_same_identity");
                     return Results.Redirect($"{frontend}/settings?error=link_same_identity");
                 }
 
@@ -251,6 +285,9 @@ public static class AuthEndpoints
                 providerLower, providerKey, context.RequestAborted);
             if (linkedOwner is not null)
             {
+                activity?.SetTag("auth.flow", "linked_sign_in");
+                activity?.SetTag("auth.linked_owner", linkedOwner.UserId);
+
                 // Use the linked account's userId, email, and display name for the session.
                 var linkedUserId = linkedOwner.UserId;
                 var linkedEmail = linkedOwner.Email;
@@ -265,6 +302,11 @@ public static class AuthEndpoints
                     linkedUserId, linkedJti, linkedIssuedAt, linkedExpiresAt,
                     linkedUserAgent,
                     mfaVerifiedAt: null, cancellationToken: context.RequestAborted);
+
+                activity?.SetTag("auth.outcome", "linked_sign_in_success");
+                ApiTelemetry.AuthLoginSuccessTotal.Add(1,
+                    new KeyValuePair<string, object?>("provider", providerLower),
+                    new KeyValuePair<string, object?>("flow", "linked_sign_in"));
 
                 return Results.Redirect(
                     $"{frontend}/auth/callback?token={Uri.EscapeDataString(linkedJwt)}");
@@ -307,6 +349,8 @@ public static class AuthEndpoints
                     providerLower, context.RequestAborted);
             }
 
+            activity?.SetTag("auth.flow", "login");
+
             var (jwt, jti, issuedAt, expiresAt) = jwtService.IssueTokenWithMeta(
                 userId, email, name, providerLower);
 
@@ -316,6 +360,11 @@ public static class AuthEndpoints
             await sessionRepo.CreateSessionAsync(
                 userId, jti, issuedAt, expiresAt, userAgent, mfaVerifiedAt,
                 context.RequestAborted);
+
+            activity?.SetTag("auth.outcome", "login_success");
+            ApiTelemetry.AuthLoginSuccessTotal.Add(1,
+                new KeyValuePair<string, object?>("provider", providerLower),
+                new KeyValuePair<string, object?>("flow", "login"));
 
             return Results.Redirect(
                 $"{frontend}/auth/callback?token={Uri.EscapeDataString(jwt)}");
@@ -687,12 +736,20 @@ public static class AuthEndpoints
             ISessionRepository sessionRepo,
             IAuditEventRepository auditRepo) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("auth.admin_recover");
+
             var adminUserId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
                 ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? "";
+            activity?.SetTag("enduser.id", adminUserId);
+
             var adminUser = await userRepo.FindByUserIdAsync(adminUserId, context.RequestAborted);
             if (adminUser is null || adminUser.Role != UserRole.Admin)
+            {
+                activity?.SetTag("auth.outcome", "forbidden");
+                activity?.SetStatus(ActivityStatusCode.Error, "Not an admin");
                 return Results.Forbid();
+            }
 
             // REQ-SEC-011: validate step-up within 5 minutes.
             var adminJti = context.User.FindFirst("jti")?.Value ?? "";
@@ -702,6 +759,8 @@ public static class AuthEndpoints
                 && adminSession.StepUpAuthenticatedAt.Value >= DateTime.UtcNow - StepUpDuration;
             if (!stepUpValid)
             {
+                activity?.SetTag("auth.outcome", "step_up_required");
+                activity?.SetStatus(ActivityStatusCode.Error, "Step-up re-authentication required");
                 return Results.Json(
                     new AuthErrorResponse("step_up_required"),
                     statusCode: StatusCodes.Status401Unauthorized);
@@ -792,11 +851,19 @@ public static class AuthEndpoints
             ISysConfigRepository configRepo,
             IAuditEventRepository auditRepo) =>
         {
+            using var activity = ApiTelemetry.ActivitySource.StartActivity("auth.accept_legal");
+
             var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
                 ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? "";
+            activity?.SetTag("enduser.id", userId);
+
             if (string.IsNullOrEmpty(userId))
+            {
+                activity?.SetTag("auth.outcome", "unauthorized");
+                activity?.SetStatus(ActivityStatusCode.Error, "User not found in token");
                 return Results.Unauthorized();
+            }
 
             var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
             if (user is null)

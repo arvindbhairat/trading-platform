@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -7,6 +8,7 @@ using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Jobs.EodSuccessMarker;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.EodSignalRunner;
 
@@ -52,6 +54,9 @@ internal sealed class EodSignalRunnerWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("EODSR.poll_cycle");
+            activity?.SetTag("job.type", "EODSR");
+            var sw = Stopwatch.StartNew();
             try
             {
                 await ProcessEodsrCycleAsync(stoppingToken);
@@ -63,8 +68,11 @@ internal sealed class EodSignalRunnerWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "EODSR worker error during processing cycle.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.EodSignalRunDurationMs.Record(sw.Elapsed.TotalMilliseconds);
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

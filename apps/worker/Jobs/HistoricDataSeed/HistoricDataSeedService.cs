@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
@@ -6,6 +7,7 @@ using SignalStack.Storage.Historical;
 using SignalStack.Storage.Universe;
 using SignalStack.MarketData;
 using SignalStack.SqlMigrations;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.HistoricDataSeed;
 
@@ -98,6 +100,8 @@ public sealed class HistoricDataSeedService
             _logger.LogError(ex,
                 "Failed to create per-symbol tables for {Symbol} (suffix: {Suffix}).",
                 symbol, suffix);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             return new SeedSymbolResult(symbol, 0, 0, 0, SeedOutcome.FailedTableCreation);
         }
         finally
@@ -137,6 +141,8 @@ public sealed class HistoricDataSeedService
             _logger.LogError(ex,
                 "Failed to fetch historical data for {Symbol} from {Provider}.",
                 symbol, _marketDataProvider.ProviderName);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             return new SeedSymbolResult(symbol, 0, 0, 0, SeedOutcome.FailedProviderFetch);
         }
 
@@ -167,6 +173,8 @@ public sealed class HistoricDataSeedService
             _logger.LogError(ex,
                 "Failed to insert daily data for {Symbol} into {Table}.",
                 symbol, dailyTableName);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
             return new SeedSymbolResult(symbol, providerRecords.Count, 0, 0, SeedOutcome.FailedDailyInsert);
         }
 

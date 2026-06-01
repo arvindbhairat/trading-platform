@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
+import { trace } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -30,15 +31,23 @@ interface TelemetryBatch {
 // ─── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  const tracer = trace.getTracer("web-telemetry");
+  const span = tracer.startSpan("telemetry.ingest");
+
   try {
     const body = (await request.json()) as TelemetryBatch;
 
     if (!body.events || !Array.isArray(body.events)) {
+      span.setAttribute("telemetry.event_count", 0);
+      span.setStatus({ code: 2, message: "Invalid payload" }); // ERROR
+      span.end();
       return NextResponse.json(
         { error: "Invalid payload — expected { events: [...] }" },
         { status: 400 },
       );
     }
+
+    span.setAttribute("telemetry.event_count", body.events.length);
 
     const logger = logs.getLogger("web-telemetry");
 
@@ -75,8 +84,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    span.end();
     return NextResponse.json({ received: body.events.length });
-  } catch {
+  } catch (err) {
+    span.setAttribute("telemetry.error", String(err));
+    span.setStatus({ code: 2, message: String(err) }); // ERROR
+    span.end();
     return NextResponse.json(
       { error: "Invalid request body" },
       { status: 400 },

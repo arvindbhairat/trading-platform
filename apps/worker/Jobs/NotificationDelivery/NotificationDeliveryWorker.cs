@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.NotificationDelivery;
 
@@ -41,6 +43,9 @@ internal sealed class NotificationDeliveryWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("NDJ.poll_cycle");
+            activity?.SetTag("job.type", "NDJ");
+            var sw = Stopwatch.StartNew();
             try
             {
                 using var scope = _serviceProvider.CreateScope();
@@ -56,8 +61,11 @@ internal sealed class NotificationDeliveryWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "NDJ worker error during delivery cycle.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.NdjDeliveryDurationMs.Record(sw.Elapsed.TotalMilliseconds);
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

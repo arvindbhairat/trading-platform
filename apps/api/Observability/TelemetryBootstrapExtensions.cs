@@ -72,6 +72,11 @@ internal static class TelemetryBootstrapExtensions
       builder.Configuration["SignalStack:Bootstrap:KeyVault:SnapshotPath"] ?? "(not set)",
       builder.Configuration["SignalStack:Bootstrap:LastKnownGood:CachePath"] ?? "(not set)");
 
+    // Enable Npgsql built-in OpenTelemetry tracing (Npgsql 9.0+).
+    // Adds db.system, db.name, db.statement attributes to spans for every
+    // NpgsqlCommand execution with zero code changes.
+    AppContext.SetSwitch("Npgsql.EnableTelemetry", true);
+
     if (hasOtlpEndpoint)
     {
       otelBuilder
@@ -88,6 +93,8 @@ internal static class TelemetryBootstrapExtensions
         .WithTracing(tracing => tracing
           .AddAspNetCoreInstrumentation()
           .AddHttpClientInstrumentation()
+          .AddSource(ApiTelemetry.ActivitySource.Name)
+          .SetSampler(new AlwaysOnSampler())
           .AddOtlpExporter(exporter => ConfigureExporter(exporter, telemetryOptions, "v1/traces")))
         .WithMetrics(metrics => metrics
           .AddAspNetCoreInstrumentation()
@@ -103,7 +110,9 @@ internal static class TelemetryBootstrapExtensions
         .WithLogging()
         .WithTracing(tracing => tracing
           .AddAspNetCoreInstrumentation()
-          .AddHttpClientInstrumentation())
+          .AddHttpClientInstrumentation()
+          .AddSource(ApiTelemetry.ActivitySource.Name)
+          .SetSampler(new AlwaysOnSampler()))
         .WithMetrics(metrics => metrics
           .AddAspNetCoreInstrumentation()
           .AddHttpClientInstrumentation()

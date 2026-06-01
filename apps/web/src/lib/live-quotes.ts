@@ -13,6 +13,7 @@
  */
 
 import { getToken, apiFetch, resolveWsUrl } from "./auth";
+import { telemetry } from "./telemetry";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -207,11 +208,11 @@ export class LiveQuotesClient {
       this.pldWs.onerror = () => {
         // PLD lease failure is non-critical; the chart still works.
         // The user loses the "latest-tab-wins" protection.
-        console.warn("[LiveQuotes] PLD WebSocket error — lease not acquired");
+        telemetry.trackCustom("live_quotes_pld_error", { message: "PLD WebSocket error — lease not acquired" });
         this.pldWs?.close();
       };
     } catch {
-      console.warn("[LiveQuotes] Failed to create PLD WebSocket");
+      telemetry.trackCustom("live_quotes_pld_error", { message: "Failed to create PLD WebSocket" });
     }
   }
 

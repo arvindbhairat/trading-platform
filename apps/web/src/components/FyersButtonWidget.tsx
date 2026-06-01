@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, Btn, Icon, Pill } from "@/components/primitives";
 import { apiFetch } from "@/lib/auth";
+import { telemetry } from "@/lib/telemetry";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function createFyersButton(
   // Check if custom element is registered
   const hasElement = customElements?.get?.("fyers-button") !== undefined;
   if (!hasElement) {
-    console.warn("[FyersButtonWidget] <fyers-button> custom element not registered");
+    telemetry.trackCustom("fyers_widget_not_registered", { message: "fyers-button custom element not registered" });
     return null;
   }
 
@@ -184,12 +185,18 @@ export default function FyersButtonWidget({
       if (!res.ok) {
         // API returned an error, but the FYERS submission was successful
         // The LADS reconciliation safety net (P7-T8) will resolve the intent later.
-        console.warn("[FyersButtonWidget] Callback API returned non-OK:", res.status);
+        telemetry.trackCustom("fyers_widget_callback_error", {
+          status: res.status,
+          nonce: signedPayload.nonce,
+        });
       }
     } catch (e) {
       // Network error — intent remains "pending" in the ledger.
       // LADS reconciliation (P7-T8) will resolve the mismatch.
-      console.warn("[FyersButtonWidget] Callback API call failed:", e);
+      telemetry.trackCustom("fyers_widget_callback_exception", {
+        error: String(e),
+        nonce: signedPayload.nonce,
+      });
     }
 
     setPhase("success");

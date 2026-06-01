@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.AdminFyersTokenCheck;
 
@@ -41,6 +43,10 @@ internal sealed class AdminFyersTokenCheckWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("FyersTokenCheck.poll_cycle");
+            activity?.SetTag("job.type", "FyersTokenCheck");
+            var sw = Stopwatch.StartNew();
+            var outcome = "completed";
             try
             {
                 using var scope = _serviceProvider.CreateScope();
@@ -57,9 +63,13 @@ internal sealed class AdminFyersTokenCheckWorker : BackgroundService
             }
             catch (Exception ex)
             {
+                outcome = "failed";
                 _logger.LogError(ex, "AdminFyersTokenCheck worker error during token check cycle.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.FyersTokenCheckOutcomeTotal.Add(1, new KeyValuePair<string, object?>("result", outcome));
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

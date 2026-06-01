@@ -33,7 +33,15 @@ internal sealed class WorkerHeartbeatService : BackgroundService
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
   {
     using var startupActivity = WorkerTelemetry.ActivitySource.StartActivity("worker.startup");
+    startupActivity?.SetTag("singleton.lease_key", _options.LeaseKey);
+    startupActivity?.SetTag("singleton.instance_id", _options.InstanceId);
+    startupActivity?.SetTag("singleton.lease_ttl_seconds", _options.LeaseTtlSeconds);
+    startupActivity?.SetTag("singleton.heartbeat_interval_seconds", _options.HeartbeatIntervalSeconds);
+
     var startupDecision = await _singletonCoordinator.AcquireStartupLeaseAsync(stoppingToken);
+    startupActivity?.SetTag("singleton.initial_acquired", !startupDecision.ShouldExitWithFailure);
+    startupActivity?.SetTag("singleton.initial_holder", startupDecision.DetectedHolderInstanceId ?? "unknown");
+    var retryCount = 0;
 
     if (startupDecision.ShouldExitWithFailure)
     {
@@ -53,11 +61,23 @@ internal sealed class WorkerHeartbeatService : BackgroundService
         startupDecision = await _singletonCoordinator.AcquireStartupLeaseAsync(stoppingToken);
         if (!startupDecision.ShouldExitWithFailure)
           break;
+        retryCount = attempt;
       }
     }
 
+    startupActivity?.SetTag("singleton.retry_attempts", retryCount);
+    startupActivity?.SetTag("singleton.acquired", !startupDecision.ShouldExitWithFailure);
+
     if (startupDecision.ShouldExitWithFailure)
     {
+      startupActivity?.SetStatus(ActivityStatusCode.Error, "Lease acquisition failed after retries");
+      startupActivity?.AddEvent(new ActivityEvent("singleton.lease_failed",
+          tags: new ActivityTagsCollection
+          {
+              ["last_holder"] = startupDecision.DetectedHolderInstanceId ?? "unknown",
+              ["max_retries"] = MaxLeaseRetryAttempts
+          }));
+
       _logger.LogError(
         "Singleton lease could not be acquired after {MaxRetries} attempts. " +
         "Last holder: {Holder}. Exiting.",
@@ -78,7 +98,19 @@ internal sealed class WorkerHeartbeatService : BackgroundService
       if (DateTimeOffset.UtcNow - lastLeaseRefreshUtc >= TimeSpan.FromSeconds(_options.RefreshIntervalSeconds))
       {
         var leaseRefreshStartedAt = Stopwatch.GetTimestamp();
-        await _singletonCoordinator.TryRefreshLeaseAsync(stoppingToken);
+        using var refreshActivity = WorkerTelemetry.ActivitySource.StartActivity("worker.lease_refresh");
+        try
+        {
+          await _singletonCoordinator.TryRefreshLeaseAsync(stoppingToken);
+          refreshActivity?.SetTag("singleton.refresh_successful", true);
+        }
+        catch (Exception ex)
+        {
+          refreshActivity?.SetTag("singleton.refresh_successful", false);
+          refreshActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+          refreshActivity?.AddException(ex);
+          _logger.LogWarning(ex, "Singleton lease refresh failed.");
+        }
         WorkerTelemetry.LeaseRefreshDurationMilliseconds.Record(Stopwatch.GetElapsedTime(leaseRefreshStartedAt).TotalMilliseconds);
         lastLeaseRefreshUtc = DateTimeOffset.UtcNow;
       }

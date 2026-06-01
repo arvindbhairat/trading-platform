@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Storage.Universe;
+using SignalStack.Worker.Observability;
 
 namespace SignalStack.Worker.Jobs.HistoricDataSeed;
 
@@ -49,6 +51,9 @@ internal sealed class HistoricDataSeedWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var activity = WorkerTelemetry.ActivitySource.StartActivity("HDS.poll_cycle");
+            activity?.SetTag("job.type", "HDS");
+            var sw = Stopwatch.StartNew();
             try
             {
                 await ProcessPendingJobsAsync(stoppingToken);
@@ -60,8 +65,11 @@ internal sealed class HistoricDataSeedWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "HistoricDataSeedWorker error while processing jobs.");
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddException(ex);
             }
 
+            WorkerTelemetry.HdsSeedDurationMs.Record(sw.Elapsed.TotalMilliseconds);
             await Task.Delay(pollInterval, stoppingToken);
         }
     }

@@ -209,3 +209,37 @@ export function generateCorrelationId(): string {
   // Fallback for environments without crypto.randomUUID
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+// ── W3C Trace Context propagation ────────────────────────────────────────
+
+/**
+ * Generate a W3C `traceparent` header value from a correlation ID.
+ *
+ * The correlation ID (UUID v4) is repurposed as the trace-id (32 hex chars
+ * after removing dashes). The span-id is derived from the first 16 hex chars
+ * of a hash of the correlation ID. The trace-flags are set to 01 (sampled).
+ *
+ * The API's existing middleware reads `X-Correlation-Id`, but adding a proper
+ * traceparent header enables Honeycomb's native distributed trace joining
+ * across the browser ↔ frontend-server ↔ API boundary.
+ *
+ * Format: 00-{trace-id}-{span-id}-{flag}
+ *   trace-id: 32 hex chars (from correlation ID)
+ *   span-id:  16 hex chars (derived hash)
+ *   flag:     01 = sampled
+ */
+export function generateTraceParent(correlationId: string): string {
+  // Use correlation ID (UUID without dashes = 32 hex chars) as trace-id
+  const traceId = correlationId.replace(/-/g, "");
+
+  // Derive a span-id from first 16 hex chars of a quick hash
+  let hash = 0;
+  for (let i = 0; i < correlationId.length; i++) {
+    const char = correlationId.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // convert to 32-bit int
+  }
+  const spanId = (Math.abs(hash) >>> 0).toString(16).padStart(16, "0");
+
+  return `00-${traceId}-${spanId}-01`;
+}

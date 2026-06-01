@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -177,6 +178,8 @@ public sealed class LiveAccountDataSyncService
             {
                 errorCount++;
                 _logger.LogError(ex, "LADS: MongoDB error during sync for user {UserId}.", user.UserId);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -186,6 +189,8 @@ public sealed class LiveAccountDataSyncService
             {
                 errorCount++;
                 _logger.LogError(ex, "LADS: unexpected error during sync for user {UserId}.", user.UserId);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
             }
         }
 
@@ -204,6 +209,8 @@ public sealed class LiveAccountDataSyncService
             _logger.LogWarning(ex,
                 "LADS: callback ratio evaluation failed. " +
                 "This does not affect the sync cycle outcome.");
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
 
         // ── Step 7: Cycle-level abort tracking (REQ-PORT-021a) ────────────
@@ -518,6 +525,8 @@ public sealed class LiveAccountDataSyncService
                         "CA detection: failed for user {UserId}. " +
                         "Trade ingestion completed; CA detection is non-critical.",
                         user.UserId);
+                    Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    Activity.Current?.AddException(ex);
                 }
             }
 
@@ -538,6 +547,8 @@ public sealed class LiveAccountDataSyncService
                     "LADS: intent reconciliation failed for user {UserId}. " +
                     "Trade ingestion completed; reconciliation will retry next cycle.",
                     user.UserId);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
             }
 
             // ── Step 3: Record sync progress (P5-T7 guard write) ───────────
@@ -671,6 +682,8 @@ public sealed class LiveAccountDataSyncService
                 "LADS: failed to emit FillConfirmedEvent for user {UserId}. " +
                 "Trade ingestion completed; fill event emission is non-critical.",
                 userId);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
 
         return fillDetails;
@@ -733,6 +746,8 @@ public sealed class LiveAccountDataSyncService
                 "LADS: failed to write fill notifications for user {UserId}. " +
                 "Fill events were emitted; notification dispatch is non-critical.",
                 userId);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
     }
 
@@ -878,6 +893,8 @@ public sealed class LiveAccountDataSyncService
             _logger.LogWarning(ex,
                 "LADS: failed to resolve open suspension incidents " +
                 "(non-critical — will retry next cycle).");
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
     }
 }

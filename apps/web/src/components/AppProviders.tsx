@@ -12,6 +12,7 @@ import { PushAlertProvider } from "./PushAlertProvider";
 import { PushDegradationBanner } from "./PushDegradationBanner";
 import { FyersSdkProvider } from "./FyersSdkProvider";
 import { telemetry } from "@/lib/telemetry";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 /**
  * Activates telemetry after the initial auth check completes.
@@ -183,7 +184,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <WebVitalsReporter />
             <GlobalErrorBoundary />
             <PageViewTracker />
-            {children}
+            <ErrorBoundary name="app-root">
+              {children}
+            </ErrorBoundary>
           </TelemetryGate>
         </PushAlertProvider>
       </FyersSdkProvider>

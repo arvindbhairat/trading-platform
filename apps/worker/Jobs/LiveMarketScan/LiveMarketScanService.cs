@@ -381,6 +381,8 @@ public sealed class LiveMarketScanService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "LMDS: error fetching quote for {Symbol}.", symbol);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
             }
         }
 
@@ -465,6 +467,8 @@ public sealed class LiveMarketScanService
             _logger.LogError(ex,
                 "LMDS: failed to enqueue {LevelType} breach event for position {PositionId}.",
                 levelType, position.PositionId);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
 
         // Publish push event for real-time portal delivery (REQ-NFR-013).
@@ -517,6 +521,8 @@ public sealed class LiveMarketScanService
             _logger.LogWarning(ex,
                 "LMDS: failed to publish push event for {LevelType} breach on position {PositionId}.",
                 levelType, position.PositionId);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            Activity.Current?.AddException(ex);
         }
     }
 
