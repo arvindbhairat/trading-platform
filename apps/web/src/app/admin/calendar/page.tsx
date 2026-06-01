@@ -177,7 +177,7 @@ export default function AdminCalendarPage() {
     const params = new URLSearchParams();
     if (filterFrom) params.set("from", filterFrom);
     if (filterTo) params.set("to", filterTo);
-    if (filterType) params.set("sessionType", filterType);
+    if (filterType) params.set("session_type", filterType);
 
     Promise.all([
       apiFetch(`/api/v1/admin/calendar/?${params.toString()}`),
@@ -257,10 +257,10 @@ export default function AdminCalendarPage() {
       if (editId) {
         // Update existing.
         const body: Record<string, unknown> = {};
-        if (form.sessionType) body.sessionType = form.sessionType;
-        if (form.sessionStartTime) body.sessionStartTime = form.sessionStartTime;
-        if (form.sessionEndTime) body.sessionEndTime = form.sessionEndTime;
-        body.holidayName = form.holidayName || null;
+        if (form.sessionType) body.session_type = form.sessionType;
+        if (form.sessionStartTime) body.session_start_time = form.sessionStartTime;
+        if (form.sessionEndTime) body.session_end_time = form.sessionEndTime;
+        body.holiday_name = form.holidayName || null;
 
         const res = await apiFetch(`/api/v1/admin/calendar/${editId}`, {
           method: "PUT",
@@ -279,15 +279,15 @@ export default function AdminCalendarPage() {
       } else {
         // Create new.
         const body: Record<string, unknown> = {
-          sessionDate: form.sessionDate,
-          sessionType: form.sessionType,
+          session_date: form.sessionDate,
+          session_type: form.sessionType,
         };
 
         if (form.sessionType === "non_trading_day") {
-          body.holidayName = form.holidayName || null;
+          body.holiday_name = form.holidayName || null;
         } else {
-          body.sessionStartTime = form.sessionStartTime || DEFAULT_START_TIME;
-          body.sessionEndTime = form.sessionEndTime || DEFAULT_END_TIME;
+          body.session_start_time = form.sessionStartTime || DEFAULT_START_TIME;
+          body.session_end_time = form.sessionEndTime || DEFAULT_END_TIME;
         }
 
         const res = await apiFetch("/api/v1/admin/calendar/", {
