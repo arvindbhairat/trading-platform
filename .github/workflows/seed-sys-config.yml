@@ -10,6 +10,8 @@
 name: seed-sys-config
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
