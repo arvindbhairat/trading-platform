@@ -21,7 +21,6 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
     telemetry.track({
       type: "error",
       name: "route_error",
-      timestamp: Date.now(),
       error: `${error.message}\n${error.stack ?? ""}`,
       attributes: {
         digest: error.digest ?? "",

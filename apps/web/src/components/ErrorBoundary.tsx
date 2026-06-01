@@ -50,7 +50,6 @@ export class ErrorBoundary extends React.Component<
     telemetry.track({
       type: "error",
       name: `render_error.${componentName}`,
-      timestamp: Date.now(),
       error: `${error.message}\n${error.stack ?? ""}`,
       attributes: {
         component_stack: errorInfo.componentStack ?? "",

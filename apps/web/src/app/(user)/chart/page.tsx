@@ -305,7 +305,7 @@ export default function ChartPage() {
       // No signed payload or error — just close the modal.
       // The user already saw the error in the modal UI.
       telemetry.trackCustom("chart_signed_payload_warn", {
-        error: params.signedPayloadError,
+        ...(params.signedPayloadError ? { error: params.signedPayloadError } : {}),
       });
     }
     setModalAction(null);
