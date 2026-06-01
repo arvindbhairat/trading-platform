@@ -14,7 +14,7 @@ The platform uses:
 The system needs:
 
 - consistent observability across all applications
-- a simple setup that works with the developer's existing New Relic account
+- a simple setup that works with the developer's chosen observability vendor (initially New Relic, migrated to Honeycomb May 2026)
 - centrally managed configuration
 - admin-managed runtime settings without direct database edits
 

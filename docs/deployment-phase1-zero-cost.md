@@ -1,6 +1,6 @@
 # Phase 1 Deployment — $0/Month Architecture (Supabase + Atlas + Railway)
 
-> **Update (May 2026):** Replaced Oracle Cloud VM with managed free-tier services. API + Worker hosted on Railway (auto-HTTPS, no Caddy/domain needed). Databases fully managed (Supabase, MongoDB Atlas, Redis Cloud). OTel Collector removed — .NET SDK exports directly to New Relic.
+> **Update (May 2026):** Replaced Oracle Cloud VM with managed free-tier services. API + Worker hosted on Railway (auto-HTTPS, no Caddy/domain needed). Databases fully managed (Supabase, MongoDB Atlas, Redis Cloud). OTel Collector removed — .NET SDK exports directly to Honeycomb. Switched from New Relic to Honeycomb for observability in May 2026.
 
 ## Architecture
 
@@ -27,9 +27,9 @@
             │
             ▼
 ┌─────────────────────────────────────────────────────────┐
-│  New Relic Free (100 GB/mo logs, 100 GB/mo traces,      │
-│   10k metrics/month)                                     │
-│  Direct OTLP export from .NET SDK — no collector         │
+│  Honeycomb Free (100 GB/mo logs + traces,                 │
+│    includes metrics)                                      │
+│  Direct OTLP export from .NET SDK — no collector          │
 └─────────────────────────────────────────────────────────┘
 
 Build and deployment of all three services is handled by Railway's
@@ -47,7 +47,7 @@ service on push to main. No GitHub Actions deploy workflow needed.
 | **MongoDB** | MongoDB Atlas M0 | **$0** | 512 MB shared storage, free forever |
 | **PostgreSQL** | Supabase Free | **$0** | 500 MB database, 2 GB bandwidth |
 | **Redis** | Redis Cloud Free | **$0** | 50 MB, redis.com |
-| **Observability** | New Relic Free | **$0** | Direct OTLP — URL + license key only |
+| **Observability** | Honeycomb Free | **$0** | Direct OTLP — URL + Ingest key only |
 | **CI/CD** | Railway (auto-deploy) + GitHub Actions (seeder only) | **$0** | Railway builds and deploys; Actions runs seeder on demand |
 | **Domain** | Not needed | **$0** | Railway provides `*.railway.app` |
 | **Total** | | **~$5-10/month** | |
@@ -170,67 +170,67 @@ Supabase comes with a web-based SQL editor, table browser, and API explorer.
 
 ---
 
-## Step 3: New Relic (Free Observability — Direct OTLP Export)
+## Step 3: Honeycomb (Free Observability — Direct OTLP Export)
 
-No collector sidecar needed. The .NET OTel SDK is configured to export directly to New Relic with the license key in the HTTP header.
+No collector sidecar needed. The .NET OTel SDK is configured to export directly to Honeycomb with the API key in the HTTP header.
 
 ### 3.1 Sign Up
 
-1. Go to [https://newrelic.com/signup](https://newrelic.com/signup) — select **Free forever** tier
-2. After logging in, go to **Add Data** → **OpenTelemetry**
-3. Note your **OTLP endpoint** and **license key**:
-   - **OTLP endpoint:** `https://otlp.eu01.nr-data.net:443` (or `https://otlp.nr-data.net:443` for US)
-   - **License key:** Looks like `eu01xx...`
+1. Go to [https://www.honeycomb.io/signup](https://www.honeycomb.io/signup) — select the free tier
+2. After logging in, create an environment (e.g. `signalstack-production`)
+3. Navigate to **Environment → API Keys** to find your **Ingest API key**
+4. Note your **OTLP endpoint**:
+   - **US instance:** `https://api.honeycomb.io:443`
+   - **EU instance:** `https://api.eu1.honeycomb.io:443`
+   - **Ingest API Key:** Looks like `hcaik_...`
 
 ### 3.2 Free Tier Limits
 
 | Telemetry Type | Free Limit |
 |----------------|-----------|
 | Logs | 100 GB/month |
-| Traces | 100 GB/month |
-| Metrics | 10,000 metrics/month |
-| Data retention | 8 days |
+| Traces (spans) | 100 GB/month |
+| Metrics | Included |
+| Data retention | 20 days (free tier) |
 
 ### 3.3 .NET Configuration
 
-In the API and Worker code, the OTel setup needs two values as environment variables:
+In the API and Worker code, the OTel setup uses generic OTLP environment variables (not vendor-specific):
 
 | Variable | Value |
 |----------|-------|
-| `NewRelic__Endpoint` | `https://otlp.eu01.nr-data.net:443` |
-| `NewRelic__LicenseKey` | `eu01xx...` |
+| `Telemetry__Otlp__Endpoint` | `https://api.honeycomb.io` (or `https://api.eu1.honeycomb.io` for EU) |
+| `Telemetry__Otlp__ApiKey` | Your Honeycomb Ingest API key (`hcaik_...`) |
 
-The .NET code configures the exporter once at startup:
+The actual .NET code configures the exporter once at startup using the generic `OtlpTelemetryOptions` configuration section:
 
 ```csharp
-// Program.cs — simplified, no collector needed
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter(options =>
-        {
-            options.Endpoint = new Uri(
-                Environment.GetEnvironmentVariable("NewRelic__Endpoint")
-                ?? "https://otlp.eu01.nr-data.net:443");
-            options.Headers = "api-key=" +
-                Environment.GetEnvironmentVariable("NewRelic__LicenseKey");
-            options.Protocol = OtlpExportProtocol.HttpProtobuf;
-        }))
-    .WithMetrics(metrics => metrics
-        .AddAspNetCoreInstrumentation()
-        .AddOtlpExporter(options =>
-        {
-            options.Endpoint = new Uri(
-                Environment.GetEnvironmentVariable("NewRelic__Endpoint")
-                ?? "https://otlp.eu01.nr-data.net:443");
-            options.Headers = "api-key=" +
-                Environment.GetEnvironmentVariable("NewRelic__LicenseKey");
-            options.Protocol = OtlpExportProtocol.HttpProtobuf;
-        }));
+// TelemetryBootstrapExtensions.cs — simplified, no collector needed
+private static void ConfigureExporter(OtlpExporterOptions exporter, OtlpTelemetryOptions options, string signalPath)
+{
+    exporter.Endpoint = new Uri(new Uri(options.Endpoint), signalPath);
+    exporter.Protocol = OtlpExportProtocol.HttpProtobuf;
+    exporter.TimeoutMilliseconds = options.ExportTimeoutMilliseconds;
+
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+    {
+        exporter.Headers = $"x-honeycomb-team={options.ApiKey}";
+    }
+}
 ```
 
-> **Why HTTP Protobuf over gRPC:** New Relic's OTLP endpoint accepts both, but HTTP makes it easy to pass the `api-key` header. No local collector needed.
+> **Why `x-honeycomb-team` header:** Honeycomb's OTLP endpoint accepts both HTTP and gRPC. The `x-honeycomb-team` header passes the Ingest API key. The code appends signal paths (`/v1/logs`, `/v1/traces`, `/v1/metrics`) to the base endpoint URL automatically.
+
+### 3.4 Honeycomb Query Builder (MCP Integration)
+
+For troubleshooting, the project uses the Honeycomb MCP tool (configured in the Claude agent) to run queries directly from the agent:
+
+- `list_spans` — see what span names exist across services
+- `get_span_details` — inspect attributes on specific operations
+- `run_query` — custom aggregations (P99 latency, error rates, etc.)
+- `get_trace` — drill into a specific trace ID from logs
+
+This replaces manual NRQL queries and provides a more structured troubleshooting workflow.
 
 ---
 
@@ -264,8 +264,8 @@ The Web service is also deployed via Railway (same project, alongside API and Wo
 | `CONNECTIONSTRINGS__MONGODB` | MongoDB Atlas connection string | API/Worker (Railway env vars) |
 | `CONNECTIONSTRINGS__POSTGRES` | Supabase connection string | API/Worker (Railway env vars) |
 | `CONNECTIONSTRINGS__REDIS` | Redis Cloud connection string | API/Worker (Railway env vars) |
-| `NewRelic__Endpoint` | New Relic OTLP endpoint URL | API/Worker (Railway env vars) |
-| `NewRelic__LicenseKey` | New Relic license key | API/Worker (Railway env vars) |
+| `Telemetry__Otlp__Endpoint` | Honeycomb OTLP endpoint URL | API/Worker (Railway env vars) |
+| `Telemetry__Otlp__ApiKey` | Honeycomb Ingest API key | API/Worker (Railway env vars) |
 
 ---
 
@@ -323,8 +323,8 @@ The Web service is also deployed via Railway (same project, alongside API and Wo
    | `ConnectionStrings__MongoDb` | Your MongoDB Atlas connection string |
    | `ConnectionStrings__Postgres` | Your Supabase connection string |
    | `ConnectionStrings__Redis` | Your Redis Cloud connection string |
-   | `NewRelic__Endpoint` | `https://otlp.eu01.nr-data.net:443` |
-   | `NewRelic__LicenseKey` | Your New Relic license key |
+   | `Telemetry__Otlp__Endpoint` | `https://api.honeycomb.io` (or `https://api.eu1.honeycomb.io` for EU) |
+   | `Telemetry__Otlp__ApiKey` | Your Honeycomb Ingest API key |
 
 5. Railway assigns a public URL like `https://api-production-xxxx.up.railway.app` — auto-HTTPS, no setup needed.
 
@@ -378,7 +378,7 @@ By default, Railway deploys every push to the linked branch. To configure:
 | **MongoDB (Atlas)** | `mongodb+srv://<user>:<password>@<cluster>.mongodb.net/signalstack?retryWrites=true&w=majority` |
 | **PostgreSQL (Supabase)** | `Host=<ref>.supabase.co;Port=5432;Database=signalstack;Username=postgres;Password=<password>;SSL Mode=Require;Trust Server Certificate=true;` |
 | **Redis (Redis Cloud)** | `redis://:<password>@<host>:<port>` |
-| **New Relic Endpoint** | `https://otlp.eu01.nr-data.net:443` (set in code + env var) |
+| **Honeycomb Endpoint** | `https://api.honeycomb.io` (set in env var `Telemetry__Otlp__Endpoint`) |
 
 ---
 
@@ -403,7 +403,7 @@ By default, Railway deploys every push to the linked branch. To configure:
 - [ ] Worker starts and shows "acquired lease" in Railway logs
 - [ ] Google OAuth redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/google/callback`
 - [ ] FYERS app redirect URI registered as `https://api-xxxx.up.railway.app/api/v1/auth/fyers/callback`
-- [ ] New Relic OTLP endpoint configured — telemetry flowing
+- [ ] Honeycomb OTLP endpoint configured — telemetry flowing
 - [ ] GitHub Actions CI passes on push to main
 
 ---

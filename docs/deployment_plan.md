@@ -498,7 +498,7 @@ Non-secret shared technical configuration:
 
 | Key | Phase 1 Example Value | Phase 2 Example Value |
 |-----|----------------------|----------------------|
-| `Telemetry:Otlp:Endpoint` | *(leave blank)* | OTLP endpoint (e.g. `https://otlp.eu01.nr-data.net:443`) |
+| `Telemetry:Otlp:Endpoint` | *(leave blank)* | OTLP endpoint (e.g. `https://api.honeycomb.io`) |
 | `Telemetry:Otlp:ApiKey` | *(leave blank)* | Provider API key |
 | `Logging:LogLevel:Default` | `Information` | `Information` |
 | `Logging:LogLevel:SignalStack` | `Debug` | `Information` |

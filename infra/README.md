@@ -44,8 +44,8 @@ cd infra\docker
 ### Telemetry (OTLP)
 
 Telemetry is exported directly from .NET apps to the configured OTLP endpoint using HTTP/Protobuf.
-- Set `Telemetry__Otlp__Endpoint` to the OTLP HTTP endpoint (e.g. `https://otlp.eu01.nr-data.net:443`)
-- Set `Telemetry__Otlp__ApiKey` to the provider's API key (e.g. New Relic license key)
+- Set `Telemetry__Otlp__Endpoint` to the OTLP HTTP endpoint (e.g. `https://api.honeycomb.io`)
+- Set `Telemetry__Otlp__ApiKey` to the provider's API key (e.g. Honeycomb Ingest API key)
 - When `Endpoint` is empty (local dev default), OTLP export is disabled — logs still go to console via Serilog
 
 ### Notes

@@ -2,7 +2,7 @@
 
 ## Overview
 
-You are a troubleshooting agent for the **SignalStack** trading platform — 3 services deployed on Railway, observability exported via OTLP/HTTP to New Relic. You have access to a New Relic MCP tool to fetch logs, traces, and metrics from all 3 services.
+You are a troubleshooting agent for the **SignalStack** trading platform — 3 services deployed on Railway, observability exported via OTLP/HTTP to Honeycomb. You have access to a Honeycomb MCP tool to fetch logs, traces, and metrics from all 3 services.
 
 This skill provides the systematic diagnostic workflow, common failure-mode catalog, and runbook cross-references needed to debug issues quickly and safely.
 
@@ -13,14 +13,14 @@ This skill provides the systematic diagnostic workflow, common failure-mode cata
 | Service | Tech | Railway Service | Logs at |
 |---|---|---|---|
 | `apps/web` | Next.js 16, client-rendered SPA, no SSR/API routes | `web` | Browser console + Railway logs (no OTLP yet) |
-| `apps/api` | ASP.NET Core 10 | `api` | Serilog → OTLP/HTTP → New Relic |
-| `apps/worker` | .NET 10 Worker Service | `worker` | Serilog → OTLP/HTTP → New Relic |
+| `apps/api` | ASP.NET Core 10 | `api` | Serilog → OTLP/HTTP → Honeycomb |
+| `apps/worker` | .NET 10 Worker Service | `worker` | Serilog → OTLP/HTTP → Honeycomb |
 
 **Deployment:** Railway auto-deploys from `main` via GitHub integration. All 3 services in the same Railway project.
 
 **Observability pipeline:**
 ```
-.NET ILogger → Serilog (structured) → OpenTelemetry SDK → OTLP/HTTP → New Relic
+.NET ILogger → Serilog (structured) → OpenTelemetry SDK → OTLP/HTTP → Honeycomb
 ```
 - OTLP endpoint: `Telemetry__Otlp__Endpoint` env var
 - API key: `Telemetry__Otlp__ApiKey` env var
@@ -42,9 +42,9 @@ From the error report, determine which service(s) are involved:
 | UI broken, chart not loading, blank page | `apps/web` (then trace API calls) |
 | Everything down | Railway infrastructure |
 
-### Step 2 — Fetch logs from New Relic
+### Step 2 — Fetch logs from Honeycomb
 
-Use the New Relic MCP tool to fetch recent logs. Key query patterns:
+Use the Honeycomb MCP tool to fetch recent logs. Key query patterns:
 
 ```
 # All errors across all services (last 15 min)
@@ -81,7 +81,7 @@ For Worker issues:
 For Web issues:
 1. Check the Next.js page/component in `apps/web/src/app/` or `apps/web/src/features/`
 2. Trace the API call via the client in `apps/web/src/lib/`
-3. Check if the API backend returned an error (New Relic)
+3. Check if the API backend returned an error (Honeycomb)
 
 ### Step 4 — Find affected code
 
@@ -110,7 +110,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** Duplicate Worker instances detected, crash-loop, `singleton_violation` errors in logs.
 
 **Diagnostic:**
-- Check New Relic for `singleton_violation` or `singleton_lease_unavailable` log entries
+- Check Honeycomb for `singleton_violation` or `singleton_lease_unavailable` log entries
 - Verify Redis connection string (`ConnectionStrings__Redis`)
 - Check `WorkerSingleton` config values in `appsettings.json`
 - If Redis is unreachable, the Worker starts but logs a warning — check `position_concurrency_alert` in admin advisory
@@ -124,7 +124,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** DataSync, LMDS, EODSR not running. Admin dashboard banner. Telegram admin alert fired once.
 
 **Diagnostic:**
-- New Relic: search for `fyers_token`, `dirty_token`, `token_refresh_failed`
+- Honeycomb: search for `fyers_token`, `dirty_token`, `token_refresh_failed`
 - Check `FYERS_ACCESS_TOKEN` and `FYERS_APP_ID` env vars in Railway
 - The platform enters asymmetric degraded state: user-specific operations (LADS, chart quotes, exit advisories) continue, but shared-ingestion jobs (LMDS, DS, EODSR) suspend
 
@@ -139,7 +139,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Diagnostic:**
 - Check user's FYERS token state in MongoDB `fyers_tokens` collection
 - The portal displays a full-screen modal that cannot be dismissed without completing re-auth
-- New Relic: search for `fyers` AND `reauth` in API logs
+- Honeycomb: search for `fyers` AND `reauth` in API logs
 
 **Architecture:** `docs/system-architecture.md` § Session and FYERS Lock Flow.
 
@@ -148,7 +148,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** A position stops updating. Admin System Health panel shows frozen channel.
 
 **Diagnostic:**
-- New Relic: `OCC_exhausted` or `PositionChannelRegistry` or `rme_incidents`
+- Honeycomb: `OCC_exhausted` or `PositionChannelRegistry` or `rme_incidents`
 - Check MongoDB `rme_incidents` collection
 - Admin dashboard should show frozen position indicators
 
@@ -162,7 +162,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 
 **Diagnostic:**
 - Check EOD pipeline sequence: DS must complete before EODSR starts
-- New Relic: search for `DataSync` or `EodSignalRunner` — check for `Success` vs `Failed` markers
+- Honeycomb: search for `DataSync` or `EodSignalRunner` — check for `Success` vs `Failed` markers
 - Check that the admin FYERS token is valid (see 3.2)
 - Verify `DataSync:PollIntervalSeconds` and `EodSignalRunner:PollIntervalSeconds` in config
 - Check that the EOD `session_success_marker` exists in MongoDB
@@ -176,7 +176,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** Three consecutive LADS aborts. Admin advisory raised.
 
 **Diagnostic:**
-- New Relic: search for `LADS` AND `abort` OR `retryWrites` OR `MongoConnectionException`
+- Honeycomb: search for `LADS` AND `abort` OR `retryWrites` OR `MongoConnectionException`
 - Check MongoDB replica-set primary status
 - Worker should retry with exponential backoff; after 3 consecutive aborts, it writes an admin advisory and pauses LADS
 
@@ -189,7 +189,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** 429 responses from FYERS. Jobs pause or skip work.
 
 **Diagnostic:**
-- New Relic: search for `rate_limit` OR `429` OR `throttle`
+- Honeycomb: search for `rate_limit` OR `429` OR `throttle`
 - Check `fyers-api-budget.md` in `docs/operations/`
 - Verify rate-limit config in `sys_config`
 - Batch sizes may be too large (`operations.universe.symbol_probe_batch_size`, etc.)
@@ -198,11 +198,11 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 
 ### 3.8 OTLP Exporter Failure
 
-**Symptom:** No logs in New Relic. Telemetry missing.
+**Symptom:** No logs in Honeycomb. Telemetry missing.
 
 **Diagnostic:**
 - Check `Telemetry__Otlp__Endpoint` and `Telemetry__Otlp__ApiKey` env vars
-- New Relic endpoint format: `https://otlp.nr-data.net` (appends `/v1/logs`, `/v1/traces`, `/v1/metrics`)
+- Honeycomb endpoint format: `https://api.honeycomb.io` (appends `/v1/logs`, `/v1/traces`, `/v1/metrics`)
 - Export timeout defaults to 5000ms (`ExportTimeoutMilliseconds`)
 - The app logs a startup line: `"Telemetry config — Endpoint: {Endpoint}, ApiKey configured: {HasKey}"` — check Railway logs for this
 - If OTLP endpoint is not set, OTel runs without the exporter (logs/metrics/traces are no-op)
@@ -225,7 +225,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** Unexpected logouts, 401/403 errors.
 
 **Diagnostic:**
-- New Relic: search for `SessionValidationMiddleware` or `session_invalidated` or `jti`
+- Honeycomb: search for `SessionValidationMiddleware` or `session_invalidated` or `jti`
 - Data Protection keys persisted in Redis — check `ConnectionStrings__Redis` is set
 - Session expiry: 24 hours. New login on second device invalidates the previous session server-side
 - OAuth callback diagnostic logging is enabled — search for `OAuth callback` in API logs
@@ -237,7 +237,7 @@ Use the BUG-FIX-PROTOCOL (see `BUG-FIX-PROTOCOL.md` in root):
 **Symptom:** Orders submitted but not linked to platform intents. Unresolved/orphan intents.
 
 **Diagnostic:**
-- New Relic metrics: `order_reconciled_via_lads_only_total`, `order_unresolved_total`, `order_orphan_total`
+- Honeycomb metrics: `order_reconciled_via_lads_only_total`, `order_unresolved_total`, `order_orphan_total`
 - Check `intent_ledger` collection in MongoDB for `pending` records past `intent_timeout_minutes`
 - High LADS-only reconciliation ratio suggests callback delivery regression from FYERS SDK
 - Alerts at `sys_config.orders.callback_failure_alert_ratio` threshold
@@ -293,8 +293,8 @@ All configured values tracked in `.memory/railway_env_vars.md`.
 
 | Variable | Services | Purpose |
 |---|---|---|
-| `Telemetry__Otlp__Endpoint` | API, Worker | New Relic OTLP ingest URL |
-| `Telemetry__Otlp__ApiKey` | API, Worker | New Relic API key |
+| `Telemetry__Otlp__Endpoint` | API, Worker | Honeycomb OTLP ingest URL |
+| `Telemetry__Otlp__ApiKey` | API, Worker | Honeycomb Ingest API key |
 | `ConnectionStrings__MongoDb` | API, Worker | MongoDB connection string |
 | `ConnectionStrings__Redis` | API, Worker | Redis connection string |
 | `ConnectionStrings__SqlServer` | API, Worker | PostgreSQL connection string (historical data) |

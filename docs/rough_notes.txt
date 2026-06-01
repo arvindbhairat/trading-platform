@@ -21,21 +21,18 @@ Secret: kdypg2f8kmws1f9gcewxq70gyfzte5qa
 
 
 
+---
 
-eu01xcd83ae386b02bfbb70153de0eed186fNRAL
-https://otlp.eu01.nr-data.net:443
-
-
-
-new relic
-url: https://otlp.eu01.nr-data.net
-ports: 443, 4317, 4318
-key: eu01xcd83ae386b02bfbb70153de0eed186fNRAL
-
-https://log-api.eu.newrelic.com/log/v1
-eu01x0cc4b3b79264b28246a657f8b24cce5NRAL
-
-curl -v -X POST https://otlp.eu01.nr-data.net:4318/v1/logs -H "api-key: eu01x0cc4b3b79264b28246a657f8b24cce5NRAL" -d "{}"
+~~New Relic (replaced by Honeycomb May 2026 — see entries above)~~
+~~eu01xcd83ae386b02bfbb70153de0eed186fNRAL~~
+~~https://otlp.eu01.nr-data.net:443~~
+~~new relic~~
+~~url: https://otlp.eu01.nr-data.net~~
+~~ports: 443, 4317, 4318~~
+~~key: eu01xcd83ae386b02bfbb70153de0eed186fNRAL~~
+~~https://log-api.eu.newrelic.com/log/v1~~
+~~eu01x0cc4b3b79264b28246a657f8b24cce5NRAL~~
+~~curl -v -X POST https://otlp.eu01.nr-data.net:4318/v1/logs -H "api-key: eu01x0cc4b3b79264b28246a657f8b24cce5NRAL" -d "{}"~~
 
 
 Supabase:
