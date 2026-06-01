@@ -304,9 +304,19 @@ public static class AdminConfigEndpoints
             IsEditable: doc.GetValue("isEditable", BsonBoolean.True).AsBoolean,
             RequiresRestart: doc.GetValue("requiresRestart", BsonBoolean.False).AsBoolean,
             Status: doc.GetValue("status", "active").AsString,
-            UpdatedAt: doc.GetValue("updatedAt", "").AsString,
+            UpdatedAt: doc.GetValue("updatedAt", BsonString.Empty) switch
+            {
+                BsonDateTime dt => dt.ToUniversalTime().ToString("o"),
+                BsonString s => s.AsString,
+                _ => ""
+            },
             UpdatedByUserId: doc.GetValue("updatedByUserId", "").AsString,
-            Version: doc.GetValue("version", 1).AsInt32
+            Version: doc.GetValue("version", 1) switch
+            {
+                BsonInt32 i32 => i32.AsInt32,
+                BsonInt64 i64 => (int)i64.AsInt64,
+                _ => 1
+            }
         );
     }
 

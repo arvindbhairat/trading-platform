@@ -171,7 +171,7 @@ public sealed class SysConfigSeederService
             ["isEditable"] = true,
             ["requiresRestart"] = false,
             ["status"] = "active",
-            ["updatedAt"] = now,
+            ["updatedAt"] = now.ToString("o"),
             ["updatedByUserId"] = "system",
             ["version"] = 1,
         };
@@ -193,7 +193,7 @@ public sealed class SysConfigSeederService
             ["isEditable"] = false,
             ["requiresRestart"] = false,
             ["status"] = "active",
-            ["updatedAt"] = now,
+            ["updatedAt"] = now.ToString("o"),
             ["updatedByUserId"] = "system",
             ["version"] = 1,
         };
