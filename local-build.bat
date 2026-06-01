@@ -33,7 +33,7 @@ cd apps\web || exit /b 1
 
 echo.
 echo Installing dependencies
-call npm ci
+call npm install
 IF ERRORLEVEL 1 exit /b 1
 
 echo.

@@ -125,7 +125,7 @@ public static class ExecutionEndpoints
             catch (SignedPayloadSigningException ex)
             {
                 activity?.SetTag("execution.outcome", "signing_failed");
-                activity?.SetTag("execution.error", ex.Error.Code);
+                activity?.SetTag("execution.error", ex.Error.Reason);
                 activity?.SetStatus(ActivityStatusCode.Error, ex.Error.Message);
                 Activity.Current?.AddException(ex);
                 return Results.UnprocessableEntity(new SignedPayloadErrorResponse(ex.Error));

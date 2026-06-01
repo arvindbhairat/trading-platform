@@ -60,7 +60,7 @@ internal sealed class DataSyncWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            using var sw = Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
             using var activity = WorkerTelemetry.ActivitySource.StartActivity("datasync.poll_cycle");
 
             try
@@ -68,7 +68,7 @@ internal sealed class DataSyncWorker : BackgroundService
                 await ProcessDataSyncCycleAsync(stoppingToken);
 
                 activity?.SetTag("datasync.outcome", "success");
-                WorkerTelemetry.DataSyncOutcomeTotal.Add(1, new("outcome", "success"));
+                WorkerTelemetry.DataSyncOutcomeTotal.Add(1, new KeyValuePair<string, object?>("outcome", "success"));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

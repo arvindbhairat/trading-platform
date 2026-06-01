@@ -12,6 +12,7 @@ internal sealed class WorkerHeartbeatService : BackgroundService
   private readonly ILogger<WorkerHeartbeatService> _logger;
   private readonly WorkerSingletonOptions _options;
   private readonly IWorkerSingletonCoordinator _singletonCoordinator;
+  private readonly IWorkerInstanceIdentityProvider _identityProvider;
 
   // Maximum retry attempts for lease acquisition on conflict.
   // With exponential backoff (2^retry seconds), 6 retries span ~126s,
@@ -22,19 +23,21 @@ internal sealed class WorkerHeartbeatService : BackgroundService
     IHostApplicationLifetime applicationLifetime,
     ILogger<WorkerHeartbeatService> logger,
     IOptions<WorkerSingletonOptions> options,
-    IWorkerSingletonCoordinator singletonCoordinator)
+    IWorkerSingletonCoordinator singletonCoordinator,
+    IWorkerInstanceIdentityProvider identityProvider)
   {
     _applicationLifetime = applicationLifetime;
     _logger = logger;
     _options = options.Value;
     _singletonCoordinator = singletonCoordinator;
+    _identityProvider = identityProvider;
   }
 
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
   {
     using var startupActivity = WorkerTelemetry.ActivitySource.StartActivity("worker.startup");
     startupActivity?.SetTag("singleton.lease_key", _options.LeaseKey);
-    startupActivity?.SetTag("singleton.instance_id", _options.InstanceId);
+    startupActivity?.SetTag("singleton.instance_id", _identityProvider.GetInstanceId());
     startupActivity?.SetTag("singleton.lease_ttl_seconds", _options.LeaseTtlSeconds);
     startupActivity?.SetTag("singleton.heartbeat_interval_seconds", _options.HeartbeatIntervalSeconds);
 
