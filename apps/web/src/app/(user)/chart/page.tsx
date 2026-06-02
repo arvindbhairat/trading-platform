@@ -22,6 +22,7 @@ import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
 import FyersButtonWidget from "@/components/FyersButtonWidget";
 import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
+import { cssVar } from "@/lib/css-vars";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,23 +136,31 @@ export default function ChartPage() {
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Resolve CSS custom properties to actual color values because
+    // lightweight-charts' internal color parser doesn't understand var().
+    const bg2 = cssVar("--bg-2");
+    const fg2 = cssVar("--fg-2");
+    const line1 = cssVar("--line-1");
+    const up500 = cssVar("--up-500");
+    const down500 = cssVar("--down-500");
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { color: "var(--bg-2)" },
-        textColor: "var(--fg-2)",
+        background: { color: bg2 },
+        textColor: fg2,
       },
       grid: {
-        vertLines: { color: "var(--line-1)" },
-        horzLines: { color: "var(--line-1)" },
+        vertLines: { color: line1 },
+        horzLines: { color: line1 },
       },
       crosshair: {
         mode: 0,
       },
       rightPriceScale: {
-        borderColor: "var(--line-1)",
+        borderColor: line1,
       },
       timeScale: {
-        borderColor: "var(--line-1)",
+        borderColor: line1,
         timeVisible: true,
         secondsVisible: false,
       },
@@ -160,12 +169,12 @@ export default function ChartPage() {
     });
 
     const series = chart.addCandlestickSeries({
-      upColor: "var(--up-500)",
-      downColor: "var(--down-500)",
-      borderUpColor: "var(--up-500)",
-      borderDownColor: "var(--down-500)",
-      wickUpColor: "var(--up-500)",
-      wickDownColor: "var(--down-500)",
+      upColor: up500,
+      downColor: down500,
+      borderUpColor: up500,
+      borderDownColor: down500,
+      wickUpColor: up500,
+      wickDownColor: down500,
     } satisfies CandlestickSeriesPartialOptions);
 
     chartRef.current = chart;
