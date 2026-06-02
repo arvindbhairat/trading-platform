@@ -96,7 +96,7 @@ export function initOpenTelemetry(): void {
   }
 
   const env = process.env.NODE_ENV || "development";
-  const commitSha = process.env["RAILWAY_COMMIT_SHA"]?.trim();
+  const commitSha = process.env["RAILWAY_GIT_COMMIT_SHA"]?.trim();
 
   // Shared resource describing this service
   const resourceAttrs: Record<string, string> = {

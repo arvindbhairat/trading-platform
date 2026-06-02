@@ -8,7 +8,7 @@
 - **Signal paths:** `/v1/logs`, `/v1/traces`, `/v1/metrics` appended to base endpoint URL
 - **Export protocol:** HTTP Protobuf (not gRPC)
 - **Export timeout:** 5000ms (configurable via `ExportTimeoutMilliseconds`)
-- **Git commit tracking:** Every service reads `RAILWAY_COMMIT_SHA` env var (set automatically by Railway) and adds it as `git.commit.sha` resource attribute on all spans, logs, and metrics. This allows Honeycomb queries to filter by deployment commit.
+- **Git commit tracking:** Every service reads `RAILWAY_GIT_COMMIT_SHA` env var (set automatically by Railway) and adds it as `git.commit.sha` resource attribute on all spans, logs, and metrics. This allows Honeycomb queries to filter by deployment commit.
 - **Agent MCP tool:** Honeycomb MCP server configured in Claude — use `list_spans`, `get_span_details`, `run_query`, `get_trace` for troubleshooting
 - **Troubleshooting skill:** `.claude/skills/troubleshooting.md` references Honeycomb throughout
 

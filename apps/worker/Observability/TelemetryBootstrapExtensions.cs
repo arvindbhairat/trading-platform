@@ -37,7 +37,7 @@ internal static class TelemetryBootstrapExtensions
       ["deployment.environment"] = builder.Environment.EnvironmentName
     };
 
-    var commitSha = Environment.GetEnvironmentVariable("RAILWAY_COMMIT_SHA");
+    var commitSha = Environment.GetEnvironmentVariable("RAILWAY_GIT_COMMIT_SHA");
     if (!string.IsNullOrEmpty(commitSha))
     {
       resourceAttributes["git.commit.sha"] = commitSha;
