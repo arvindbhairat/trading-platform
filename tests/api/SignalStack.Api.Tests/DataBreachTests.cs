@@ -321,5 +321,7 @@ public sealed class DataBreachTests : IClassFixture<AuthTestApiFactory>
     private sealed record ExerciseRecordResponse(
         bool recorded, string action_type, string recorded_at);
 
-    private sealed record CsrfResponse(string csrfToken);
+    private sealed record CsrfResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("csrf_token")]
+        string csrfToken);
 }

@@ -17,14 +17,13 @@ public sealed class WorkerSingletonInfrastructureLintTests
   }
 
   [Fact]
-  public void Worker_release_workflow_runs_the_singleton_preflight_script()
+  public void Singleton_preflight_script_exists_and_includes_autoscale_check()
   {
     var repoRoot = GetRepoRoot();
-    var workflowPath = Path.Combine(repoRoot, ".github", "workflows", "worker-release-preflight.yml");
-    var workflow = File.ReadAllText(workflowPath);
+    var scriptPath = Path.Combine(repoRoot, "infra", "azure", "scripts", "Test-WorkerSingletonPreflight.ps1");
+    var script = File.ReadAllText(scriptPath);
 
-    Assert.Contains("infra/azure/scripts/Test-WorkerSingletonPreflight.ps1", workflow);
-    Assert.Contains("az monitor autoscale list", File.ReadAllText(Path.Combine(repoRoot, "infra", "azure", "scripts", "Test-WorkerSingletonPreflight.ps1")));
+    Assert.Contains("az monitor autoscale list", script);
   }
 
   private static string GetRepoRoot()

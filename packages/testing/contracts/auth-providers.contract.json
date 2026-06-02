@@ -6,7 +6,7 @@
   "responseFields": [
     { "path": "providers", "type": "array", "required": true, "description": "Array of OAuth provider objects" },
     { "path": "providers[].name", "type": "string", "required": true, "description": "Provider identifier: google, microsoft, facebook" },
-    { "path": "providers[].loginUrl", "type": "string", "required": true, "description": "OAuth initiation URL for this provider" }
+    { "path": "providers[].login_url", "type": "string", "required": true, "description": "OAuth initiation URL for this provider" }
   ],
   "statusCodes": [200]
 }

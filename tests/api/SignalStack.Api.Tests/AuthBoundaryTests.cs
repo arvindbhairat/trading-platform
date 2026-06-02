@@ -134,6 +134,8 @@ public sealed class AuthBoundaryTests : IClassFixture<AuthTestApiFactory>
     private sealed record ProviderEntry(string name, string loginUrl);
     private sealed record MeResponse(string? sub, string? email, string? name);
     private sealed record TokenResponse(string token);
-    private sealed record CsrfResponse(string csrfToken);
+    private sealed record CsrfResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("csrf_token")]
+        string csrfToken);
     private sealed record ErrorResponse(string error, string message);
 }

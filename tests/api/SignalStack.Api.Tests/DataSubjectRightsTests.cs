@@ -280,7 +280,11 @@ public sealed class DataSubjectRightsTests : IClassFixture<AuthTestApiFactory>
         using var resp = await client.GetAsync("/api/v1/admin/privacy/requests");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
-        var body = await resp.Content.ReadFromJsonAsync<PrivacyRequestListResponse>();
+        var body = await resp.Content.ReadFromJsonAsync<PrivacyRequestListResponse>(
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower
+            });
         Assert.NotNull(body);
         Assert.Contains(body.Tickets, t => t.TicketId == ticketId);
     }
@@ -433,5 +437,7 @@ public sealed class DataSubjectRightsTests : IClassFixture<AuthTestApiFactory>
     private sealed record PrivacyRequestListResponse(
         List<PrivacyRequestEntry> Tickets);
 
-    private sealed record CsrfResponse(string csrfToken);
+    private sealed record CsrfResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("csrf_token")]
+        string csrfToken);
 }
