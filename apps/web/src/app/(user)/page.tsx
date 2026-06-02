@@ -122,6 +122,7 @@ export default function DashboardPage() {
       }
 
       setDataFreshness(new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" }));
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load portfolio data");
     } finally {
@@ -135,11 +136,22 @@ export default function DashboardPage() {
 
   const handleRefresh = useCallback(async () => {
     setReconLoading(true);
+    setError(null);
     try {
       const res = await apiFetch("/api/v1/reconciliation/refresh", { method: "POST" });
       if (res.ok) {
         await loadData();
+        setError(null);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(
+          (body as { error?: string; message?: string }).error
+            ?? (body as { error?: string; message?: string }).message
+            ?? `Refresh request failed (${res.status})`
+        );
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Refresh request failed");
     } finally {
       setReconLoading(false);
     }

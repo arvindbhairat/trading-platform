@@ -252,12 +252,19 @@ public static class ReconciliationEndpoints
             );
         }
 
-        var syncStatus = syncDoc.GetValue("sync_status", BsonNull.Value)?.AsString ?? "unknown";
+        // ⚠ BsonNull.Value is a non-null BsonValue instance — it does NOT
+        // short-circuit the null-conditional operator. Calling .AsString on
+        // a BsonNull throws NotSupportedException. Always check IsBsonNull first.
+        var syncStatusVal = syncDoc.GetValue("sync_status", BsonNull.Value);
+        var syncStatus = syncStatusVal.IsBsonNull ? "unknown" : syncStatusVal.AsString;
+
         var lastSync = syncDoc.GetValue("last_successful_sync_at", BsonNull.Value);
         var lastAttempt = syncDoc.GetValue("last_sync_attempt_at", BsonNull.Value);
         var lastRequest = syncDoc.GetValue("last_sync_request_at", BsonNull.Value);
         var requestStatus = syncDoc.GetValue("sync_request_status", BsonNull.Value);
 
+        // Only reference lastSync/requestStatus values in paths where they are
+        // guaranteed to be non-null (guarded by the switch case or IsBsonNull check).
         return new SyncStatusResponse(
             Status: syncStatus,
             LastSuccessfulSyncAt: lastSync.IsBsonNull ? null : (DateTime?)lastSync.ToUniversalTime(),
@@ -266,7 +273,9 @@ public static class ReconciliationEndpoints
             SyncRequestStatus: requestStatus.IsBsonNull ? null : requestStatus.AsString,
             Message: syncStatus switch
             {
-                "completed" => $"Last successful sync: {lastSync.ToUniversalTime():O}",
+                "completed" => lastSync.IsBsonNull
+                    ? "Sync status is completed but no timestamp is available."
+                    : $"Last successful sync: {lastSync.ToUniversalTime():O}",
                 "failed" => "Last sync attempt failed. Use refresh to retry.",
                 "suspended" => "Auto-sync is temporarily suspended due to repeated failures. Manual refresh is available.",
                 _ => "Sync status unknown. Use refresh to initiate a sync.",
