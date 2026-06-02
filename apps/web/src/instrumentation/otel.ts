@@ -28,8 +28,6 @@ import {
   BatchLogRecordProcessor,
 } from "@opentelemetry/sdk-logs";
 import { resourceFromAttributes } from "@opentelemetry/resources";
-import { registerInstrumentations } from "@opentelemetry/instrumentation";
-import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { serverLogger } from "@/lib/server-logger";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -155,13 +153,13 @@ export function initOpenTelemetry(): void {
   logs.setGlobalLoggerProvider(loggerProvider);
   pushShutdown(() => loggerProvider.shutdown());
 
-  // ── Instrumentations ────────────────────────────────────────────────────
-
-  registerInstrumentations({
-    instrumentations: [
-      new HttpInstrumentation(),
-    ],
-  });
+  // Note: Node.js HTTP auto-instrumentation (HttpInstrumentation) is
+  // intentionally NOT used here. It depends on require-in-the-middle for
+  // runtime module hooking, which Turbopack cannot safely bundle for Docker
+  // deployments — it creates hashed symlinks in .next/node_modules/ that
+  // break in multi-stage builds. The web app doesn't need auto-instrumentation;
+  // Next.js captures HTTP spans natively, and manual spans/metrics/logs are
+  // set up above.
 
   // ── Process signal handlers ─────────────────────────────────────────────
 

@@ -4,23 +4,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
 
-  // Externalize OpenTelemetry instrumentation packages from the Turbopack
-  // server bundle. Without this, Turbopack creates hashed symlinks in
-  // .next/node_modules/ (e.g. require-in-the-middle-<hash>) that point to
-  // absolute paths on the build machine. These symlinks break in Docker/
-  // Railway deployments where the build path does not exist, causing:
-  //   "Cannot find module 'require-in-the-middle-<hash>'"
-  // at startup when the instrumentation hook fires.
-  //
-  // Externalizing keeps them as plain require() calls that resolve from
-  // node_modules/ at runtime — which is guaranteed to exist in the deployed
-  // container (it was installed during the build stage).
-  serverExternalPackages: [
-    "@opentelemetry/instrumentation",
-    "@opentelemetry/instrumentation-http",
-    "require-in-the-middle",
-    "import-in-the-middle",
-  ],
+  // No serverExternalPackages needed. The auto-instrumentation packages
+  // (@opentelemetry/instrumentation, @opentelemetry/instrumentation-http)
+  // that triggered Turbopack's hashed-symlink issue (require-in-the-middle
+  // being symlinked to an absolute path that breaks in Docker) have been
+  // removed — the web app doesn't need HTTP auto-instrumentation since
+  // Next.js handles spans natively.
 };
 
 export default nextConfig;
