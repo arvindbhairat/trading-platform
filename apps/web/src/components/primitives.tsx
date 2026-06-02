@@ -8,7 +8,7 @@
 // All visual values come from tokens defined in globals.css.
 // ---------------------------------------------------------------------------
 
-import React, { useState, type ReactNode, type CSSProperties } from "react";
+import React, { useState, useEffect, type ReactNode, type CSSProperties } from "react";
 import Link from "next/link";
 import { logout } from "@/lib/auth";
 
@@ -363,6 +363,25 @@ export function StatusDot({ tone = "up" }: { tone?: "up" | "down" | "warn" | "ne
 // ---------------------------------------------------------------------------
 
 export function LegalFooter() {
+  const [commitSha, setCommitSha] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((data: { commitSha: string | null }) => setCommitSha(data.commitSha))
+      .catch(() => { /* env var not available */ });
+  }, []);
+
+  const handleCopy = async () => {
+    if (!commitSha) return;
+    try {
+      await navigator.clipboard.writeText(commitSha);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard not available */ }
+  };
+
   return (
     <div
       style={{
@@ -391,6 +410,20 @@ export function LegalFooter() {
           flexWrap: "wrap",
         }}
       >
+        {commitSha && (
+          <span
+            onClick={handleCopy}
+            title="Click to copy commit SHA"
+            style={{
+              cursor: "pointer",
+              fontFamily: "monospace",
+              color: copied ? "var(--brand-300)" : "var(--fg-3)",
+              transition: "color 0.15s",
+            }}
+          >
+            {copied ? "Copied!" : commitSha.substring(0, 7)}
+          </span>
+        )}
         <Link href="/legal/tos" style={linkStyle}>Terms of Service</Link>
         <Link href="/legal/privacy" style={linkStyle}>Privacy Policy</Link>
         <Link href="/legal/disclaimer" style={linkStyle}>Disclaimer</Link>

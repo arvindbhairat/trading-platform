@@ -96,12 +96,19 @@ export function initOpenTelemetry(): void {
   }
 
   const env = process.env.NODE_ENV || "development";
+  const commitSha = process.env["RAILWAY_COMMIT_SHA"]?.trim();
 
   // Shared resource describing this service
-  const resource = resourceFromAttributes({
+  const resourceAttrs: Record<string, string> = {
     "service.name": "SignalStack.Web",
     "deployment.environment": env,
-  });
+  };
+
+  if (commitSha) {
+    resourceAttrs["git.commit.sha"] = commitSha;
+  }
+
+  const resource = resourceFromAttributes(resourceAttrs);
 
   // ── Traces ──────────────────────────────────────────────────────────────
 

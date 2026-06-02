@@ -32,13 +32,21 @@ internal static class TelemetryBootstrapExtensions
     builder.Logging.ClearProviders();
     builder.Logging.AddSerilog(serilogLogger, dispose: true);
 
+    var resourceAttributes = new Dictionary<string, object>
+    {
+      ["deployment.environment"] = builder.Environment.EnvironmentName
+    };
+
+    var commitSha = Environment.GetEnvironmentVariable("RAILWAY_COMMIT_SHA");
+    if (!string.IsNullOrEmpty(commitSha))
+    {
+      resourceAttributes["git.commit.sha"] = commitSha;
+    }
+
     var otelBuilder = builder.Services.AddOpenTelemetry()
       .ConfigureResource(resource => resource
         .AddService(serviceName: serviceName, serviceVersion: "v0.2")
-        .AddAttributes(new Dictionary<string, object>
-        {
-          ["deployment.environment"] = builder.Environment.EnvironmentName
-        }));
+        .AddAttributes(resourceAttributes));
 
     bool hasOtlpEndpoint = !string.IsNullOrWhiteSpace(telemetryOptions.Endpoint);
 
