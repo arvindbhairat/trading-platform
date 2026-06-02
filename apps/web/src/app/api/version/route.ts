@@ -4,6 +4,6 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
   return NextResponse.json({
-    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    buildId: process.env.RAILWAY_GIT_COMMIT_SHA || null,
   });
 }

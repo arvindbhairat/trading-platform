@@ -363,20 +363,20 @@ export function StatusDot({ tone = "up" }: { tone?: "up" | "down" | "warn" | "ne
 // ---------------------------------------------------------------------------
 
 export function LegalFooter() {
-  const [commitSha, setCommitSha] = useState<string | null>(null);
+  const [buildId, setBuildId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/version")
       .then((r) => r.json())
-      .then((data: { commitSha: string | null }) => setCommitSha(data.commitSha))
+      .then((data: { buildId: string | null }) => setBuildId(data.buildId))
       .catch(() => { /* env var not available */ });
   }, []);
 
   const handleCopy = async () => {
-    if (!commitSha) return;
+    if (!buildId) return;
     try {
-      await navigator.clipboard.writeText(commitSha);
+      await navigator.clipboard.writeText(buildId);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* clipboard not available */ }
@@ -410,10 +410,10 @@ export function LegalFooter() {
           flexWrap: "wrap",
         }}
       >
-        {commitSha && (
+        {buildId && (
           <span
             onClick={handleCopy}
-            title="Click to copy commit SHA"
+            title="Click to copy build ID"
             style={{
               cursor: "pointer",
               fontFamily: "monospace",
@@ -421,7 +421,7 @@ export function LegalFooter() {
               transition: "color 0.15s",
             }}
           >
-            {copied ? "Copied!" : commitSha.substring(0, 7)}
+            {copied ? "Copied!" : buildId.substring(0, 7)}
           </span>
         )}
         <Link href="/legal/tos" style={linkStyle}>Terms of Service</Link>

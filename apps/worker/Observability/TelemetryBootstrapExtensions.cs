@@ -40,7 +40,7 @@ internal static class TelemetryBootstrapExtensions
     var commitSha = Environment.GetEnvironmentVariable("RAILWAY_GIT_COMMIT_SHA");
     if (!string.IsNullOrEmpty(commitSha))
     {
-      resourceAttributes["git.commit.sha"] = commitSha;
+      resourceAttributes["build_id"] = commitSha;
     }
 
     var otelBuilder = builder.Services.AddOpenTelemetry()

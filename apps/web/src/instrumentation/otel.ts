@@ -105,7 +105,7 @@ export function initOpenTelemetry(): void {
   };
 
   if (commitSha) {
-    resourceAttrs["git.commit.sha"] = commitSha;
+    resourceAttrs["build_id"] = commitSha;
   }
 
   const resource = resourceFromAttributes(resourceAttrs);
