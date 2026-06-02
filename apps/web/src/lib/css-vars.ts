@@ -28,23 +28,5 @@ function getRoot(): HTMLElement {
  */
 export function cssVar(name: string, fallback = "#000000"): string {
   if (typeof document === "undefined") return fallback;
-  return getRoot()?.computedStyleMap
-    ? (getRoot().computedStyleMap() as Map<string, CSSStyleValue>).get(name)?.toString() ?? fallback
-    : getComputedStyle(getRoot()).getPropertyValue(name).trim() || fallback;
-}
-
-/**
- * Resolve a set of CSS variable names to their computed values.
- * Convenience wrapper for chart options that reference multiple tokens.
- *
- * Example:
- *   const colors = cssVars("--fg-2", "--bg-2", "--line-1", "--up-500", "--down-500");
- *   // => { "--fg-2": "#c4bdb0", "--bg-2": "#1d1917", ... }
- */
-export function cssVars(...names: string[]): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const name of names) {
-    result[name] = cssVar(name);
-  }
-  return result;
+  return getComputedStyle(getRoot()).getPropertyValue(name).trim() || fallback;
 }
