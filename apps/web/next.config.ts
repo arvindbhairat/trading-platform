@@ -4,23 +4,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
 
-  // OpenTelemetry packages are Node.js-native and must remain external — they
-  // use process-level hooks (SIGTERM, async_hooks, etc.) that break when
-  // bundled by the Next.js server compiler.
-  serverExternalPackages: [
-    "@opentelemetry/api",
-    "@opentelemetry/api-logs",
-    "@opentelemetry/exporter-logs-otlp-http",
-    "@opentelemetry/exporter-metrics-otlp-http",
-    "@opentelemetry/exporter-trace-otlp-http",
-    "@opentelemetry/instrumentation",
-    "@opentelemetry/instrumentation-http",
-    "@opentelemetry/resources",
-    "@opentelemetry/sdk-logs",
-    "@opentelemetry/sdk-metrics",
-    "@opentelemetry/sdk-trace-base",
-    "@opentelemetry/sdk-trace-node",
-  ],
+  // OpenTelemetry packages are intentionally NOT in serverExternalPackages.
+  // Turbopack externalizes them as symlinks in .next/node_modules/ with
+  // hashed names (e.g. @opentelemetry/api-6ec0324a2d0bd38c). These symlinks
+  // break in Docker multi-stage builds, causing runtime require() failures.
+  // Bundling them via Turbopack works correctly for the Node.js server runtime.
 };
 
 export default nextConfig;
