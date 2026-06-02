@@ -24,14 +24,14 @@ public sealed class JwtTokenService
     }
 
     public string IssueToken(string userId, string email, string name, string provider)
-        => IssueTokenWithMeta(userId, email, name, provider).Jwt;
+        => IssueTokenWithMeta(userId, email, name, provider, "").Jwt;
 
     /// <summary>
     /// Issues a signed JWT and returns it alongside the claims needed to create the
     /// server-side session record (REQ-SESSION-002a).
     /// </summary>
     public (string Jwt, string Jti, DateTime IssuedAt, DateTime ExpiresAt) IssueTokenWithMeta(
-        string userId, string email, string name, string provider)
+        string userId, string email, string name, string provider, string role)
     {
         var jti = Guid.NewGuid().ToString();
         var issuedAt = DateTime.UtcNow;
@@ -45,7 +45,8 @@ public sealed class JwtTokenService
                 new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim(JwtRegisteredClaimNames.Name, name),
                 new Claim("provider", provider),
-                new Claim(JwtRegisteredClaimNames.Jti, jti)
+                new Claim(JwtRegisteredClaimNames.Jti, jti),
+                new Claim(ClaimTypes.Role, role)
             ]),
             Issuer = _issuer,
             Audience = _audience,

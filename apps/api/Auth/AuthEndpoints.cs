@@ -295,7 +295,7 @@ public static class AuthEndpoints
 
                 var (linkedJwt, linkedJti, linkedIssuedAt, linkedExpiresAt) =
                     jwtService.IssueTokenWithMeta(
-                        linkedUserId, linkedEmail, linkedName, providerLower);
+                        linkedUserId, linkedEmail, linkedName, providerLower, linkedOwner.Role);
 
                 var linkedUserAgent = context.Request.Headers.UserAgent.ToString();
                 await sessionRepo.CreateSessionAsync(
@@ -351,8 +351,9 @@ public static class AuthEndpoints
 
             activity?.SetTag("auth.flow", "login");
 
+            var role = isSeedAdmin ? UserRole.Admin : UserRole.User;
             var (jwt, jti, issuedAt, expiresAt) = jwtService.IssueTokenWithMeta(
-                userId, email, name, providerLower);
+                userId, email, name, providerLower, role);
 
             // REQ-SESSION-002 / REQ-SESSION-002a: atomically invalidate prior session
             // and write the new one before redirecting the user.
@@ -981,7 +982,7 @@ public static class AuthEndpoints
                     ct: context.RequestAborted);
 
                 var (jwt, jti, issuedAt, expiresAt) = jwtService.IssueTokenWithMeta(
-                    testUserId, "test@example.com", "Test User", "test");
+                    testUserId, "test@example.com", "Test User", "test", UserRole.User);
 
                 await sessionRepo.CreateSessionAsync(
                     testUserId, jti, issuedAt, expiresAt,
