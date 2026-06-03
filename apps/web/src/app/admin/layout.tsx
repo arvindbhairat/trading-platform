@@ -19,7 +19,7 @@ import {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { role, loading } = useAuth();
+  const { role, loading, userName } = useAuth();
 
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
@@ -71,12 +71,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     if (route) router.push(route);
   };
 
+  // Compute user initials from the OAuth display name for the profile circle.
+  const initials = userName
+    ? userName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : undefined;
+
   return (
     <Shell
       current={current}
       navItems={navItems}
       onNavigate={handleNavigate}
       admin={true}
+      userInitials={initials}
     >
       {children}
     </Shell>

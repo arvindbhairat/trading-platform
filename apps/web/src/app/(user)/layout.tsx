@@ -25,7 +25,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   const [hasToken] = useState(() => !!getToken());
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [unreadCritical, setUnreadCritical] = useState(0);
-  const { role } = useAuth();
+  const { role, userName, fyersUserId } = useAuth();
 
   // Auth guard: redirect to login if no JWT token.
   useEffect(() => {
@@ -95,8 +95,25 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     if (route) router.push(route);
   };
 
+  // Compute user initials from the OAuth display name for the profile circle.
+  // Takes the first letter of the first and last name (e.g. "John Doe" → "JD").
+  const initials = userName
+    ? userName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : undefined;
+
   return (
-    <Shell current={current} navItems={navItems} onNavigate={handleNavigate}>
+    <Shell
+      current={current}
+      navItems={navItems}
+      onNavigate={handleNavigate}
+      userInitials={initials}
+      fyersUserId={fyersUserId}
+    >
       {children}
     </Shell>
   );

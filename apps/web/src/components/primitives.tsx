@@ -451,10 +451,13 @@ export function TopBar({
   admin = false,
   search = true,
   userInitials = "AR",
+  fyersUserId,
 }: {
   admin?: boolean;
   search?: boolean;
   userInitials?: string;
+  /** The FYERS client ID (fy_id) to show in the connection pill, or null/undefined to show a placeholder. */
+  fyersUserId?: string | null;
 }) {
   return (
     <header
@@ -542,7 +545,7 @@ export function TopBar({
       ) : (
         <>
           <Pill tone="outline">Phase A · Tester</Pill>
-          <Pill tone="up" dot>FYERS connected</Pill>
+          <Pill tone="up" dot>{fyersUserId ? `FYERS · ${fyersUserId}` : "FYERS connected"}</Pill>
         </>
       )}
       <div
@@ -764,6 +767,7 @@ export function Shell({
   search = true,
   navItems,
   userInitials,
+  fyersUserId,
 }: {
   children: ReactNode;
   current: string;
@@ -772,6 +776,7 @@ export function Shell({
   search?: boolean;
   navItems: NavItem[];
   userInitials?: string;
+  fyersUserId?: string | null;
 }) {
   return (
     <div
@@ -782,7 +787,7 @@ export function Shell({
         background: "var(--bg-0)",
       }}
     >
-      <TopBar admin={admin} search={search} userInitials={userInitials} />
+      <TopBar admin={admin} search={search} userInitials={userInitials} fyersUserId={fyersUserId} />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <SideNav items={navItems} current={current} onNavigate={onNavigate} admin={admin} />
         <main
