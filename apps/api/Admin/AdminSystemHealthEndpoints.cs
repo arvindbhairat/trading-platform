@@ -342,7 +342,7 @@ public static class AdminSystemHealthEndpoints
         {
             event_at = e.GetValue("event_at", BsonNull.Value).ToNullableUniversalTime(),
             action_type = e.GetValue("action_type", "")?.AsString ?? "",
-            details = e.GetValue("details", BsonNull.Value).IsBsonNull ? null : e["details"]
+            details = SafeBsonDetails(e.GetValue("details", BsonNull.Value))
         }).ToList();
 
         return new AdminFyersTokenResponse(
@@ -532,7 +532,7 @@ public static class AdminSystemHealthEndpoints
         {
             event_at = e.GetValue("event_at", BsonNull.Value).ToNullableUniversalTime(),
             action_type = e.GetValue("action_type", "")?.AsString ?? "",
-            details = e.GetValue("details", BsonNull.Value).IsBsonNull ? null : e["details"]
+            details = SafeBsonDetails(e.GetValue("details", BsonNull.Value))
         }).ToList();
 
         // Find halt start time.
@@ -599,6 +599,32 @@ public static class AdminSystemHealthEndpoints
 
         var user = await userRepo.FindByUserIdAsync(userId, context.RequestAborted);
         return user is not null && user.Role == UserRole.Admin;
+    }
+
+    /// <summary>
+    /// Converts a BsonValue details field to a JSON-safe representation.
+    /// Raw BsonDocument values cannot be safely serialized by System.Text.Json
+    /// because enumerating BsonValue properties (e.g. AsBoolean) on a BsonDocument
+    /// throws InvalidCastException. (REQ-ADMIN-014)
+    /// </summary>
+    private static object? SafeBsonDetails(BsonValue details)
+    {
+        if (details.IsBsonNull || details.IsBsonUndefined)
+            return null;
+
+        if (details.IsBsonDocument)
+            return details.AsBsonDocument.ToDictionary();
+
+        // Scalar BsonValues: return the .NET equivalent.
+        return details switch
+        {
+            BsonString s => s.AsString,
+            BsonInt32 i => i.AsInt32,
+            BsonInt64 l => (long)l.AsInt64,
+            BsonDouble d => d.AsDouble,
+            BsonBoolean b => b.AsBoolean,
+            _ => details.ToString()
+        };
     }
 }
 
