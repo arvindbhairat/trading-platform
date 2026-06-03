@@ -160,17 +160,10 @@ function getSessionTypeColor(type: string): "up" | "brand" | "warn" | "info" {
   }
 }
 
-function todayIST(): string {
+function currentYearStart(): string {
   const now = new Date();
   const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  return ist.toISOString().slice(0, 10);
-}
-
-function thirtyDaysFromNow(): string {
-  const now = new Date();
-  const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  ist.setDate(ist.getDate() + 30);
-  return ist.toISOString().slice(0, 10);
+  return `${ist.getFullYear()}-01-01`;
 }
 
 // ── Page Component ─────────────────────────────────────────────────────
@@ -184,9 +177,7 @@ export default function AdminCalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
 
-  // Filters.
-  const [filterFrom, setFilterFrom] = useState(todayIST());
-  const [filterTo, setFilterTo] = useState(thirtyDaysFromNow());
+  // Filter (by type only — date range is fixed to current year + future).
   const [filterType, setFilterType] = useState("");
 
   // Form state for add/edit.
@@ -208,8 +199,7 @@ export default function AdminCalendarPage() {
     if (!token) { router.replace("/login"); return; }
 
     const params = new URLSearchParams();
-    if (filterFrom) params.set("from", filterFrom);
-    if (filterTo) params.set("to", filterTo);
+    params.set("from", currentYearStart());
     if (filterType) params.set("session_type", filterType);
 
     Promise.all([
@@ -235,7 +225,7 @@ export default function AdminCalendarPage() {
         setError(err instanceof Error ? err.message : "Failed to load calendar");
         setLoading(false);
       });
-  }, [filterFrom, filterTo, filterType, router]);
+  }, [filterType, router]);
 
   useEffect(() => {
     fetchData();
@@ -484,7 +474,7 @@ export default function AdminCalendarPage() {
           </Card>
         )}
 
-        {/* Filters */}
+        {/* Filter by type only — date range is fixed to current year + future */}
         <div
           style={{
             display: "flex",
@@ -494,20 +484,6 @@ export default function AdminCalendarPage() {
             alignItems: "flex-end",
           }}
         >
-          <Field label="From date">
-            <TextInput
-              type="date"
-              value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
-            />
-          </Field>
-          <Field label="To date">
-            <TextInput
-              type="date"
-              value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
-            />
-          </Field>
           <Field label="Type">
             <Select
               value={filterType}
@@ -531,7 +507,7 @@ export default function AdminCalendarPage() {
         ) : entries.length === 0 ? (
           <Card style={{ padding: "var(--s-8)", textAlign: "center" }}>
             <p className="t-body">
-              No calendar entries found in the selected range.
+              No calendar entries found for the current year onward.
             </p>
           </Card>
         ) : (
