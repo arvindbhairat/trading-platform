@@ -51,7 +51,12 @@ public sealed class FyersTokenDocument
     [BsonElement("issued_at")]
     public required DateTime IssuedAt { get; init; }
 
-    /// <summary>ISO 8601 UTC timestamp of when the token expires.</summary>
+    /// <summary>
+    /// ISO 8601 UTC timestamp of when the token expires.
+    /// REQ-AUTH-008: set to midnight IST (end of the IST calendar day on which the
+    /// token was issued), not 24 hours from issuance. A token issued at any time on
+    /// day X becomes invalid at 00:00 IST day X+1.
+    /// </summary>
     [BsonElement("expires_at")]
     public required DateTime ExpiresAt { get; init; }
 

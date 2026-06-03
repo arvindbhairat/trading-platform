@@ -559,14 +559,33 @@ public static class AuthEndpoints
         // POST /api/v1/auth/logout
         // REQ-SESSION-004: invalidates the current server-side session and clears
         // the JWT so the user must re-authenticate via OAuth to obtain a new token.
+        // REQ-AUTH-009/015: also invalidates the user's FYERS token so it cannot
+        // be reused after the session ends.
         auth.MapPost("/logout", async (
             HttpContext context,
-            ISessionRepository sessionRepo) =>
+            ISessionRepository sessionRepo,
+            IFyersTokenRepository fyersTokenRepo,
+            IAuditEventRepository auditRepo) =>
         {
             var jti = context.User.FindFirst("jti")?.Value ?? "";
             if (!string.IsNullOrEmpty(jti))
             {
                 await sessionRepo.InvalidateSessionAsync(jti, context.RequestAborted);
+            }
+
+            // REQ-AUTH-015: mark the user's FYERS token dirty on logout so it
+            // cannot be reused after the session is terminated.
+            var userId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await fyersTokenRepo.MarkDirtyAsync(userId, context.RequestAborted);
+                await auditRepo.RecordAsync(
+                    userId,
+                    "fyers_token_logout_invalidated",
+                    DateTime.UtcNow,
+                    cancellationToken: context.RequestAborted);
             }
 
             return Results.Ok(new LogoutResponse(true));

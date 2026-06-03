@@ -69,7 +69,9 @@ public sealed class InMemoryFyersTokenRepository : IFyersTokenRepository
         {
             // In tests, use the access_token_ref directly as the token value.
             var token = _tokens.FirstOrDefault(t =>
-                t.UserId == userId && t.Status == FyersTokenStatus.Active);
+                t.UserId == userId
+                && t.Status == FyersTokenStatus.Active
+                && t.ExpiresAt > DateTime.UtcNow);
             return Task.FromResult(token?.AccessTokenRef);
         }
     }

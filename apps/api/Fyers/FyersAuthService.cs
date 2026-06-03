@@ -163,6 +163,7 @@ public sealed class FyersAuthService
 
         // Step 4: Persist the token.
         var now = DateTime.UtcNow;
+        var expiresAt = GetDayScopedExpiry(); // REQ-AUTH-008: valid only for the IST calendar day
         var token = new FyersTokenDocument
         {
             Id = MongoDB.Bson.ObjectId.GenerateNewId(),
@@ -170,7 +171,7 @@ public sealed class FyersAuthService
             FyersUserId = fyersUserId,
             AccessTokenRef = accessToken,
             IssuedAt = now,
-            ExpiresAt = now.AddHours(24),
+            ExpiresAt = expiresAt,
             Status = FyersTokenStatus.Active,
             UpdatedAt = now,
         };
@@ -217,6 +218,7 @@ public sealed class FyersAuthService
         // Key Vault reference resolved at read time.
         var simulatedTokenValue = $"sim_{userId}_{Convert.ToHexString(
             System.Security.Cryptography.RandomNumberGenerator.GetBytes(16))}";
+        var expiresAt = GetDayScopedExpiry(); // REQ-AUTH-008: valid only for the IST calendar day
         var token = new FyersTokenDocument
         {
             Id = MongoDB.Bson.ObjectId.GenerateNewId(),
@@ -224,7 +226,7 @@ public sealed class FyersAuthService
             FyersUserId = simulatedFyersUserId,
             AccessTokenRef = simulatedTokenValue, // local-dev: token value; prod: KV ref
             IssuedAt = now,
-            ExpiresAt = now.AddHours(24), // REQ-AUTH-008: day-scoped
+            ExpiresAt = expiresAt,
             Status = FyersTokenStatus.Active,
             UpdatedAt = now,
         };
@@ -314,6 +316,20 @@ public sealed class FyersAuthService
             "fyers_token_marked_dirty",
             DateTime.UtcNow,
             cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// Returns the UTC DateTime for midnight IST (start of the next IST calendar day).
+    /// REQ-AUTH-008: FYERS tokens are scoped to the IST trading day — they expire at
+    /// the end of the calendar day in Indian Standard Time, not 24 hours from issuance.
+    /// This ensures a token issued at any time on day X is invalid at 00:00 IST day X+1.
+    /// </summary>
+    private static DateTime GetDayScopedExpiry()
+    {
+        var istOffset = TimeSpan.FromHours(5.5);
+        var istNow = DateTime.UtcNow + istOffset;
+        var nextMidnightIst = istNow.Date.AddDays(1);
+        return nextMidnightIst - istOffset;
     }
 }
 
