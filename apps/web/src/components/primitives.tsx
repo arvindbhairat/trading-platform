@@ -26,7 +26,7 @@ type IconName =
   | "trending-up" | "trending-down" | "upload" | "download"
   | "refresh" | "play" | "pause" | "calendar" | "lock" | "mail" | "send"
   | "file-text" | "circle-check" | "circle-x" | "eye" | "filter"
-  | "more" | "database" | "telegram";
+  | "more" | "database" | "telegram" | "arrow-left";
 
 const iconPaths: Record<IconName, ReactNode> = {
   "bar-chart": <><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>,
@@ -69,6 +69,7 @@ const iconPaths: Record<IconName, ReactNode> = {
   "more": <><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></>,
   "database": <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></>,
   "telegram": <><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></>,
+  "arrow-left": <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
 };
 
 export function Icon({
@@ -580,18 +581,22 @@ export function SideNav({
   items,
   current,
   onNavigate,
+  admin = false,
 }: {
   items: NavItem[];
   current: string;
   onNavigate?: (id: string) => void;
+  admin?: boolean;
 }) {
   const { role } = useAuth();
   const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+  const toggle = () => setCollapsed((c) => !c);
 
   return (
     <nav
       style={{
-        width: "220px",
+        width: collapsed ? "56px" : "220px",
         flexShrink: 0,
         background: "var(--bg-1)",
         borderRight: "1px solid var(--line-1)",
@@ -599,6 +604,8 @@ export function SideNav({
         display: "flex",
         flexDirection: "column",
         gap: "2px",
+        transition: "width 0.2s ease",
+        overflow: "hidden",
       }}
     >
       {items.map((item) => {
@@ -622,30 +629,33 @@ export function SideNav({
               fontSize: "13px",
               fontWeight: 500,
               textAlign: "left",
-              justifyContent: "flex-start",
+              justifyContent: collapsed ? "center" : "flex-start",
+              whiteSpace: "nowrap",
             }}
           >
             <Icon name={item.icon} size={16} />
-            <span style={{ flex: 1 }}>{item.label}</span>
-            {item.badge && <Pill tone={item.badgeTone ?? "info"}>{item.badge}</Pill>}
+            {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+            {!collapsed && item.badge && <Pill tone={item.badgeTone ?? "info"}>{item.badge}</Pill>}
           </button>
         );
       })}
-      <div
-        style={{
-          marginTop: "auto",
-          padding: "8px 12px",
-          fontSize: "10px",
-          color: "var(--fg-4)",
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-        }}
-      >
-        System
-      </div>
+      {!collapsed && (
+        <div
+          style={{
+            marginTop: "auto",
+            padding: "8px 12px",
+            fontSize: "10px",
+            color: "var(--fg-4)",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          System
+        </div>
+      )}
       {role === "admin" && (
         <button
-          onClick={() => router.push("/admin")}
+          onClick={() => router.push(admin ? "/" : "/admin")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -659,10 +669,12 @@ export function SideNav({
             fontSize: "13px",
             fontWeight: 500,
             textAlign: "left",
+            justifyContent: collapsed ? "center" : "flex-start",
+            whiteSpace: "nowrap",
           }}
         >
-          <Icon name="shield" size={16} />
-          Admin
+          <Icon name={admin ? "arrow-left" : "shield"} size={16} />
+          {!collapsed && (admin ? "User" : "Admin")}
         </button>
       )}
       <button
@@ -679,10 +691,12 @@ export function SideNav({
           fontSize: "13px",
           fontWeight: 500,
           textAlign: "left",
+          justifyContent: collapsed ? "center" : "flex-start",
+          whiteSpace: "nowrap",
         }}
       >
         <Icon name="settings" size={16} />
-        Settings
+        {!collapsed && "Settings"}
       </button>
       <button
         onClick={() => logout()}
@@ -699,10 +713,38 @@ export function SideNav({
           fontSize: "13px",
           fontWeight: 500,
           textAlign: "left",
+          justifyContent: collapsed ? "center" : "flex-start",
+          whiteSpace: "nowrap",
         }}
       >
         <Icon name="x" size={16} />
-        Sign out
+        {!collapsed && "Sign out"}
+      </button>
+      <button
+        onClick={toggle}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "9px 12px",
+          background: "transparent",
+          border: "none",
+          color: "var(--fg-3)",
+          cursor: "pointer",
+          fontFamily: "var(--font-sans)",
+          fontSize: "13px",
+          fontWeight: 500,
+          textAlign: "left",
+          justifyContent: collapsed ? "center" : "flex-start",
+          whiteSpace: "nowrap",
+          borderTop: "1px solid var(--line-1)",
+          marginTop: "4px",
+          paddingTop: "12px",
+        }}
+      >
+        <Icon name={collapsed ? "arrow-right" : "arrow-left"} size={16} />
+        {!collapsed && (collapsed ? "Expand" : "Collapse")}
       </button>
     </nav>
   );
@@ -740,7 +782,7 @@ export function Shell({
     >
       <TopBar admin={admin} search={search} userInitials={userInitials} />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <SideNav items={navItems} current={current} onNavigate={onNavigate} />
+        <SideNav items={navItems} current={current} onNavigate={onNavigate} admin={admin} />
         <main
           style={{
             flex: 1,
