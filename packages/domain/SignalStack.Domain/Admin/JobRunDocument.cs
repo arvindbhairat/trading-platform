@@ -8,6 +8,7 @@ namespace SignalStack.Domain.Admin;
 /// Used by the transfer recovery summary (REQ-ROLE-007a) to surface failed/skipped
 /// job outcomes during the admin transfer window.
 /// </summary>
+[BsonIgnoreExtraElements]
 public sealed class JobRunDocument
 {
     [BsonId]
