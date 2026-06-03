@@ -10,7 +10,9 @@
 
 import React, { useState, useEffect, type ReactNode, type CSSProperties } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ---------------------------------------------------------------------------
 // Icon — Lucide-style SVG icons, 24x24 viewBox
@@ -583,6 +585,9 @@ export function SideNav({
   current: string;
   onNavigate?: (id: string) => void;
 }) {
+  const { role } = useAuth();
+  const router = useRouter();
+
   return (
     <nav
       style={{
@@ -638,6 +643,28 @@ export function SideNav({
       >
         System
       </div>
+      {role === "admin" && (
+        <button
+          onClick={() => router.push("/admin")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "9px 12px",
+            background: "transparent",
+            border: "none",
+            color: "var(--brand-1)",
+            cursor: "pointer",
+            fontFamily: "var(--font-sans)",
+            fontSize: "13px",
+            fontWeight: 500,
+            textAlign: "left",
+          }}
+        >
+          <Icon name="shield" size={16} />
+          Admin
+        </button>
+      )}
       <button
         style={{
           display: "flex",
