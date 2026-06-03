@@ -36,6 +36,9 @@ public interface ITradingCalendarRepository
     /// <summary>Creates a new calendar entry.</summary>
     Task CreateAsync(TradingCalendarDocument document, CancellationToken ct = default);
 
+    /// <summary>Bulk-creates multiple calendar entries in a single batch.</summary>
+    Task CreateManyAsync(List<TradingCalendarDocument> documents, CancellationToken ct = default);
+
     /// <summary>Updates an existing calendar entry's mutable fields.</summary>
     Task UpdateAsync(
         ObjectId id,

@@ -102,6 +102,12 @@ public sealed class MongoTradingCalendarRepository : ITradingCalendarRepository
         await _collection.InsertOneAsync(document, cancellationToken: ct);
     }
 
+    public async Task CreateManyAsync(List<TradingCalendarDocument> documents, CancellationToken ct = default)
+    {
+        if (documents.Count == 0) return;
+        await _collection.InsertManyAsync(documents, cancellationToken: ct);
+    }
+
     public async Task UpdateAsync(
         ObjectId id,
         string? sessionType = null,

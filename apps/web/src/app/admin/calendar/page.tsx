@@ -27,6 +27,14 @@ interface CoverageData {
   checked_to: string;
 }
 
+interface FillRemainingResponse {
+  created_count: number;
+  range_from: string;
+  range_to: string;
+  total_weekdays_in_range: number;
+  total_weekend_markers: number;
+}
+
 interface CalendarEntry {
   id: string;
   sessionDate: string;
@@ -191,6 +199,7 @@ export default function AdminCalendarPage() {
     holidayName: "",
   });
   const [saving, setSaving] = useState(false);
+  const [filling, setFilling] = useState(false);
 
   // ── Data fetching ────────────────────────────────────────────────────
 
@@ -367,6 +376,47 @@ export default function AdminCalendarPage() {
     }
   }
 
+  async function handleFillRemaining() {
+    if (!confirm(
+      "This will auto-create normal trading sessions for all weekdays " +
+      "and non-trading-day markers for all weekends from tomorrow through " +
+      "the end of the period. Dates with existing entries will be skipped. Continue?"
+    )) return;
+
+    setFilling(true);
+    setNotification(null);
+
+    try {
+      const res = await apiFetch("/api/v1/admin/calendar/fill-remaining", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setNotification({ type: "error", message: friendlyError(body) });
+        setFilling(false);
+        return;
+      }
+
+      const data = (await res.json()) as FillRemainingResponse;
+      setNotification({
+        type: "success",
+        message: `Created ${data.created_count} entries ` +
+          `(${data.total_weekdays_in_range} trading sessions, ` +
+          `${data.total_weekend_markers} weekend markers) ` +
+          `from ${data.range_from} to ${data.range_to}.`,
+      });
+      fetchData();
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Fill remaining failed",
+      });
+    } finally {
+      setFilling(false);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────
 
   const isNonTradingDay = form.sessionType === "non_trading_day";
@@ -414,6 +464,8 @@ export default function AdminCalendarPage() {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              flexWrap: "wrap",
+              gap: "var(--s-3)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
@@ -427,6 +479,15 @@ export default function AdminCalendarPage() {
                 . Add session records or non-trading-day markers to resolve.
               </span>
             </div>
+            <Btn
+              variant="primary"
+              size="sm"
+              icon="calendar"
+              onClick={handleFillRemaining}
+              disabled={filling}
+            >
+              {filling ? "Filling…" : "Fill remaining"}
+            </Btn>
           </Card>
         )}
 

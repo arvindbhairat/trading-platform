@@ -79,6 +79,12 @@ public sealed class InMemoryTradingCalendarRepository : ITradingCalendarReposito
         return Task.CompletedTask;
     }
 
+    public Task CreateManyAsync(List<TradingCalendarDocument> documents, CancellationToken ct = default)
+    {
+        _entries.AddRange(documents);
+        return Task.CompletedTask;
+    }
+
     public Task UpdateAsync(
         MongoDB.Bson.ObjectId id,
         string? sessionType = null,

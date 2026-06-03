@@ -214,6 +214,96 @@ public static class TradingCalendarEndpoints
         .RequireAuthorization()
         .WithTags(Tag);
 
+        // POST /api/v1/admin/calendar/fill-remaining — bulk-fill unconfirmed dates
+        // Scans today through end of current year (or Mar 31 next year if December)
+        // and creates normal sessions for weekdays, non_trading_day markers for weekends.
+        // REQ-CALENDAR-007 resolution helper.
+        admin.MapPost("/fill-remaining", async (
+            ITradingCalendarRepository repo,
+            TimeStopRecomputeService recomputeService,
+            CancellationToken ct) =>
+        {
+            var istNow = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, IstTimeZone.Instance);
+            var today = DateOnly.FromDateTime(istNow);
+
+            // Determine target end date:
+            //   - December → March 31 of next year
+            //   - Otherwise → December 31 of current year
+            DateOnly endDate;
+            if (istNow.Month == 12)
+                endDate = new DateOnly(istNow.Year + 1, 3, 31);
+            else
+                endDate = new DateOnly(istNow.Year, 12, 31);
+
+            var fromStr = today.ToString("yyyy-MM-dd");
+            var toStr = endDate.ToString("yyyy-MM-dd");
+
+            // Fetch all existing entries in the range so we don't double-create.
+            var existing = await repo.GetAllAsync(fromStr, toStr, null, ct);
+            var existingDates = new HashSet<string>(existing.Select(e => e.SessionDate));
+
+            var now = DateTime.UtcNow;
+            var toCreate = new List<TradingCalendarDocument>();
+
+            for (var date = today; date <= endDate; date = date.AddDays(1))
+            {
+                var dateStr = date.ToString("yyyy-MM-dd");
+                if (existingDates.Contains(dateStr))
+                {
+                    continue;
+                }
+
+                // Only consider dates from tomorrow onward — today is already in
+                // progress and should not be auto-filled.
+                if (date == today)
+                    continue;
+
+                if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday)
+                {
+                    toCreate.Add(new TradingCalendarDocument
+                    {
+                        SessionDate = dateStr,
+                        SessionType = "non_trading_day",
+                        SessionStartTime = null,
+                        SessionEndTime = null,
+                        HolidayName = "Weekend",
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+                else
+                {
+                    toCreate.Add(new TradingCalendarDocument
+                    {
+                        SessionDate = dateStr,
+                        SessionType = "normal",
+                        SessionStartTime = "09:15",
+                        SessionEndTime = "15:30",
+                        HolidayName = null,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+            }
+
+            await repo.CreateManyAsync(toCreate, ct);
+
+            // REQ-STOP-003a: trigger Time Stop recompute after bulk calendar edit.
+            if (toCreate.Count > 0)
+                recomputeService.Trigger();
+
+            return Results.Ok(new CalendarFillRemainingResponse(
+                CreatedCount: toCreate.Count,
+                RangeFrom: fromStr,
+                RangeTo: toStr,
+                TotalWeekdaysInRange: toCreate.Count(d => d.SessionType == "normal"),
+                TotalWeekendMarkers: toCreate.Count(d => d.SessionType == "non_trading_day")
+            ));
+        })
+        .RequireAuthorization()
+        .WithTags(Tag);
+
         // DELETE /api/v1/admin/calendar/{id} — delete a calendar entry
         // REQ-STOP-003a: triggers Time Stop date recompute after deletion.
         admin.MapDelete("/{id}", async (
@@ -291,6 +381,15 @@ public sealed record CalendarCoverageResponse(
 
 /// <summary>Response for DELETE calendar endpoint.</summary>
 public sealed record CalendarDeleteResponse(string Status);
+
+/// <summary>Response for POST /fill-remaining.</summary>
+public sealed record CalendarFillRemainingResponse(
+    int CreatedCount,
+    string RangeFrom,
+    string RangeTo,
+    int TotalWeekdaysInRange,
+    int TotalWeekendMarkers
+);
 
 /// <summary>Error response for calendar endpoints.
 /// Optional properties use JsonIgnore to maintain identical JSON output
