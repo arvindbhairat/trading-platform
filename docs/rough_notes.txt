@@ -19,7 +19,14 @@ Honeycomb signalstack-mcp
 Key ID: hcamk_01kszasn4x77vf7wv5dta1jwae
 Secret: kdypg2f8kmws1f9gcewxq70gyfzte5qa
 
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("hcamk_01kszasn4x77vf7wv5dta1jwae:kdypg2f8kmws1f9gcewxq70gyfzte5qa"))
+aGNhbWtfMDFrc3phc240eDc3dmY3d3Y1ZHRhMWp3YWU6a2R5cGcyZjhrbXdzMWY5Z2Nld3hxNzBneWZ6dGU1cWE=
+aGNhbWtfMDFrc3phc240eDc3dmY3d3Y1ZHRhMWp3YWU6a2R5cGcyZjhrbXdzMWY5Z2Nld3hxNzBneWZ6dGU1cWE=
 
+-y
+mcp-remote
+https://mcp.honeycomb.io/mcp
+--header="Authorization: Basic aGNhbWtfMDFrc3phc240eDc3dmY3d3Y1ZHRhMWp3YWU6a2R5cGcyZjhrbXdzMWY5Z2Nld3hxNzBneWZ6dGU1cWE="
 
 ---
 
