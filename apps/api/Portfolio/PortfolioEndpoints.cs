@@ -3,6 +3,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Portfolio;
 using SignalStack.Storage.Portfolio;
+using SignalStack.Storage;
 
 namespace Microsoft.AspNetCore.Routing;
 
@@ -262,7 +263,7 @@ public static class PortfolioEndpoints
         var caIncidents = await incidents.Find(incidentFilter).ToListAsync(ct);
 
         return caIncidents
-            .Select(i => i.GetValue("position_id", BsonNull.Value)?.AsString)
+            .Select(i => i.GetBsonStringOrNull("position_id"))
             .Where(id => id is not null && posIdToSymbol.ContainsKey(id))
             .Select(id => posIdToSymbol[id!])
             .ToHashSet();

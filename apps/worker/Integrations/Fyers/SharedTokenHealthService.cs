@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Storage.Fyers;
+using SignalStack.Storage;
 using SignalStack.Domain.Notifications;
 using SignalStack.Storage.Notifications;
 
@@ -101,7 +102,7 @@ public sealed class SharedTokenHealthService
         if (degradedDoc is null)
             return true; // absent = presumed healthy
 
-        var value = degradedDoc.GetValue("value", BsonNull.Value)?.AsString;
+        var value = degradedDoc.GetBsonStringOrNull("value");
         lock (_lock) _isDegraded = value == "true";
 
         return !_isDegraded;

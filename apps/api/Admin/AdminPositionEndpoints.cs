@@ -8,6 +8,7 @@ using SignalStack.Api.Auth;
 using SignalStack.Api.Sessions;
 using SignalStack.Api.Users;
 using SignalStack.Domain.Users;
+using SignalStack.Storage;
 
 namespace SignalStack.Api.Admin;
 
@@ -113,8 +114,8 @@ public static class AdminPositionEndpoints
                     currentState));
             }
 
-            var suspensionReason = current.GetValue("suspension_reason", BsonNull.Value)?.AsString;
-            var suspensionSource = current.GetValue("suspension_source", BsonNull.Value)?.AsString;
+            var suspensionReason = current.GetBsonStringOrNull("suspension_reason");
+            var suspensionSource = current.GetBsonStringOrNull("suspension_source");
 
             // Only ADMIN-sourced suspensions can be released through this endpoint.
             // Non-ADMIN suspensions (e.g. LMDS circuit-break, RME_OCC, CORPORATE_ACTION)

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Admin;
+using SignalStack.Storage;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Notifications;
@@ -533,7 +534,7 @@ public static class UniverseSyncEndpoints
                     _ => null
                 },
                 r.GetValue("outcome", "").AsString,
-                r.GetValue("symbols_processed", BsonNull.Value)?.AsInt32 ?? 0,
+                r.GetBsonInt32OrNull("symbols_processed") ?? 0,
                 r.GetValue("symbols", BsonNull.Value) switch
                 {
                     BsonArray arr => arr.Select(s => s.AsString).ToList(),
@@ -765,7 +766,7 @@ public static class UniverseSyncEndpoints
 
             // Group by user.
             var userPositions = positions
-                .GroupBy(p => p.GetValue("user_id", BsonNull.Value)?.AsString ?? "")
+                .GroupBy(p => p.GetBsonStringOrNull("user_id") ?? "")
                 .Where(g => !string.IsNullOrWhiteSpace(g.Key))
                 .ToList();
 

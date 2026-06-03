@@ -6,6 +6,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
+using SignalStack.Storage;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Observability;
 
@@ -184,7 +185,7 @@ internal sealed class DataSyncWorker : BackgroundService
 
         var completedSessions = new HashSet<string>(
             existingMarkers
-                .Select(m => m.GetValue("session_date", BsonNull.Value)?.AsString)
+                .Select(m => m.GetBsonStringOrNull("session_date"))
                 .Where(s => s is not null)!,
             StringComparer.OrdinalIgnoreCase);
 

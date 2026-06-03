@@ -5,6 +5,7 @@ using SignalStack.Domain.Admin;
 using SignalStack.Domain.Notifications;
 using SignalStack.Storage.Admin;
 using SignalStack.Storage.Notifications;
+using SignalStack.Storage;
 
 namespace SignalStack.Api.Admin;
 
@@ -137,7 +138,7 @@ internal sealed class TimeStopRecomputeService
                     continue;
                 }
 
-                var previousDate = pos.GetValue("time_stop_date", BsonNull.Value).AsString;
+                var previousDate = pos.GetBsonStringOrNull("time_stop_date") ?? "";
 
                 // Count forward `defaultSessions` trading sessions from entry date.
                 var newDate = await ComputeTimeStopDateAsync(entryDateStr, defaultSessions, ct);

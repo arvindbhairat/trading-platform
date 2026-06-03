@@ -7,6 +7,7 @@ using SignalStack.Api.Auth;
 using SignalStack.Api.Users;
 using SignalStack.Domain.Users;
 using SignalStack.Storage.Fyers;
+using SignalStack.Storage;
 
 namespace SignalStack.Api.Admin;
 
@@ -72,7 +73,7 @@ public static class AdminSystemHealthEndpoints
                     Name: jobType,
                     Label: JobTypeLabel(jobType),
                     Status: ComputeJobStatus(lastRun, breakdown),
-                    LastRunAt: lastRun?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
+                    LastRunAt: lastRun?.GetBsonDateTimeOrNull("started_at"),
                     LastOutcome: lastRun?.GetValue("outcome", "")?.AsString ?? "never_run",
                     DailyBreakdown: breakdown
                 ));
@@ -224,7 +225,7 @@ public static class AdminSystemHealthEndpoints
             var showBanner = !suppressBanner && flaggedSymbols.Count >= flagThreshold;
 
             return Results.Ok(new SymbolProbeSummaryResponse(
-                LastRunAt: lastProbe.GetValue("started_at", BsonNull.Value).ToNullableUniversalTime(),
+                LastRunAt: lastProbe.GetBsonDateTimeOrNull("started_at"),
                 TotalSymbols: lastProbe.GetValue("symbols_processed", 0).AsInt32,
                 FlaggedCount: flaggedSymbols.Count,
                 FlaggedSymbols: flaggedSymbols,
@@ -351,7 +352,7 @@ public static class AdminSystemHealthEndpoints
 
         var history = tokenEvents.Select(e => (object)new
         {
-            event_at = e.GetValue("event_at", BsonNull.Value).ToNullableUniversalTime(),
+            event_at = e.GetBsonDateTimeOrNull("event_at"),
             action_type = e.GetValue("action_type", "")?.AsString ?? "",
             details = SafeBsonDetails(e.GetValue("details", BsonNull.Value))
         }).ToList();
@@ -405,7 +406,7 @@ public static class AdminSystemHealthEndpoints
 
         return new MarketDataProviderResponse(
             ActiveProvider: activeProvider,
-            LastSuccessfulFetchAt: lastSuccess?.GetValue("started_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            LastSuccessfulFetchAt: lastSuccess?.GetBsonDateTimeOrNull("started_at"),
             DailyBreakdown: combined
         );
     }
@@ -478,8 +479,7 @@ public static class AdminSystemHealthEndpoints
         )).ToList();
 
         return new TelegramPipelineResponse(
-            LastSuccessfulDeliveryAt: lastDelivered?.GetValue("last_telegram_attempt_at", BsonNull.Value)
-                ?.ToNullableUniversalTime(),
+            LastSuccessfulDeliveryAt: lastDelivered?.GetBsonDateTimeOrNull("last_telegram_attempt_at"),
             DailyBreakdown: breakdown
         );
     }
@@ -508,7 +508,7 @@ public static class AdminSystemHealthEndpoints
 
         return new KillSwitchResponse(
             Active: isActive,
-            LastChangeAt: lastChange?.GetValue("event_at", BsonNull.Value)?.ToNullableUniversalTime(),
+            LastChangeAt: lastChange?.GetBsonDateTimeOrNull("event_at"),
             LastChangeActor: lastChange?.GetValue("actor_id", "")?.AsString
         );
     }
@@ -541,7 +541,7 @@ public static class AdminSystemHealthEndpoints
 
         var history = haltEvents.Select(e => (object)new
         {
-            event_at = e.GetValue("event_at", BsonNull.Value).ToNullableUniversalTime(),
+            event_at = e.GetBsonDateTimeOrNull("event_at"),
             action_type = e.GetValue("action_type", "")?.AsString ?? "",
             details = SafeBsonDetails(e.GetValue("details", BsonNull.Value))
         }).ToList();
@@ -550,7 +550,7 @@ public static class AdminSystemHealthEndpoints
         var haltStart = isHalted
             ? haltEvents
                 .Where(e => e.GetValue("action_type", "")?.AsString == "market_halt_detected")
-                .Select(e => e.GetValue("event_at", BsonNull.Value)?.ToNullableUniversalTime())
+                .Select(e => e.GetBsonDateTimeOrNull("event_at"))
                 .FirstOrDefault()
             : null;
 

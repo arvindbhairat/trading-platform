@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Storage;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
@@ -32,7 +33,7 @@ public static class AdminHomeEndpoints
                 .Find(Builders<BsonDocument>.Filter.Eq("_id", "ops.degraded_mode.shared_ingestion_token"))
                 .FirstOrDefaultAsync();
 
-            var isDegraded = degradedDoc?.GetValue("value", BsonNull.Value)?.AsString == "true";
+            var isDegraded = degradedDoc?.GetBsonStringOrNull("value") == "true";
 
             if (!isDegraded)
             {
@@ -51,8 +52,8 @@ public static class AdminHomeEndpoints
                 .Find(Builders<BsonDocument>.Filter.Eq("_id", "ops.degraded_mode.degraded_reason"))
                 .FirstOrDefaultAsync();
 
-            var lastTokenAt = lastTokenDoc?.GetValue("value", BsonNull.Value)?.AsString;
-            var degradedReason = reasonDoc?.GetValue("value", BsonNull.Value)?.AsString;
+            var lastTokenAt = lastTokenDoc?.GetBsonStringOrNull("value");
+            var degradedReason = reasonDoc?.GetBsonStringOrNull("value");
 
             var bannerMessage =
                 "Shared-ingestion suspended: admin FYERS token refresh failed — " +

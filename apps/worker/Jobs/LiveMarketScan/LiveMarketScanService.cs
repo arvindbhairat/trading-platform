@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Storage.Universe;
+using SignalStack.Storage;
 using SignalStack.MarketData;
 using SignalStack.Worker.Observability;
 using SignalStack.Worker.Push;
@@ -322,7 +323,7 @@ public sealed class LiveMarketScanService
         info = new PositionScanInfo(
             Id: doc["_id"].AsObjectId,
             PositionId: positionId,
-            UserId: doc.GetValue("user_id", BsonNull.Value)?.AsString ?? "",
+            UserId: doc.GetBsonStringOrNull("user_id") ?? "",
             Symbol: symbol.AsString,
             CurrentStopLoss: stopLoss,
             TrailingStopLevel: trailingStop,

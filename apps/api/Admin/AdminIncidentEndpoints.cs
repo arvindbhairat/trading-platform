@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Storage;
 using SignalStack.Api.Audit;
 using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
@@ -131,8 +132,8 @@ public static class AdminIncidentEndpoints
                 details: new Dictionary<string, object?>
                 {
                     ["incident_id"] = id,
-                    ["incident_type"] = incident.GetValue("incident_type", BsonNull.Value)?.AsString,
-                    ["position_id"] = incident.GetValue("position_id", BsonNull.Value)?.AsString,
+                    ["incident_type"] = incident.GetBsonStringOrNull("incident_type"),
+                    ["position_id"] = incident.GetBsonStringOrNull("position_id"),
                 },
                 cancellationToken: ct);
 
@@ -217,8 +218,8 @@ public static class AdminIncidentEndpoints
                 ));
             }
 
-            var incidentType = incident.GetValue("incident_type", BsonNull.Value)?.AsString;
-            var positionId = incident.GetValue("position_id", BsonNull.Value)?.AsString;
+            var incidentType = incident.GetBsonStringOrNull("incident_type");
+            var positionId = incident.GetBsonStringOrNull("position_id");
             var now = DateTime.UtcNow;
 
             // ── Frozen-with-visibility resolution for RME_OCC incidents ──────
@@ -360,24 +361,28 @@ public static class AdminIncidentEndpoints
 
     /// <summary>
     /// Maps a raw BSON incident document to a response-safe anonymous shape.
+    /// All field accesses handle missing/null BSON values via IsBsonNull
+    /// guards — the ?. operator does NOT work because BsonNull.Value is
+    /// a non-null BsonValue instance, not C# null (REQ-ADMIN-INCIDENTS-001).
     /// </summary>
     private static IncidentResponse MapIncident(BsonDocument doc)
     {
         var id = doc.GetValue("_id", BsonNull.Value);
         return new IncidentResponse(
             Id: id.IsBsonNull ? null : id.AsObjectId.ToString(),
-            PositionId: doc.GetValue("position_id", BsonNull.Value)?.AsString,
-            UserId: doc.GetValue("user_id", BsonNull.Value)?.AsString,
-            IncidentType: doc.GetValue("incident_type", BsonNull.Value)?.AsString,
-            Severity: doc.GetValue("severity", BsonNull.Value)?.AsString,
-            Status: doc.GetValue("status", BsonNull.Value)?.AsString ?? "unknown",
-            Detail: doc.GetValue("detail", BsonNull.Value)?.AsBsonDocument?.ToDictionary(),
-            CreatedAt: doc.GetValue("created_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            UpdatedAt: doc.GetValue("updated_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            ResolvedAt: doc.GetValue("resolved_at", BsonNull.Value)?.ToNullableUniversalTime(),
-            ResolvedBy: doc.GetValue("resolved_by", BsonNull.Value)?.AsString
+            PositionId: doc.GetBsonStringOrNull("position_id"),
+            UserId: doc.GetBsonStringOrNull("user_id"),
+            IncidentType: doc.GetBsonStringOrNull("incident_type"),
+            Severity: doc.GetBsonStringOrNull("severity"),
+            Status: doc.GetBsonStringOrNull("status") ?? "unknown",
+            Detail: doc.GetBsonDocumentOrNull("detail"),
+            CreatedAt: doc.GetBsonDateTimeOrNull("created_at"),
+            UpdatedAt: doc.GetBsonDateTimeOrNull("updated_at"),
+            ResolvedAt: doc.GetBsonDateTimeOrNull("resolved_at"),
+            ResolvedBy: doc.GetBsonStringOrNull("resolved_by")
         );
     }
+
 }
 
 /// <summary>

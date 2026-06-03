@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using SignalStack.Storage;
 
 namespace SignalStack.Worker.Jobs.EodSuccessMarker;
 
@@ -68,7 +69,7 @@ internal sealed class EodMarkerReader : IEodMarkerReader
         if (marker is null)
             return null;
 
-        var sessionDateStr = marker.GetValue("session_date", BsonNull.Value)?.AsString;
+        var sessionDateStr = marker.GetBsonStringOrNull("session_date");
         if (sessionDateStr is null)
             return null;
 
@@ -100,7 +101,7 @@ internal sealed class EodMarkerReader : IEodMarkerReader
         var sessionDates = new HashSet<DateOnly>();
         foreach (var marker in markers)
         {
-            var dateStr = marker.GetValue("session_date", BsonNull.Value)?.AsString;
+            var dateStr = marker.GetBsonStringOrNull("session_date");
             if (dateStr is not null && DateOnly.TryParse(dateStr, out var d))
                 sessionDates.Add(d);
         }

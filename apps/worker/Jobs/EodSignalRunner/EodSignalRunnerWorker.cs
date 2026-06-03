@@ -6,6 +6,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
+using SignalStack.Storage;
 using SignalStack.Worker.Integrations.Fyers;
 using SignalStack.Worker.Jobs.EodSuccessMarker;
 using SignalStack.Worker.Observability;
@@ -132,7 +133,7 @@ internal sealed class EodSignalRunnerWorker : BackgroundService
         if (pendingJob is not null)
         {
             var jobId = pendingJob["_id"].AsObjectId;
-            var sessionDateStr = pendingJob.GetValue("session_date", BsonNull.Value)?.AsString;
+            var sessionDateStr = pendingJob.GetBsonStringOrNull("session_date");
 
             _logger.LogInformation(
                 "Processing pending EODSR job {JobId} for session {Session}.",

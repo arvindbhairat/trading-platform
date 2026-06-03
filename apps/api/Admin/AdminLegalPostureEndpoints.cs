@@ -3,6 +3,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SignalStack.Api.Auth;
 using SignalStack.Storage.SysConfig;
+using SignalStack.Storage;
 using SignalStack.Api.Users;
 using SignalStack.Domain.Users;
 
@@ -62,7 +63,7 @@ public static class AdminLegalPostureEndpoints
             var sebiOpinionReceived = await configRepo.GetByKeyAsync("legal.sebi_opinion.received", ct);
             var sebiReceived = sebiOpinionReceived?.GetValue("value", false).AsBoolean ?? false;
             var sebiDateDoc = await configRepo.GetByKeyAsync("legal.sebi_opinion.received_date", ct);
-            var sebiReceivedDate = sebiDateDoc?.GetValue("value", BsonNull.Value)?.AsString;
+            var sebiReceivedDate = sebiDateDoc?.GetBsonStringOrNull("value");
 
             // 6. Legal-review gate status.
             var legalReviewGate = await configRepo.GetByKeyAsync("legal.phase_b.legal_review_received", ct);
