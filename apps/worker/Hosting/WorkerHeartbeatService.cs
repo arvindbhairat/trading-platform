@@ -119,7 +119,7 @@ internal sealed class WorkerHeartbeatService : BackgroundService
       }
 
       WorkerTelemetry.HeartbeatCounter.Add(1);
-      _logger.LogVerbose("SignalStack.Worker heartbeat.");
+      _logger.LogTrace("SignalStack.Worker heartbeat.");
     }
   }
 }
