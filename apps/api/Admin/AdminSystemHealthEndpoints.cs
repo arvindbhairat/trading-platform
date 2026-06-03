@@ -6,6 +6,7 @@ using SignalStack.Domain.Audit;
 using SignalStack.Api.Auth;
 using SignalStack.Api.Users;
 using SignalStack.Domain.Users;
+using SignalStack.Storage.Fyers;
 
 namespace SignalStack.Api.Admin;
 
@@ -305,7 +306,7 @@ public static class AdminSystemHealthEndpoints
         // Find the admin user's FYERS token.
         var fyersTokens = database.GetCollection<BsonDocument>("fyers_tokens");
         var adminToken = await fyersTokens
-            .Find(Builders<BsonDocument>.Filter.Eq("status", "Active"))
+            .Find(Builders<BsonDocument>.Filter.Eq("status", FyersTokenStatus.Active))
             .FirstOrDefaultAsync(ct);
 
         string tokenStatus;
