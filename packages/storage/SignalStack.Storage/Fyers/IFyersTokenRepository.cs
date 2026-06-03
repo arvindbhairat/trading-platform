@@ -13,6 +13,20 @@ public interface IFyersTokenRepository
     /// </summary>
     Task SaveTokenAsync(FyersTokenDocument token, CancellationToken ct = default);
 
+    /// <summary>
+    /// Stores a pair of FYERS tokens for admin users: one personal copy keyed by
+    /// the admin's OAuth user ID, and one system copy keyed by <c>"admin"</c> for
+    /// Worker services (SharedTokenHealthService, AdminFyersTokenCheckService, etc.).
+    /// Supersedes any prior active tokens for BOTH user IDs before inserting.
+    /// The system copy shares the same <c>AccessTokenRef</c> and <c>ExpiresAt</c>
+    /// as the personal copy.
+    /// REQ-AUTH-008: day-scoped tokens are replaced on each new OAuth flow.
+    /// </summary>
+    Task SaveAdminTokenPairAsync(
+        FyersTokenDocument userToken,
+        FyersTokenDocument adminToken,
+        CancellationToken ct = default);
+
     /// <summary>Returns the active token for the user, or <see langword="null"/> if none exists.</summary>
     Task<FyersTokenDocument?> FindActiveByUserIdAsync(string userId, CancellationToken ct = default);
 

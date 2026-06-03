@@ -28,6 +28,32 @@ public sealed class InMemoryFyersTokenRepository : IFyersTokenRepository
         return Task.CompletedTask;
     }
 
+    public Task SaveAdminTokenPairAsync(
+        FyersTokenDocument userToken,
+        FyersTokenDocument adminToken,
+        CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            // Supersede any existing active token for the OAuth user ID.
+            foreach (var t in _tokens.Where(t => t.UserId == userToken.UserId && t.Status == FyersTokenStatus.Active))
+            {
+                t.Status = FyersTokenStatus.Superseded;
+            }
+
+            // Supersede any existing active token for "admin".
+            foreach (var t in _tokens.Where(t => t.UserId == "admin" && t.Status == FyersTokenStatus.Active))
+            {
+                t.Status = FyersTokenStatus.Superseded;
+            }
+
+            _tokens.Add(userToken);
+            _tokens.Add(adminToken);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<FyersTokenDocument?> FindActiveByUserIdAsync(string userId, CancellationToken ct = default)
     {
         lock (_lock)

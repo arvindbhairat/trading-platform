@@ -32,6 +32,37 @@ public sealed class MongoFyersTokenRepository : IFyersTokenRepository
         await _tokens.InsertOneAsync(token, cancellationToken: ct);
     }
 
+    // REQ-AUTH-004/008: stores dual entries for admin — one personal copy keyed by
+    // OAuth user ID, and one system copy keyed by "admin" for Worker services.
+    public async Task SaveAdminTokenPairAsync(
+        FyersTokenDocument userToken,
+        FyersTokenDocument adminToken,
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var supersedeUpdate = Builders<FyersTokenDocument>.Update
+            .Set(t => t.Status, FyersTokenStatus.Superseded)
+            .Set(t => t.SupersededAt, now);
+
+        // Supersede old tokens for BOTH user IDs in parallel.
+        var userFilter = Builders<FyersTokenDocument>.Filter.And(
+            Builders<FyersTokenDocument>.Filter.Eq(t => t.UserId, userToken.UserId),
+            Builders<FyersTokenDocument>.Filter.Eq(t => t.Status, FyersTokenStatus.Active));
+
+        var adminFilter = Builders<FyersTokenDocument>.Filter.And(
+            Builders<FyersTokenDocument>.Filter.Eq(t => t.UserId, "admin"),
+            Builders<FyersTokenDocument>.Filter.Eq(t => t.Status, FyersTokenStatus.Active));
+
+        await Task.WhenAll(
+            _tokens.UpdateManyAsync(userFilter, supersedeUpdate, cancellationToken: ct),
+            _tokens.UpdateManyAsync(adminFilter, supersedeUpdate, cancellationToken: ct));
+
+        // Insert both new tokens in parallel.
+        await Task.WhenAll(
+            _tokens.InsertOneAsync(userToken, cancellationToken: ct),
+            _tokens.InsertOneAsync(adminToken, cancellationToken: ct));
+    }
+
     public async Task<FyersTokenDocument?> FindActiveByUserIdAsync(
         string userId,
         CancellationToken ct = default)

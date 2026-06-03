@@ -136,8 +136,10 @@ public static class FyersEndpoints
             var activeDoc = await fyersTokenRepo.FindActiveByUserIdAsync(userId, context.RequestAborted);
             var existingFyersUserId = activeDoc?.FyersUserId;
 
+            var isAdmin = user.Role == UserRole.Admin;
+
             var result = await fyersAuth.HandleCallbackAsync(
-                userId, authCode, existingFyersUserId, context.RequestAborted);
+                userId, authCode, existingFyersUserId, isAdmin, context.RequestAborted);
 
             if (!result.IsSuccess)
             {

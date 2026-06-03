@@ -35,6 +35,10 @@ public static class AdminSystemHealthEndpoints
             IUserRepository userRepo,
             IMongoDatabase database) =>
         {
+            var adminUserId = context.User.FindFirst(JwtRegisteredClaimNamesCompat.Sub)?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "";
+
             if (!await IsAdminAsync(context, userRepo))
                 return Results.Forbid();
 
@@ -75,7 +79,7 @@ public static class AdminSystemHealthEndpoints
             }
 
             // ── 2. Admin FYERS token ─────────────────────────────────────────
-            var adminFyers = await BuildAdminFyersTokenAsync(database, auditCol, context.RequestAborted);
+            var adminFyers = await BuildAdminFyersTokenAsync(database, auditCol, adminUserId, context.RequestAborted);
 
             // ── 3. Market data provider ──────────────────────────────────────
             var mdpData = await BuildMarketDataProviderAsync(
@@ -301,12 +305,18 @@ public static class AdminSystemHealthEndpoints
     private static async Task<AdminFyersTokenResponse> BuildAdminFyersTokenAsync(
         IMongoDatabase database,
         IMongoCollection<BsonDocument> auditCol,
+        string adminUserId,
         CancellationToken ct)
     {
-        // Find the admin user's FYERS token.
+        // Find the admin user's personal FYERS token (keyed by OAuth user ID).
+        // The admin also has a system copy keyed by "admin" — we query by the
+        // real user ID to show the admin their own token's expiry, not a stale one.
         var fyersTokens = database.GetCollection<BsonDocument>("fyers_tokens");
         var adminToken = await fyersTokens
-            .Find(Builders<BsonDocument>.Filter.Eq("status", FyersTokenStatus.Active))
+            .Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("user_id", adminUserId),
+                Builders<BsonDocument>.Filter.Eq("status", FyersTokenStatus.Active)))
+            .Sort(Builders<BsonDocument>.Sort.Descending("issued_at"))
             .FirstOrDefaultAsync(ct);
 
         string tokenStatus;

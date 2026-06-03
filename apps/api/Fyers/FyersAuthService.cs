@@ -56,11 +56,15 @@ public sealed class FyersAuthService
     /// persists the token.
     /// REQ-AUTH-014: detects FYERS account ID changes and blocks re-binding.
     /// REQ-AUTH-003a: token values are stored as references (handled by caller).
+    /// When <paramref name="isAdmin"/> is <c>true</c>, creates dual entries:
+    /// one keyed by the admin's OAuth user ID and one keyed by <c>"admin"</c>
+    /// for Worker services (SharedTokenHealthService, etc.).
     /// </summary>
     public async Task<FyersAuthResult> HandleCallbackAsync(
         string userId,
         string code,
         string? existingFyersUserId,
+        bool isAdmin = false,
         CancellationToken ct = default)
     {
         // In a local-dev / testing environment, simulate a successful exchange.
@@ -68,7 +72,7 @@ public sealed class FyersAuthService
         var simulated = _configuration.GetValue<bool>("Fyers:SimulateAuth");
         if (simulated)
         {
-            return await SimulateCallbackAsync(userId, existingFyersUserId, ct);
+            return await SimulateCallbackAsync(userId, existingFyersUserId, isAdmin, ct);
         }
 
         // Production path: exchange code for token via FYERS API.
@@ -176,7 +180,26 @@ public sealed class FyersAuthService
             UpdatedAt = now,
         };
 
-        await _tokenRepo.SaveTokenAsync(token, ct);
+        if (isAdmin)
+        {
+            // Create a system copy keyed by "admin" for Worker services.
+            var adminCopy = new FyersTokenDocument
+            {
+                Id = MongoDB.Bson.ObjectId.GenerateNewId(),
+                UserId = "admin",
+                FyersUserId = token.FyersUserId,
+                AccessTokenRef = token.AccessTokenRef,
+                IssuedAt = token.IssuedAt,
+                ExpiresAt = token.ExpiresAt,
+                Status = token.Status,
+                UpdatedAt = token.UpdatedAt,
+            };
+            await _tokenRepo.SaveAdminTokenPairAsync(token, adminCopy, ct);
+        }
+        else
+        {
+            await _tokenRepo.SaveTokenAsync(token, ct);
+        }
 
         await _auditRepo.RecordAsync(
             userId,
@@ -195,7 +218,8 @@ public sealed class FyersAuthService
     private async Task<FyersAuthResult> SimulateCallbackAsync(
         string userId,
         string? existingFyersUserId,
-        CancellationToken ct)
+        bool isAdmin = false,
+        CancellationToken ct = default)
     {
         var simulatedFyersUserId = existingFyersUserId ?? $"FYERS_{userId.Replace(":", "_")}";
         var now = DateTime.UtcNow;
@@ -231,7 +255,25 @@ public sealed class FyersAuthService
             UpdatedAt = now,
         };
 
-        await _tokenRepo.SaveTokenAsync(token, ct);
+        if (isAdmin)
+        {
+            var adminCopy = new FyersTokenDocument
+            {
+                Id = MongoDB.Bson.ObjectId.GenerateNewId(),
+                UserId = "admin",
+                FyersUserId = token.FyersUserId,
+                AccessTokenRef = token.AccessTokenRef,
+                IssuedAt = token.IssuedAt,
+                ExpiresAt = token.ExpiresAt,
+                Status = token.Status,
+                UpdatedAt = token.UpdatedAt,
+            };
+            await _tokenRepo.SaveAdminTokenPairAsync(token, adminCopy, ct);
+        }
+        else
+        {
+            await _tokenRepo.SaveTokenAsync(token, ct);
+        }
 
         await _auditRepo.RecordAsync(
             userId,
