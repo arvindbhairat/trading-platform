@@ -676,64 +676,114 @@ export default function AdminCalendarPage() {
           </div>
         )}
 
-        {/* Add/Edit form panel */}
+        {/* Add/Edit modal pop-up */}
         {showForm && (
-          <Card
-            accent="brand"
+          <div
             style={{
-              marginTop: "var(--s-6)",
-              padding: "var(--s-6)",
-              maxWidth: "600px",
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
             }}
+            onClick={resetForm}
           >
-            <h3 style={{ marginBottom: "var(--s-2)" }}>
-              {editId ? "Edit calendar entry" : "Add calendar entry"}
-            </h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
-              <Field label="Session date">
-                <TextInput
-                  type="date"
-                  value={form.sessionDate}
-                  onChange={(e) => setForm({ ...form, sessionDate: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Session type">
-                <Select
-                  value={form.sessionType}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      sessionType: e.target.value,
-                      ...(e.target.value === "non_trading_day"
-                        ? { sessionStartTime: "", sessionEndTime: "" }
-                        : {
-                            sessionStartTime: form.sessionStartTime || DEFAULT_START_TIME,
-                            sessionEndTime: form.sessionEndTime || DEFAULT_END_TIME,
-                          }),
-                    })
-                  }
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "var(--bg-2)",
+                border: "1px solid var(--line-2)",
+                borderRadius: 12,
+                width: 480,
+                maxHeight: "90vh",
+                overflow: "auto",
+                boxShadow: "var(--shadow-lg)",
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: "16px 20px",
+                  borderBottom: "1px solid var(--line-1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  position: "sticky",
+                  top: 0,
+                  background: "var(--bg-2)",
+                  zIndex: 1,
+                }}
+              >
+                <h3 style={{ margin: 0 }}>
+                  {editId ? "Edit calendar entry" : "Add calendar entry"}
+                </h3>
+                <button
+                  onClick={resetForm}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--fg-3)",
+                    cursor: "pointer",
+                    padding: 4,
+                  }}
                 >
-                  {SESSION_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+                  <Icon name="x" size={18} />
+                </button>
+              </div>
 
-              {isNonTradingDay ? (
-                <Field label="Holiday name (optional)">
+              {/* Body */}
+              <div
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s-4)",
+                }}
+              >
+                <Field label="Session date">
                   <TextInput
-                    type="text"
-                    value={form.holidayName}
-                    onChange={(e) => setForm({ ...form, holidayName: e.target.value })}
-                    placeholder="e.g. Republic Day"
+                    type="date"
+                    value={form.sessionDate}
+                    onChange={(e) => setForm({ ...form, sessionDate: e.target.value })}
                   />
                 </Field>
-              ) : (
-                <>
+
+                <Field label="Session type">
+                  <Select
+                    value={form.sessionType}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        sessionType: e.target.value,
+                        ...(e.target.value === "non_trading_day"
+                          ? { sessionStartTime: "", sessionEndTime: "" }
+                          : {
+                              sessionStartTime: form.sessionStartTime || DEFAULT_START_TIME,
+                              sessionEndTime: form.sessionEndTime || DEFAULT_END_TIME,
+                            }),
+                      })
+                    }
+                  >
+                    {SESSION_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                {isNonTradingDay ? (
+                  <Field label="Holiday name (optional)">
+                    <TextInput
+                      type="text"
+                      value={form.holidayName}
+                      onChange={(e) => setForm({ ...form, holidayName: e.target.value })}
+                      placeholder="e.g. Republic Day"
+                    />
+                  </Field>
+                ) : (
                   <div style={{ display: "flex", gap: "var(--s-4)" }}>
                     <Field label="Start time (IST)">
                       <TextInput
@@ -754,10 +804,22 @@ export default function AdminCalendarPage() {
                       />
                     </Field>
                   </div>
-                </>
-              )}
+                )}
+              </div>
 
-              <div style={{ display: "flex", gap: "var(--s-3)", marginTop: "var(--s-2)" }}>
+              {/* Footer */}
+              <div
+                style={{
+                  padding: "14px 20px",
+                  borderTop: "1px solid var(--line-1)",
+                  display: "flex",
+                  gap: 10,
+                  justifyContent: "flex-end",
+                }}
+              >
+                <Btn variant="ghost" size="sm" onClick={resetForm}>
+                  Cancel
+                </Btn>
                 <Btn
                   variant="primary"
                   size="sm"
@@ -766,12 +828,9 @@ export default function AdminCalendarPage() {
                 >
                   {saving ? "Saving…" : editId ? "Update" : "Create"}
                 </Btn>
-                <Btn variant="ghost" size="sm" onClick={resetForm}>
-                  Cancel
-                </Btn>
               </div>
             </div>
-          </Card>
+          </div>
         )}
       </div>
     </>
