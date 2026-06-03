@@ -639,23 +639,46 @@ export function SideNav({
           </button>
         );
       })}
-      {!collapsed && (
-        <div
-          style={{
-            marginTop: "auto",
-            padding: "8px 12px",
-            fontSize: "10px",
-            color: "var(--fg-4)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}
-        >
-          System
-        </div>
-      )}
-      {role === "admin" && (
+      {/* Bottom section — pushed to bottom in both expanded and collapsed states */}
+      <div style={{ marginTop: "auto" }}>
+        {!collapsed && (
+          <div
+            style={{
+              padding: "8px 12px",
+              fontSize: "10px",
+              color: "var(--fg-4)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            System
+          </div>
+        )}
+        {role === "admin" && (
+          <button
+            onClick={() => router.push(admin ? "/" : "/admin")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "9px 12px",
+              background: "transparent",
+              border: "none",
+              color: "var(--brand-1)",
+              cursor: "pointer",
+              fontFamily: "var(--font-sans)",
+              fontSize: "13px",
+              fontWeight: 500,
+              textAlign: "left",
+              justifyContent: collapsed ? "center" : "flex-start",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Icon name={admin ? "arrow-left" : "shield"} size={16} />
+            {!collapsed && (admin ? "User" : "Admin")}
+          </button>
+        )}
         <button
-          onClick={() => router.push(admin ? "/" : "/admin")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -663,7 +686,7 @@ export function SideNav({
             padding: "9px 12px",
             background: "transparent",
             border: "none",
-            color: "var(--brand-1)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             fontFamily: "var(--font-sans)",
             fontSize: "13px",
@@ -673,79 +696,58 @@ export function SideNav({
             whiteSpace: "nowrap",
           }}
         >
-          <Icon name={admin ? "arrow-left" : "shield"} size={16} />
-          {!collapsed && (admin ? "User" : "Admin")}
+          <Icon name="settings" size={16} />
+          {!collapsed && "Settings"}
         </button>
-      )}
-      <button
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          padding: "9px 12px",
-          background: "transparent",
-          border: "none",
-          color: "var(--fg-2)",
-          cursor: "pointer",
-          fontFamily: "var(--font-sans)",
-          fontSize: "13px",
-          fontWeight: 500,
-          textAlign: "left",
-          justifyContent: collapsed ? "center" : "flex-start",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <Icon name="settings" size={16} />
-        {!collapsed && "Settings"}
-      </button>
-      <button
-        onClick={() => logout()}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          padding: "9px 12px",
-          background: "transparent",
-          border: "none",
-          color: "var(--fg-2)",
-          cursor: "pointer",
-          fontFamily: "var(--font-sans)",
-          fontSize: "13px",
-          fontWeight: 500,
-          textAlign: "left",
-          justifyContent: collapsed ? "center" : "flex-start",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <Icon name="x" size={16} />
-        {!collapsed && "Sign out"}
-      </button>
-      <button
-        onClick={toggle}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          padding: "9px 12px",
-          background: "transparent",
-          border: "none",
-          color: "var(--fg-3)",
-          cursor: "pointer",
-          fontFamily: "var(--font-sans)",
-          fontSize: "13px",
-          fontWeight: 500,
-          textAlign: "left",
-          justifyContent: collapsed ? "center" : "flex-start",
-          whiteSpace: "nowrap",
-          borderTop: "1px solid var(--line-1)",
-          marginTop: "4px",
-          paddingTop: "12px",
-        }}
-      >
-        <Icon name={collapsed ? "arrow-right" : "arrow-left"} size={16} />
-        {!collapsed && (collapsed ? "Expand" : "Collapse")}
-      </button>
+        <button
+          onClick={() => logout()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "9px 12px",
+            background: "transparent",
+            border: "none",
+            color: "var(--fg-2)",
+            cursor: "pointer",
+            fontFamily: "var(--font-sans)",
+            fontSize: "13px",
+            fontWeight: 500,
+            textAlign: "left",
+            justifyContent: collapsed ? "center" : "flex-start",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Icon name="external" size={16} />
+          {!collapsed && "Sign out"}
+        </button>
+        <button
+          onClick={toggle}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "9px 12px",
+            background: "transparent",
+            border: "none",
+            color: "var(--fg-3)",
+            cursor: "pointer",
+            fontFamily: "var(--font-sans)",
+            fontSize: "13px",
+            fontWeight: 500,
+            textAlign: "left",
+            justifyContent: collapsed ? "center" : "flex-start",
+            whiteSpace: "nowrap",
+            borderTop: "1px solid var(--line-1)",
+            marginTop: "4px",
+            paddingTop: "12px",
+          }}
+        >
+          <Icon name={collapsed ? "arrow-right" : "arrow-left"} size={16} />
+          {!collapsed && (collapsed ? "Expand" : "Collapse")}
+        </button>
+      </div>
     </nav>
   );
 }

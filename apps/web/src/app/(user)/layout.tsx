@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { getLiveAlerts } from "@/lib/live-alerts";
 import {
   Shell,
@@ -14,6 +15,7 @@ import {
   userNavRoutes,
   resolveActiveNavId,
   userNavItemsWithNotificationCount,
+  type NavItem,
 } from "@/components/primitives";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
@@ -23,6 +25,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   const [hasToken] = useState(() => !!getToken());
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [unreadCritical, setUnreadCritical] = useState(0);
+  const { role } = useAuth();
 
   // Auth guard: redirect to login if no JWT token.
   useEffect(() => {
@@ -70,9 +73,24 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   }
 
   const current = resolveActiveNavId(pathname, userNavRoutes) ?? "dashboard";
-  const navItems = userNavItemsWithNotificationCount(unreadTotal, unreadCritical);
+  const baseNavItems = userNavItemsWithNotificationCount(unreadTotal, unreadCritical);
+  const navItems: NavItem[] =
+    role === "admin"
+      ? [
+          ...baseNavItems,
+          {
+            id: "admin",
+            label: "Admin Panel",
+            icon: "shield",
+          },
+        ]
+      : baseNavItems;
 
   const handleNavigate = (id: string) => {
+    if (id === "admin") {
+      router.push("/admin");
+      return;
+    }
     const route = userNavRoutes[id];
     if (route) router.push(route);
   };
