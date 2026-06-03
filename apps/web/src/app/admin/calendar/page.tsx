@@ -59,6 +59,39 @@ interface CalendarFormState {
 
 type Notification = { type: "success" | "error"; message: string };
 
+// Maps server-side error codes to user-friendly messages.
+const ERROR_MESSAGES: Record<string, string> = {
+  duplicate_calendar_entry: "This date already has a calendar entry of the same type.",
+  date_already_has_entry: "A calendar entry already exists for this date.",
+  session_date_required: "Session date is required.",
+  invalid_session_date_format: "Invalid session date format. Use YYYY-MM-DD.",
+  session_type_required: "Session type is required.",
+  invalid_session_type: "Invalid session type.",
+  non_trading_day_must_not_have_session_times: "Non-trading day markers must not have session times.",
+  session_start_time_required: "Session start time is required for session records.",
+  session_end_time_required: "Session end time is required for session records.",
+  invalid_session_start_time_format: "Invalid session start time format. Use HH:mm.",
+  invalid_session_end_time_format: "Invalid session end time format. Use HH:mm.",
+  invalid_id: "Invalid entry ID.",
+};
+
+function friendlyError(body: Record<string, unknown>): string {
+  const code = typeof body.error === "string" ? body.error : "";
+  const known = code ? ERROR_MESSAGES[code] : null;
+  if (known) {
+    // Append additional context if available.
+    const extra: string[] = [];
+    if (body.session_date) extra.push(`Date: ${body.session_date}`);
+    if (body.session_type) {
+      const label = SESSION_TYPES.find((t) => t.value === body.session_type)?.label ?? body.session_type;
+      extra.push(`Type: ${label}`);
+    }
+    return extra.length > 0 ? `${known} (${extra.join(", ")})` : known;
+  }
+  // Fallback: show the raw error code if we don't have a mapping.
+  return code || "An unknown error occurred.";
+}
+
 const SESSION_TYPES = [
   { value: "normal", label: "Normal" },
   { value: "special", label: "Special" },
@@ -270,7 +303,7 @@ export default function AdminCalendarPage() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setNotification({ type: "error", message: body.error ?? "Update failed" });
+          setNotification({ type: "error", message: friendlyError(body) });
           setSaving(false);
           return;
         }
@@ -298,7 +331,7 @@ export default function AdminCalendarPage() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setNotification({ type: "error", message: body.error ?? "Create failed" });
+          setNotification({ type: "error", message: friendlyError(body) });
           setSaving(false);
           return;
         }
@@ -330,7 +363,7 @@ export default function AdminCalendarPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setNotification({ type: "error", message: body.error ?? "Delete failed" });
+        setNotification({ type: "error", message: friendlyError(body) });
         return;
       }
 
