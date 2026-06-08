@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Npgsql;
 using SignalStack.Domain.Admin;
 using SignalStack.Storage.Admin;
 using SignalStack.Signals.Backtesting;
@@ -618,8 +619,16 @@ public sealed class EodSignalRunnerService
     }
 
     private static bool IsTransient(Exception ex)
-        => ex is System.Data.Common.DbException
+    {
+        // 42P01 = relation (table) does not exist. The table hasn't been
+        // created by HDS yet — retrying won't help. Fail immediately so
+        // the symbol is excluded from evaluation without burning 120s.
+        if (ex is PostgresException { SqlState: "42P01" })
+            return false;
+
+        return ex is System.Data.Common.DbException
             || ex is TimeoutException;
+    }
 
     /// <summary>
     /// Serialises a <see cref="SignalResult"/> into a <see cref="BsonDocument"/>

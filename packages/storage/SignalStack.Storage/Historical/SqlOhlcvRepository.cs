@@ -65,6 +65,14 @@ public sealed class SqlOhlcvRepository : IOhlcvRepository
 
         var tableName = $"D_{suffix}";
 
+        if (!await TableExistsAsync(tableName, ct))
+        {
+            _logger.LogWarning(
+                "OHLCV table {TableName} does not exist for rolling query. Returning empty data set.",
+                tableName);
+            return [];
+        }
+
         // Rolling candles: fetch the last N sessions and build one OHLCV record.
         // REQ-TIMEFRAME-003: the opening bar is the oldest included trading session,
         // and the closing bar is the most recent trading session.
@@ -152,6 +160,14 @@ SELECT CASE WHEN EXISTS (
     private async Task<List<OhlcvRecord>> QueryOhlcvAsync(
         string tableName, DateOnly from, DateOnly to, CancellationToken ct)
     {
+        if (!await TableExistsAsync(tableName, ct))
+        {
+            _logger.LogWarning(
+                "OHLCV table {TableName} does not exist. Returning empty data set.",
+                tableName);
+            return [];
+        }
+
         var sql = $@"
 SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
 FROM ""{tableName}""
@@ -173,6 +189,39 @@ ORDER BY ""Date"" ASC";
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Checks whether a table exists in the public schema.
+    /// Returns false gracefully on any error (connection, etc.) so callers
+    /// degrade to empty results rather than throwing PostgresException 42P01.
+    /// </summary>
+    private async Task<bool> TableExistsAsync(string tableName, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+
+            var sql = @"
+SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = @TableName
+) THEN 1 ELSE 0 END";
+
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@TableName", tableName);
+            var result = (int)(await cmd.ExecuteScalarAsync(ct))!;
+            return result == 1;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to check existence of table {TableName}. " +
+                "Assuming table does not exist.",
+                tableName);
+            return false;
+        }
     }
 
     private static OhlcvRecord ReadOhlcv(NpgsqlDataReader reader)
