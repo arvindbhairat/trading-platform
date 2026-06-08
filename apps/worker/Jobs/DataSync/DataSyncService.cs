@@ -429,21 +429,31 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
         {
             if (ct.IsCancellationRequested) break;
 
-            var dailyTableName = $"D_{suffix}";
-            var weeklyTableName = $"W_{suffix}";
-            var monthlyTableName = $"M_{suffix}";
+            try
+            {
+                var dailyTableName = $"D_{suffix}";
+                var weeklyTableName = $"W_{suffix}";
+                var monthlyTableName = $"M_{suffix}";
 
-            // Recompute weekly aggregate for the week containing this session.
-            await UpsertAggregateAsync(
-                conn, dailyTableName, weeklyTableName,
-                "date_trunc('week', \"Date\")",
-                weekStart, weekEnd, ct);
+                // Recompute weekly aggregate for the week containing this session.
+                await UpsertAggregateAsync(
+                    conn, dailyTableName, weeklyTableName,
+                    "date_trunc('week', \"Date\")",
+                    weekStart, weekEnd, ct);
 
-            // Recompute monthly aggregate for the month containing this session.
-            await UpsertAggregateAsync(
-                conn, dailyTableName, monthlyTableName,
-                "date_trunc('month', \"Date\")",
-                monthStart, monthEnd, ct);
+                // Recompute monthly aggregate for the month containing this session.
+                await UpsertAggregateAsync(
+                    conn, dailyTableName, monthlyTableName,
+                    "date_trunc('month', \"Date\")",
+                    monthStart, monthEnd, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "DataSync: skipped aggregate recompute for suffix {Suffix} — " +
+                    "tables likely missing (symbol not yet seeded by HDS).",
+                    suffix);
+            }
         }
 
         _logger.LogDebug(
