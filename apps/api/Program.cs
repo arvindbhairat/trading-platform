@@ -479,6 +479,9 @@ app.MapAdminAuditEndpoints();
 // Admin system health dashboard endpoints — P8-T2 / REQ-ADMIN-014, A-14
 app.MapAdminSystemHealthEndpoints();
 
+// Admin connectivity check endpoint — verifies MongoDB, PostgreSQL, and Redis reachability
+app.MapAdminConnectivityEndpoints();
+
 // Admin phase transition + gate management endpoints — P8-T3 / REQ-LEGAL-001/005/005a
 app.MapAdminPhaseEndpoints();
 

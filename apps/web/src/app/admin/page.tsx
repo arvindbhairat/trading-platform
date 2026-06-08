@@ -143,6 +143,20 @@ interface LegalPostureData {
 
 type Notification = { type: "success" | "error"; message: string };
 
+// ── Connectivity Types ──────────────────────────────────────────────
+
+interface DatabaseConnectivity {
+  reachable: boolean;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+interface ConnectivityData {
+  mongo_db: DatabaseConnectivity;
+  postgre_sql: DatabaseConnectivity;
+  redis: DatabaseConnectivity;
+}
+
 // ── Page Component ─────────────────────────────────────────────────────
 
 export default function AdminHomePage() {
@@ -157,6 +171,8 @@ export default function AdminHomePage() {
   const [dismissing, setDismissing] = useState(false);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
+  const [connectivity, setConnectivity] = useState<ConnectivityData | null>(null);
+  const [testingConnectivity, setTestingConnectivity] = useState(false);
 
   // ── Impersonation state (P8-T5 / REQ-ADMIN-015) ──────────────────────
   const [impTargetUserId, setImpTargetUserId] = useState("");
@@ -366,6 +382,31 @@ export default function AdminHomePage() {
         window.location.href = data.auth_url;
       }
     });
+  }
+
+  // ── Connectivity test handler ─────────────────────────────────────────
+
+  async function handleTestConnectivity() {
+    setTestingConnectivity(true);
+    setNotification(null);
+
+    try {
+      const res = await apiFetch("/api/v1/admin/connectivity");
+      if (!res.ok) {
+        setNotification({ type: "error", message: "Connectivity check failed" });
+        setTestingConnectivity(false);
+        return;
+      }
+      const data: ConnectivityData = await res.json();
+      setConnectivity(data);
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err instanceof Error ? err.message : "Connectivity test failed",
+      });
+    } finally {
+      setTestingConnectivity(false);
+    }
   }
 
   // ── Job type display names ───────────────────────────────────────────
@@ -777,6 +818,73 @@ export default function AdminHomePage() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </Card>
+
+                {/* ── Connectivity Check Card ─────────────────────────── */}
+                <Card>
+                  <div style={{ padding: "var(--s-4) var(--s-5)", borderBottom: "1px solid var(--border-1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h2 style={{ margin: 0 }}>Connectivity</h2>
+                    <Btn size="sm" variant="secondary" icon="refresh" onClick={handleTestConnectivity} disabled={testingConnectivity}>
+                      {testingConnectivity ? "Testing…" : connectivity ? "Test again" : "Test now"}
+                    </Btn>
+                  </div>
+                  <div style={{ padding: "var(--s-5)" }}>
+                    {connectivity ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+                        <Row label="MongoDB">
+                          <StatusDot tone={connectivity.mongo_db.reachable ? "up" : "down"} />
+                          {connectivity.mongo_db.reachable ? (
+                            <span className="t-body-sm" style={{ color: "var(--up-500)" }}>
+                              Connected {connectivity.mongo_db.latency_ms !== null ? `(${connectivity.mongo_db.latency_ms}ms)` : ""}
+                            </span>
+                          ) : (
+                            <span className="t-body-sm" style={{ color: "var(--down-500)" }}>
+                              Unreachable
+                            </span>
+                          )}
+                        </Row>
+                        <Row label="PostgreSQL">
+                          <StatusDot tone={connectivity.postgre_sql.reachable ? "up" : "down"} />
+                          {connectivity.postgre_sql.reachable ? (
+                            <span className="t-body-sm" style={{ color: "var(--up-500)" }}>
+                              Connected {connectivity.postgre_sql.latency_ms !== null ? `(${connectivity.postgre_sql.latency_ms}ms)` : ""}
+                            </span>
+                          ) : (
+                            <span className="t-body-sm" style={{ color: "var(--down-500)" }}>
+                              Unreachable
+                            </span>
+                          )}
+                        </Row>
+                        <Row label="Redis">
+                          <StatusDot tone={connectivity.redis.reachable ? "up" : "down"} />
+                          {connectivity.redis.reachable ? (
+                            <span className="t-body-sm" style={{ color: "var(--up-500)" }}>
+                              Connected {connectivity.redis.latency_ms !== null ? `(${connectivity.redis.latency_ms}ms)` : ""}
+                            </span>
+                          ) : (
+                            <span className="t-body-sm" style={{ color: "var(--down-500)" }}>
+                              Unreachable
+                            </span>
+                          )}
+                        </Row>
+                        {(!connectivity.mongo_db.reachable || !connectivity.postgre_sql.reachable || !connectivity.redis.reachable) && (
+                          <div style={{ borderTop: "1px solid var(--line-1)", paddingTop: "var(--s-3)", marginTop: "var(--s-1)" }}>
+                            <p className="t-body-sm" style={{ color: "var(--down-500)", fontSize: "11px", margin: 0, whiteSpace: "pre-wrap" }}>
+                              {[
+                                !connectivity.mongo_db.reachable && `MongoDB: ${connectivity.mongo_db.error}`,
+                                !connectivity.postgre_sql.reachable && `PostgreSQL: ${connectivity.postgre_sql.error}`,
+                                !connectivity.redis.reachable && `Redis: ${connectivity.redis.error}`,
+                              ].filter(Boolean).join("\n")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="t-body-sm" style={{ color: "var(--t-3)", margin: 0 }}>
+                        Run a connectivity test to verify MongoDB, PostgreSQL, and Redis reachability.
+                      </p>
+                    )}
                   </div>
                 </Card>
 
