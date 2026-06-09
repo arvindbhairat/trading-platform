@@ -738,6 +738,20 @@ export default function AdminHomePage() {
                           <Pill tone={health.admin_fyers_token.status === "valid" ? "up" : health.admin_fyers_token.status === "expired" ? "down" : "warn"}>
                             {health.admin_fyers_token.status}
                           </Pill>
+                          {health.admin_fyers_token.status !== "valid" && (
+                            <span
+                              className="t-body-sm"
+                              style={{
+                                color: "var(--info-500)",
+                                cursor: "pointer",
+                                textDecoration: "underline",
+                                marginLeft: "var(--s-1)",
+                              }}
+                              onClick={() => router.push("/fyers-required")}
+                            >
+                              Re-authenticate
+                            </span>
+                          )}
                         </div>
                         {health.admin_fyers_token.expires_at && (
                           <span className="t-body-sm" style={{ color: "var(--t-3)", fontSize: "10px" }}>

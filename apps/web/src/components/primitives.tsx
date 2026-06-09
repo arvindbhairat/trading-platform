@@ -981,7 +981,6 @@ export const adminNavItems: NavItem[] = [
   { id: "privacy-requests", label: "Privacy Requests",  icon: "file-text" },
   { id: "config",           label: "Config",            icon: "settings" },
   { id: "universe",         label: "Universe",          icon: "layers" },
-  { id: "jobs",             label: "Job runs",          icon: "activity" },
   { id: "calendar",         label: "Trading calendar",  icon: "calendar" },
 ];
 
@@ -1040,7 +1039,6 @@ export const adminNavRoutes: Record<string, string> = {
   "privacy-requests": "/admin/privacy-requests",
   config: "/admin/config",
   universe: "/admin/universe",
-  jobs: "/admin/jobs",
   calendar: "/admin/calendar",
 };
 
