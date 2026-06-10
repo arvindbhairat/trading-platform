@@ -554,22 +554,33 @@ public sealed class LiveAccountDataSyncService
             // ── Step 3: Record sync progress (P5-T7 guard write) ───────────
             var now = DateTime.UtcNow;
 
-            var filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId);
-            var update = Builders<BsonDocument>.Update
+            // Step 3a: Guarantee the sync-progress document exists (user_id upsert
+            // with no fence-token condition). This avoids a DuplicateKey error when
+            // the fence-guarded upsert below fails to match an existing document but
+            // then tries to INSERT a duplicate user_id row.
+            var baseFilter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId);
+            var seedUpdate = Builders<BsonDocument>.Update
+                .SetOnInsert("user_id", user.UserId)
+                .SetOnInsert("user_object_id", user.Id);
+            await accountSyncCollection.UpdateOneAsync(
+                baseFilter, seedUpdate,
+                options: new UpdateOptions { IsUpsert = true },
+                cancellationToken: ct);
+
+            // Step 3b: Fence-guarded update (no upsert) — REQ-PORT-031b(b).
+            // If the stored ledger_fence_token exceeds our handle's token, another
+            // process has already written newer data and this write is stale.
+            var dataUpdate = Builders<BsonDocument>.Update
                 .Set("last_successful_sync_at", now)
                 .Set("last_sync_attempt_at", now)
                 .Set("sync_status", "completed")
-                .Set("updated_at", now)
-                .SetOnInsert("user_id", user.UserId)
-                .SetOnInsert("user_object_id", user.Id);
+                .Set("updated_at", now);
 
-            // REQ-PORT-031b(b): include fencing-token filter for stale-write detection
-            filter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId)
+            var fenceFilter = Builders<BsonDocument>.Filter.Eq("user_id", user.UserId)
                      & Builders<BsonDocument>.Filter.Lte("ledger_fence_token", handle.FencingToken);
 
             var result = await accountSyncCollection.UpdateOneAsync(
-                filter, update,
-                options: new UpdateOptions { IsUpsert = true },
+                fenceFilter, dataUpdate,
                 cancellationToken: ct);
 
             // ── Step 4: Fencing-token guard (REQ-PORT-031b invariant A-11) ──

@@ -142,12 +142,12 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
 
             return (await SendAndParseAsync<FyersHistoryResponse, IReadOnlyList<OhlcvRecord>>(
                 request, requestBodyForLogging, endpoint, fyersSymbol,
-                (body, _) => body?.S == "ok" && body.Data?.Candles is not null,
-                (body, sym) => body!.Data!.Candles!
+                (body, _) => body?.S == "ok" && (body.Data?.Candles is not null || body.Candles is not null),
+                (body, sym) => (body?.Data?.Candles ?? body?.Candles)?
                     .Select(candle => MapCandle(sym!, candle))
                     .Where(r => r is not null)
                     .OfType<OhlcvRecord>()
-                    .ToList(),
+                    .ToList() ?? [],
                 symbol,
                 ct))!;
         }, cancellationToken);
@@ -375,12 +375,12 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
         if (candle.Count < 6)
             return null;
 
-        var timestamp = candle[0];
+        var timestamp = (long)candle[0];
         var open = candle[1];
         var high = candle[2];
         var low = candle[3];
         var close_ = candle[4];
-        var volume = candle[5];
+        var volume = (long)candle[5];
 
         var date = DateTimeOffset.FromUnixTimeSeconds(timestamp).UtcDateTime;
 
@@ -391,7 +391,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             High: high,
             Low: low,
             Close: close_,
-            Volume: (long)volume);
+            Volume: volume);
     }
 
     private static QuoteRecord? MapQuote(string symbol, FyersQuoteDetail quote)
@@ -428,6 +428,13 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
 
         [JsonPropertyName("data")]
         public FyersHistoryData? Data { get; init; }
+
+        /// <summary>
+        /// FYERS v2 response shape returns candles at the root level (not nested
+        /// under "data"). This property handles both v2 and v3 response formats.
+        /// </summary>
+        [JsonPropertyName("candles")]
+        public List<FyersCandle>? Candles { get; init; }
     }
 
     private sealed record FyersHistoryData
@@ -436,8 +443,11 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
         public List<FyersCandle>? Candles { get; init; }
     }
 
-    /// <summary>FYERS candle: [timestamp, open, high, low, close, volume].</summary>
-    private sealed class FyersCandle : List<long>;
+    /// <summary>
+    /// FYERS candle: [timestamp_epoch, open, high, low, close, volume].
+    /// Prices are decimal (e.g. 1082.50), not integers — must use decimal, not long.
+    /// </summary>
+    private sealed class FyersCandle : List<decimal>;
 
     private sealed record FyersQuoteResponse
     {

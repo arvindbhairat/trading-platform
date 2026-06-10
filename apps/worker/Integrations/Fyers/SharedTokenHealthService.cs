@@ -258,7 +258,10 @@ public sealed class SharedTokenHealthService
 
             await sysConfig.UpdateOneAsync(
                 Builders<BsonDocument>.Filter.Eq("_id", SysConfigDegradedKey),
-                Builders<BsonDocument>.Update.Set("value", "false").Set("updated_at", now),
+                Builders<BsonDocument>.Update
+                    .Set("value", "false")
+                    .Set("updated_at", now)
+                    .SetOnInsert("key", SysConfigDegradedKey),
                 new UpdateOptions { IsUpsert = true },
                 cancellationToken: ct);
 
@@ -268,14 +271,18 @@ public sealed class SharedTokenHealthService
                     Builders<BsonDocument>.Filter.Eq("_id", SysConfigLastTokenKey),
                     Builders<BsonDocument>.Update
                         .Set("value", _lastSuccessfulTokenAt.Value.ToString("o"))
-                        .Set("updated_at", now),
+                        .Set("updated_at", now)
+                        .SetOnInsert("key", SysConfigLastTokenKey),
                     new UpdateOptions { IsUpsert = true },
                     cancellationToken: ct);
             }
 
             await sysConfig.UpdateOneAsync(
                 Builders<BsonDocument>.Filter.Eq("_id", SysConfigDegradedReasonKey),
-                Builders<BsonDocument>.Update.Set("value", "").Set("updated_at", now),
+                Builders<BsonDocument>.Update
+                    .Set("value", "")
+                    .Set("updated_at", now)
+                    .SetOnInsert("key", SysConfigDegradedReasonKey),
                 new UpdateOptions { IsUpsert = true },
                 cancellationToken: ct);
         }
