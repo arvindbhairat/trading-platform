@@ -315,13 +315,22 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
 
             if (!response.IsSuccessStatusCode)
             {
+                var statusCode = (int)response.StatusCode;
                 _logger.LogError(
                     "FYERS API error: {Method} {Endpoint} for {Symbol} returned {StatusCode}. " +
                     "Request body: {RequestBody}. Response body: {ResponseBody}",
                     request.Method, endpoint, fyersSymbol,
-                    (int)response.StatusCode,
+                    statusCode,
                     requestBodyJson,
                     responseBody);
+
+                // 4xx are client errors (bad symbol, delisted, invalid params) —
+                // return null so the caller handles gracefully as "data unavailable".
+                // 5xx are server errors — throw so they surface as exception traces
+                // for monitoring.
+                if (statusCode < 500)
+                    return default;
+
                 response.EnsureSuccessStatusCode();
             }
 
