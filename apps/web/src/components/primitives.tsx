@@ -8,11 +8,12 @@
 // All visual values come from tokens defined in globals.css.
 // ---------------------------------------------------------------------------
 
-import React, { useState, useEffect, type ReactNode, type CSSProperties } from "react";
+import React, { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePushAlerts } from "./PushAlertProvider";
 
 // ---------------------------------------------------------------------------
 // Icon — Lucide-style SVG icons, 24x24 viewBox
@@ -366,24 +367,23 @@ export function StatusDot({ tone = "up" }: { tone?: "up" | "down" | "warn" | "ne
 // ---------------------------------------------------------------------------
 
 export function LegalFooter() {
-  const [buildId, setBuildId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { pushStatus } = usePushAlerts();
+  const [showAlertTooltip, setShowAlertTooltip] = useState(false);
+  const alertRef = useRef<HTMLDivElement>(null);
 
+  const isDegraded = pushStatus !== "connecting" && pushStatus !== "connected";
+
+  // Close tooltip on click outside
   useEffect(() => {
-    fetch("/api/version")
-      .then((r) => r.json())
-      .then((data: { buildId: string | null }) => setBuildId(data.buildId))
-      .catch(() => { /* env var not available */ });
-  }, []);
-
-  const handleCopy = async () => {
-    if (!buildId) return;
-    try {
-      await navigator.clipboard.writeText(buildId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard not available */ }
-  };
+    if (!showAlertTooltip) return;
+    const handleClick = (e: MouseEvent) => {
+      if (alertRef.current && !alertRef.current.contains(e.target as Node)) {
+        setShowAlertTooltip(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showAlertTooltip]);
 
   return (
     <div
@@ -413,19 +413,48 @@ export function LegalFooter() {
           flexWrap: "wrap",
         }}
       >
-        {buildId && (
-          <span
-            onClick={handleCopy}
-            title="Click to copy build ID"
-            style={{
-              cursor: "pointer",
-              fontFamily: "monospace",
-              color: copied ? "var(--brand-300)" : "var(--fg-3)",
-              transition: "color 0.15s",
-            }}
-          >
-            {copied ? "Copied!" : buildId.substring(0, 7)}
-          </span>
+        {isDegraded && (
+          <div ref={alertRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowAlertTooltip((v) => !v)}
+              title="Push status"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: 0,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--warn-500)",
+                opacity: showAlertTooltip ? 1 : 0.7,
+              }}
+            >
+              <Icon name="alert-triangle" size={13} />
+            </button>
+            {showAlertTooltip && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "100%",
+                  right: 0,
+                  marginBottom: "6px",
+                  background: "var(--bg-2)",
+                  border: "1px solid var(--line-1)",
+                  borderRadius: "var(--r-xs)",
+                  padding: "6px 10px",
+                  fontSize: "11px",
+                  color: "var(--warn-500)",
+                  whiteSpace: "nowrap",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                  zIndex: 100,
+                  lineHeight: 1.4,
+                }}
+              >
+                Live alerts paused — real-time monitoring is temporarily unavailable.
+                {pushStatus === "rest_fallback" && <span style={{ opacity: 0.8 }}> Using periodic refresh.</span>}
+              </div>
+            )}
+          </div>
         )}
         <Link href="/legal/tos" style={linkStyle}>Terms of Service</Link>
         <Link href="/legal/privacy" style={linkStyle}>Privacy Policy</Link>
@@ -596,6 +625,25 @@ export function SideNav({
   const [collapsed, setCollapsed] = useState(false);
   const toggle = () => setCollapsed((c) => !c);
 
+  const [buildId, setBuildId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((data: { buildId: string | null }) => setBuildId(data.buildId))
+      .catch(() => { /* env var not available */ });
+  }, []);
+
+  const handleCopyBuildId = async () => {
+    if (!buildId) return;
+    try {
+      await navigator.clipboard.writeText(buildId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard not available */ }
+  };
+
   return (
     <nav
       style={{
@@ -724,6 +772,26 @@ export function SideNav({
           <Icon name="external" size={16} />
           {!collapsed && "Sign out"}
         </button>
+        {/* Version / build ID */}
+        {!collapsed && buildId && (
+          <span
+            onClick={handleCopyBuildId}
+            title="Click to copy build ID"
+            style={{
+              display: "block",
+              padding: "4px 12px",
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              color: copied ? "var(--brand-300)" : "var(--fg-4)",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "color 0.15s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {copied ? "Copied!" : buildId.substring(0, 7)}
+          </span>
+        )}
         <button
           onClick={toggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}

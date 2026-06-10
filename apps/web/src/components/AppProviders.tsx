@@ -9,7 +9,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PushAlertProvider } from "./PushAlertProvider";
-import { PushDegradationBanner } from "./PushDegradationBanner";
+
 import { FyersSdkProvider } from "./FyersSdkProvider";
 import { telemetry } from "@/lib/telemetry";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -179,7 +179,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <AuthProvider>
       <FyersSdkProvider>
         <PushAlertProvider>
-          <PushDegradationBanner />
           <TelemetryGate>
             <WebVitalsReporter />
             <GlobalErrorBoundary />
