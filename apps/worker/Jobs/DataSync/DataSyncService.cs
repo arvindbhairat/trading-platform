@@ -292,6 +292,14 @@ public sealed class DataSyncService
 
     /// <summary>
     /// Syncs OHLCV data for a single symbol on a specific trading session date.
+    ///
+    /// Optimised to fetch a date range (from the last known candle to the session
+    /// date) in a single API call, rather than one day at a time. All returned
+    /// candles are inserted with ON CONFLICT DO NOTHING to proactively fill any
+    /// gaps left by missed sessions or partial HDS seeding.
+    ///
+    /// REQ-MARKET-009: 10-session auto-recovery — range-based fetch handles
+    /// multiple missed days in a single provider call.
     /// </summary>
     private async Task<SymbolSyncOutcome> SyncSymbolForDateAsync(
         string symbol,
@@ -310,90 +318,120 @@ public sealed class DataSyncService
 
         var dailyTableName = $"D_{suffix}";
 
-        // ── Step 2: Check if data already exists for this date ──────────────
-        var exists = await CheckDailyDataExistsAsync(dailyTableName, sessionDate, ct);
-        if (exists)
+        // ── Step 2: Fast path — data already exists up to or past sessionDate ─
+        // Uses the last known candle date to avoid unnecessary fetch calls.
+        // This replaces the per-date CheckDailyDataExistsAsync check with a
+        // single MAX(Date) query covering the full recovery window.
+        var lastDate = await GetLastDateAsync(dailyTableName, ct);
+        if (lastDate.HasValue && lastDate.Value >= sessionDate)
         {
             _logger.LogTrace(
-                "DataSync: data already exists for {Symbol} on {Date}. Skipping.",
-                symbol, sessionDate);
+                "DataSync: data already exists for {Symbol} up to {LastDate} " +
+                "(>= session {Date}). Skipping.",
+                symbol, lastDate.Value, sessionDate);
             return SymbolSyncOutcome.NoOpAlreadySynced;
         }
 
-        // ── Step 3: Fetch OHLCV data from the MDP ───────────────────────────
+        // ── Step 3: Fetch OHLCV range from the MDP ──────────────────────────
+        // Fetch from lastDate+1 (or sessionDate if no prior data) through
+        // sessionDate in a single API call. This fills gaps from missed
+        // recovery sessions and partial HDS seeding in one round-trip.
+        var fetchFrom = lastDate?.AddDays(1) ?? sessionDate;
+
         IReadOnlyList<SignalStack.MarketData.OhlcvRecord> providerRecords;
         try
         {
             providerRecords = await _marketDataProvider.FetchHistoricalOhlcvAsync(
-                symbol, sessionDate, sessionDate, ct);
+                symbol, fetchFrom, sessionDate, ct);
         }
         catch (Exception ex)
         {
             Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
             Activity.Current?.AddException(ex);
             _logger.LogWarning(ex,
-                "DataSync: failed to fetch data for {Symbol} on {Date} from {Provider}.",
-                symbol, sessionDate, _marketDataProvider.ProviderName);
+                "DataSync: failed to fetch data for {Symbol} from {From} to {Date} " +
+                "from {Provider}.",
+                symbol, fetchFrom, sessionDate, _marketDataProvider.ProviderName);
             return SymbolSyncOutcome.DataUnavailable;
         }
 
         if (providerRecords.Count == 0)
         {
-            // REQ-MARKET-006: if today's daily data is unavailable, skip.
             _logger.LogTrace(
-                "DataSync: no data returned for {Symbol} on {Date}. Skipping.",
-                symbol, sessionDate);
+                "DataSync: no data returned for {Symbol} from {From} to {Date}. Skipping.",
+                symbol, fetchFrom, sessionDate);
             return SymbolSyncOutcome.DataUnavailable;
         }
 
-        var candle = providerRecords[0];
+        // ── Step 4: Validate and insert all records from the range ──────────
+        // Insert each candle with ON CONFLICT DO NOTHING so overlapping date
+        // ranges (from parallel HDS runs or re-runs) are handled idempotently.
+        var sessionDateInserted = false;
+        var insertedCount = 0;
+        var skippedCount = 0;
 
-        // ── Step 4: Validate the candle (REQ-MARKET-013) ────────────────────
-        var validationError = ValidateCandle(candle);
-        if (validationError is not null)
+        await using var conn = new NpgsqlConnection(_sqlConnectionString);
+        await conn.OpenAsync(ct);
+
+        foreach (var candle in providerRecords)
         {
-            _logger.LogWarning(
-                "DataSync: invalid candle for {Symbol} on {Date}: {Error}. Skipping.",
-                symbol, sessionDate, validationError);
-            return SymbolSyncOutcome.ValidationFailed;
-        }
+            if (ct.IsCancellationRequested) break;
 
-        // ── Step 5: Insert into D_ table ────────────────────────────────────
-        try
-        {
-            await using var conn = new NpgsqlConnection(_sqlConnectionString);
-            await conn.OpenAsync(ct);
+            // ── Validate each candle (REQ-MARKET-013) ───────────────────────
+            var validationError = ValidateCandle(candle);
+            if (validationError is not null)
+            {
+                _logger.LogWarning(
+                    "DataSync: invalid candle for {Symbol} on {Date}: {Error}. Skipping.",
+                    symbol, candle.Date, validationError);
+                skippedCount++;
+                continue;
+            }
 
-            var insertSql = $@"
+            try
+            {
+                var insertSql = $@"
 INSERT INTO ""{dailyTableName}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
-VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
+VALUES (@Date, @Open, @High, @Low, @Close, @Volume)
+ON CONFLICT (""Date"") DO NOTHING;";
 
-            await using var cmd = new NpgsqlCommand(insertSql, conn);
-            cmd.Parameters.AddWithValue("@Date", sessionDate.ToDateTime(TimeOnly.MinValue));
-            cmd.Parameters.AddWithValue("@Open", (double)candle.Open);
-            cmd.Parameters.AddWithValue("@High", (double)candle.High);
-            cmd.Parameters.AddWithValue("@Low", (double)candle.Low);
-            cmd.Parameters.AddWithValue("@Close", (double)candle.Close);
-            cmd.Parameters.AddWithValue("@Volume", candle.Volume);
-            await cmd.ExecuteNonQueryAsync(ct);
+                await using var cmd = new NpgsqlCommand(insertSql, conn);
+                cmd.Parameters.AddWithValue("@Date", candle.Date.ToDateTime(TimeOnly.MinValue));
+                cmd.Parameters.AddWithValue("@Open", (double)candle.Open);
+                cmd.Parameters.AddWithValue("@High", (double)candle.High);
+                cmd.Parameters.AddWithValue("@Low", (double)candle.Low);
+                cmd.Parameters.AddWithValue("@Close", (double)candle.Close);
+                cmd.Parameters.AddWithValue("@Volume", candle.Volume);
+                await cmd.ExecuteNonQueryAsync(ct);
 
-            _logger.LogDebug(
-                "DataSync: inserted daily candle for {Symbol} on {Date}: " +
-                "O={Open} H={High} L={Low} C={Close} V={Volume}.",
-                symbol, sessionDate,
-                candle.Open, candle.High, candle.Low, candle.Close, candle.Volume);
+                if (candle.Date == sessionDate)
+                    sessionDateInserted = true;
 
-            return SymbolSyncOutcome.Success;
+                insertedCount++;
+            }
+            catch (Exception ex)
+            {
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
+                _logger.LogError(ex,
+                    "DataSync: failed to insert daily data for {Symbol} on {Date} into {Table}.",
+                    symbol, candle.Date, dailyTableName);
+                skippedCount++;
+            }
         }
-        catch (Exception ex)
+
+        if (insertedCount > 0)
         {
-            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            Activity.Current?.AddException(ex);
-            _logger.LogError(ex,
-                "DataSync: failed to insert daily data for {Symbol} on {Date} into {Table}.",
-                symbol, sessionDate, dailyTableName);
-            return SymbolSyncOutcome.DataUnavailable;
+            _logger.LogDebug(
+                "DataSync: processed {Count} candles for {Symbol} range {From} to {To}: " +
+                "{Inserted} inserted, {Skipped} skipped.",
+                providerRecords.Count, symbol, fetchFrom, sessionDate,
+                insertedCount, skippedCount);
         }
+
+        return sessionDateInserted
+            ? SymbolSyncOutcome.Success
+            : SymbolSyncOutcome.DataUnavailable;
     }
 
     /// <summary>
@@ -584,11 +622,13 @@ ON CONFLICT (""Date"") DO UPDATE SET
     }
 
     /// <summary>
-    /// Checks whether daily data already exists for a given symbol and date.
+    /// Returns the most recent Date in the symbol's D_ table, or null if the
+    /// table is empty or does not exist.
+    ///
+    /// Used by the range-based fetch to determine where to resume fetching from.
     /// </summary>
-    private async Task<bool> CheckDailyDataExistsAsync(
+    private async Task<DateOnly?> GetLastDateAsync(
         string tableName,
-        DateOnly date,
         CancellationToken ct)
     {
         try
@@ -596,19 +636,40 @@ ON CONFLICT (""Date"") DO UPDATE SET
             await using var conn = new NpgsqlConnection(_sqlConnectionString);
             await conn.OpenAsync(ct);
 
-            var checkSql = $"SELECT COUNT(1) FROM \"{tableName}\" WHERE \"Date\" = @Date;";
-            await using var cmd = new NpgsqlCommand(checkSql, conn);
-            cmd.Parameters.AddWithValue("@Date", date.ToDateTime(TimeOnly.MinValue));
-            var count = (long)(await cmd.ExecuteScalarAsync(ct))!;
-            return count > 0;
+            var checkTableSql = @"
+SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = @TableName
+) THEN 1 ELSE 0 END";
+
+            await using var checkCmd = new NpgsqlCommand(checkTableSql, conn);
+            checkCmd.Parameters.AddWithValue("@TableName", tableName);
+            var exists = (int)(await checkCmd.ExecuteScalarAsync(ct))! == 1;
+
+            if (!exists)
+            {
+                _logger.LogTrace(
+                    "DataSync: table {Table} does not exist. Assuming no data.",
+                    tableName);
+                return null;
+            }
+
+            var dateQuery = $"SELECT MAX(\"Date\") FROM \"{tableName}\"";
+            await using var dateCmd = new NpgsqlCommand(dateQuery, conn);
+            var result = await dateCmd.ExecuteScalarAsync(ct);
+
+            if (result is null || result == DBNull.Value)
+                return null;
+
+            return DateOnly.FromDateTime(Convert.ToDateTime(result));
         }
         catch (Exception ex)
         {
             // Table may not exist yet — treat as no data.
             _logger.LogTrace(ex,
-                "DataSync: could not check existence in {Table} for {Date}. Assuming no data.",
-                tableName, date);
-            return false;
+                "DataSync: could not query max date in {Table}. Assuming no data.",
+                tableName);
+            return null;
         }
     }
 

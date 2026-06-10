@@ -56,4 +56,7 @@ internal sealed class NoopOhlcvRepository : IOhlcvRepository
 
     public Task<DateOnly?> GetLastCandleDateAsync(string symbol, CancellationToken ct = default)
         => Task.FromResult<DateOnly?>(null);
+
+    public Task<DateOnly?> GetFirstCandleDateAsync(string symbol, CancellationToken ct = default)
+        => Task.FromResult<DateOnly?>(null);
 }

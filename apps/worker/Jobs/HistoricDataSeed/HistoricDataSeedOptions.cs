@@ -20,10 +20,16 @@ public sealed class HistoricDataSeedOptions
     public int PollIntervalSeconds { get; init; } = 30;
 
     /// <summary>
-    /// Number of years of historical daily data to fetch for each symbol
-    /// during the initial seed. Default: 10 years (covers NSE data depth).
+    /// Safety-floor lookback for the initial backfill cursor when the
+    /// symbol's D_ table is empty. The actual backfill iterates backwards
+    /// until the API returns no candles (reaching inception), so this value
+    /// is only a conservative starting offset, not the final depth.
+    ///
+    /// Default: 10 years. NSE was founded in 1992 (~33 years from 2025),
+    /// but the algorithm will automatically iterate further back past this
+    /// value as needed.
     /// </summary>
-    [Range(1, 30)]
+    [Range(1, 50)]
     public int HistoricalYearsBack { get; init; } = 10;
 
     /// <summary>

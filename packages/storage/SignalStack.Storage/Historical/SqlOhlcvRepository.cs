@@ -157,6 +157,38 @@ SELECT CASE WHEN EXISTS (
         return DateOnly.FromDateTime(Convert.ToDateTime(result));
     }
 
+    public async Task<DateOnly?> GetFirstCandleDateAsync(string symbol, CancellationToken ct = default)
+    {
+        var suffix = await _tableMapping.GetSuffixAsync(symbol, ct);
+        if (suffix is null) return null;
+
+        var tableName = $"D_{suffix}";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // First check if the table exists.
+        var tableExistsQuery = @"
+SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = @TableName
+) THEN 1 ELSE 0 END";
+
+        await using var existsCmd = new NpgsqlCommand(tableExistsQuery, conn);
+        existsCmd.Parameters.AddWithValue("@TableName", tableName);
+        var exists = (int)(await existsCmd.ExecuteScalarAsync(ct))! == 1;
+
+        if (!exists) return null;
+
+        // Query earliest Date.
+        var dateQuery = $"SELECT MIN(\"Date\") FROM \"{tableName}\"";
+        await using var dateCmd = new NpgsqlCommand(dateQuery, conn);
+        var result = await dateCmd.ExecuteScalarAsync(ct);
+
+        if (result is null || result == DBNull.Value) return null;
+        return DateOnly.FromDateTime(Convert.ToDateTime(result));
+    }
+
     private async Task<List<OhlcvRecord>> QueryOhlcvAsync(
         string tableName, DateOnly from, DateOnly to, CancellationToken ct)
     {

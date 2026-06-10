@@ -40,6 +40,12 @@ public interface IOhlcvRepository
     /// Returns null if the table has no rows or does not exist.
     /// </summary>
     Task<DateOnly?> GetLastCandleDateAsync(string symbol, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the earliest Date available in the symbol's D_ table.
+    /// Returns null if the table has no rows or does not exist.
+    /// </summary>
+    Task<DateOnly?> GetFirstCandleDateAsync(string symbol, CancellationToken ct = default);
 }
 
 /// <summary>

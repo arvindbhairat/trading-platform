@@ -84,4 +84,12 @@ public sealed class InMemoryOhlcvRepository : IOhlcvRepository
 
         return Task.FromResult<DateOnly?>(all.Max(r => r.Date));
     }
+
+    public Task<DateOnly?> GetFirstCandleDateAsync(string symbol, CancellationToken ct = default)
+    {
+        if (!_dailyData.TryGetValue(symbol, out var all) || all.Count == 0)
+            return Task.FromResult<DateOnly?>(null);
+
+        return Task.FromResult<DateOnly?>(all.Min(r => r.Date));
+    }
 }

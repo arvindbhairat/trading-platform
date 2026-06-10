@@ -49,10 +49,37 @@ public sealed class HistoricDataSeedService
     }
 
     /// <summary>
+    /// Absolute minimum backfill date — NSE started trading in 1992, so this
+    /// safety floor prevents runaway backwards iteration if the API never
+    /// returns empty.
+    /// </summary>
+    private static readonly DateOnly MinBackfillDate = new(1990, 1, 1);
+
+    /// <summary>
+    /// Maximum days per chunk when fetching historical data from the MDP.
+    /// Matches the FYERS API's 366-day limit for daily resolution.
+    /// </summary>
+    private const int MaxDaysPerChunk = 365;
+
+    /// <summary>
     /// Seeds historical data for a single symbol. Idempotent and resumable.
+    ///
+    /// <para>Backfills to inception: iterates backwards from the earliest data point
+    /// (or today if the table is empty) in 365-day chunks. Each chunk is fetched,
+    /// validated, and inserted. Stops when FYERS returns zero candles, indicating
+    /// the symbol's inception has been reached.</para>
+    ///
+    /// <para>After backfill, forward-fills any gap between the latest data point and
+    /// today to ensure the symbol is fully up to date.</para>
+    ///
+    /// <para>Weekly and monthly aggregates are recomputed over the full range of
+    /// newly inserted data.</para>
     /// </summary>
     /// <param name="symbol">NSE trading symbol (e.g. "RELIANCE").</param>
-    /// <param name="historicalYearsBack">Number of years of history to fetch.</param>
+    /// <param name="historicalYearsBack">
+    /// Ignored for backfill depth — the algorithm iterates to inception regardless.
+    /// Retained for API backward compatibility only.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A result describing what was done.</returns>
     public async Task<SeedSymbolResult> SeedSymbolAsync(
@@ -73,6 +100,8 @@ public sealed class HistoricDataSeedService
         _logger.LogInformation(
             "Seeding historical data for {Symbol} (suffix: {Suffix}).",
             symbol, suffix);
+
+        var dailyTableName = $"D_{suffix}";
 
         // ── Step 2: Create tables atomically (IF NOT EXISTS) ───────────────
         await using var conn = new NpgsqlConnection(_sqlConnectionString);
@@ -109,85 +138,188 @@ public sealed class HistoricDataSeedService
             await (transaction?.DisposeAsync() ?? ValueTask.CompletedTask);
         }
 
-        // ── Step 3: Determine resumption point ─────────────────────────────
+        // ── Step 3: Find existing data boundaries ──────────────────────────
+        var firstDate = await _ohlcvRepo.GetFirstCandleDateAsync(symbol, ct);
         var lastDate = await _ohlcvRepo.GetLastCandleDateAsync(symbol, ct);
-        var fromDate = lastDate?.AddDays(1)
-            ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-historicalYearsBack));
-
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        if (fromDate > today)
+        // ── Step 4: BACKFILL PHASE — go backwards from earliest data to inception ──
+        // Start the cursor at the earliest known date, or today if the table is empty.
+        // Walk backwards in MaxDaysPerChunk-sized chunks, stopping when the MDP
+        // returns zero candles (inception reached).
+        var backfillCursor = firstDate ?? today;
+        var totalDailyInserted = 0;
+        var dataRangeStart = (DateOnly?)null;
+        var dataRangeEnd = (DateOnly?)null;
+
+        while (backfillCursor > MinBackfillDate)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var chunkEnd = backfillCursor.AddDays(-1);
+            var chunkStart = chunkEnd.AddDays(-(MaxDaysPerChunk - 1));
+            if (chunkStart < MinBackfillDate)
+                chunkStart = MinBackfillDate;
+
+            if (chunkStart > chunkEnd)
+                break;
+
+            _logger.LogDebug(
+                "HDS backfill {Symbol}: chunk {From} to {To}.",
+                symbol, chunkStart, chunkEnd);
+
+            IReadOnlyList<SignalStack.MarketData.OhlcvRecord> records;
+            try
+            {
+                records = await _marketDataProvider.FetchHistoricalOhlcvAsync(
+                    symbol, chunkStart, chunkEnd, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "HDS backfill {Symbol}: fetch failed for range {From} to {To} " +
+                    "from {Provider}. Aborting backfill.",
+                    symbol, chunkStart, chunkEnd, _marketDataProvider.ProviderName);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
+                // Partial backfill is better than none — proceed to forward-fill.
+                break;
+            }
+
+            if (records.Count == 0)
+            {
+                _logger.LogInformation(
+                    "HDS backfill {Symbol}: reached inception — " +
+                    "no candles returned for {From} to {To}.",
+                    symbol, chunkStart, chunkEnd);
+                break;
+            }
+
+            int inserted;
+            try
+            {
+                inserted = await BulkInsertDailyAsync(conn, dailyTableName, records, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "HDS backfill {Symbol}: failed to insert {Count} records for " +
+                    "range {From} to {To} into {Table}. Aborting backfill.",
+                    symbol, records.Count, chunkStart, chunkEnd, dailyTableName);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
+                break;
+            }
+
+            totalDailyInserted += inserted;
+
+            // Track the overall data range for aggregate recomputation.
+            if (dataRangeStart is null || records[0].Date < dataRangeStart)
+                dataRangeStart = records[0].Date;
+            if (dataRangeEnd is null || records[^1].Date > dataRangeEnd)
+                dataRangeEnd = records[^1].Date;
+
+            _logger.LogInformation(
+                "HDS backfill {Symbol}: inserted {Inserted}/{Fetched} records " +
+                "dated {FirstRecord} to {LastRecord}. Cursor moving to {NextCursor}.",
+                symbol, inserted, records.Count,
+                records[0].Date, records[^1].Date, chunkStart.AddDays(-1));
+
+            backfillCursor = chunkStart.AddDays(-1);
+        }
+
+        // ── Step 5: FORWARD FILL PHASE — close any gap between latest data and today ──
+        var latestAfterBackfill = await _ohlcvRepo.GetLastCandleDateAsync(symbol, ct);
+        var forwardFrom = latestAfterBackfill?.AddDays(1);
+
+        if (forwardFrom.HasValue && forwardFrom.Value <= today)
         {
             _logger.LogInformation(
-                "Symbol {Symbol} is already fully seeded up to {LastDate}. Nothing to do.",
-                symbol, lastDate);
-            return new SeedSymbolResult(symbol, 0, 0, 0, SeedOutcome.AlreadyUpToDate);
+                "HDS forward-fill {Symbol}: fetching missing data from {From} to {To}.",
+                symbol, forwardFrom.Value, today);
+
+            IReadOnlyList<SignalStack.MarketData.OhlcvRecord> forwardRecords;
+            try
+            {
+                forwardRecords = await _marketDataProvider.FetchHistoricalOhlcvAsync(
+                    symbol, forwardFrom.Value, today, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "HDS forward-fill {Symbol}: fetch failed for range {From} to {To} " +
+                    "from {Provider}.",
+                    symbol, forwardFrom.Value, today, _marketDataProvider.ProviderName);
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                Activity.Current?.AddException(ex);
+                forwardRecords = [];
+            }
+
+            if (forwardRecords.Count > 0)
+            {
+                int inserted;
+                try
+                {
+                    inserted = await BulkInsertDailyAsync(conn, dailyTableName, forwardRecords, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "HDS forward-fill {Symbol}: failed to insert {Count} records " +
+                        "into {Table}.",
+                        symbol, forwardRecords.Count, dailyTableName);
+                    Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    Activity.Current?.AddException(ex);
+                    inserted = 0;
+                }
+
+                totalDailyInserted += inserted;
+
+                if (dataRangeStart is null || forwardRecords[0].Date < dataRangeStart)
+                    dataRangeStart = forwardRecords[0].Date;
+                if (dataRangeEnd is null || forwardRecords[^1].Date > dataRangeEnd)
+                    dataRangeEnd = forwardRecords[^1].Date;
+
+                _logger.LogInformation(
+                    "HDS forward-fill {Symbol}: inserted {Inserted}/{Fetched} records " +
+                    "dated {First} to {Last}.",
+                    symbol, inserted, forwardRecords.Count,
+                    forwardRecords[0].Date, forwardRecords[^1].Date);
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "HDS forward-fill {Symbol}: no new data from {From} to {To}.",
+                    symbol, forwardFrom.Value, today);
+            }
         }
 
-        _logger.LogInformation(
-            "Fetching historical data for {Symbol} from {FromDate} to {ToDate} "
-            + "(resumed from last candle: {LastDate}).",
-            symbol, fromDate, today, lastDate?.ToString() ?? "(none)");
+        // If nothing was inserted, determine the right outcome.
+        if (totalDailyInserted == 0)
+        {
+            var hasExistingData = firstDate.HasValue || lastDate.HasValue;
+            var outcome = hasExistingData
+                ? SeedOutcome.AlreadyUpToDate
+                : SeedOutcome.NoDataReturned;
 
-        // ── Step 4: Fetch historical daily OHLCV from the MDP ──────────────
-        IReadOnlyList<SignalStack.MarketData.OhlcvRecord> providerRecords;
-        try
-        {
-            providerRecords = await _marketDataProvider.FetchHistoricalOhlcvAsync(
-                symbol, fromDate, today, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Failed to fetch historical data for {Symbol} from {Provider}.",
-                symbol, _marketDataProvider.ProviderName);
-            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            Activity.Current?.AddException(ex);
-            return new SeedSymbolResult(symbol, 0, 0, 0, SeedOutcome.FailedProviderFetch);
-        }
-
-        if (providerRecords.Count == 0)
-        {
             _logger.LogInformation(
-                "No historical data returned for {Symbol} from {FromDate} to {ToDate}.",
-                symbol, fromDate, today);
-            return new SeedSymbolResult(symbol, 0, 0, 0, SeedOutcome.NoDataReturned);
+                "HDS {Symbol}: {Outcome} — no new daily records inserted.",
+                symbol, outcome);
+
+            return new SeedSymbolResult(symbol, 0, 0, 0, outcome);
         }
 
         _logger.LogInformation(
-            "Fetched {Count} daily records for {Symbol} from {FirstDate} to {LastDate}.",
-            providerRecords.Count, symbol,
-            providerRecords[0].Date, providerRecords[^1].Date);
-
-        // ── Step 5: Insert daily data into D_ table ────────────────────────
-        var dailyTableName = $"D_{suffix}";
-        int dailyInserted;
-
-        try
-        {
-            dailyInserted = await BulkInsertDailyAsync(
-                conn, dailyTableName, providerRecords, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Failed to insert daily data for {Symbol} into {Table}.",
-                symbol, dailyTableName);
-            Activity.Current?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            Activity.Current?.AddException(ex);
-            return new SeedSymbolResult(symbol, providerRecords.Count, 0, 0, SeedOutcome.FailedDailyInsert);
-        }
-
-        _logger.LogInformation(
-            "Inserted {Count} daily records into {Table} for {Symbol}.",
-            dailyInserted, dailyTableName, symbol);
+            "HDS {Symbol}: inserted a total of {Count} daily records " +
+            "spanning {FirstDate} to {LastDate}.",
+            symbol, totalDailyInserted, dataRangeStart, dataRangeEnd);
 
         // ── Step 6: Compute and upsert weekly aggregates ───────────────────
         var weeklyTableName = $"W_{suffix}";
         var weeklyComputed = await ComputeAndInsertAggregatesAsync(
             conn, dailyTableName, weeklyTableName,
             "weekly", "date_trunc('week', \"Date\")",
-            providerRecords[0].Date, providerRecords[^1].Date, ct);
+            dataRangeStart!.Value, dataRangeEnd!.Value, ct);
 
         _logger.LogInformation(
             "Computed {Count} weekly records for {Symbol} into {Table}.",
@@ -198,14 +330,14 @@ public sealed class HistoricDataSeedService
         var monthlyComputed = await ComputeAndInsertAggregatesAsync(
             conn, dailyTableName, monthlyTableName,
             "monthly", "date_trunc('month', \"Date\")",
-            providerRecords[0].Date, providerRecords[^1].Date, ct);
+            dataRangeStart!.Value, dataRangeEnd!.Value, ct);
 
         _logger.LogInformation(
             "Computed {Count} monthly records for {Symbol} into {Table}.",
             monthlyComputed, symbol, monthlyTableName);
 
         return new SeedSymbolResult(
-            symbol, dailyInserted, weeklyComputed, monthlyComputed, SeedOutcome.Success);
+            symbol, totalDailyInserted, weeklyComputed, monthlyComputed, SeedOutcome.Success);
     }
 
     /// <summary>
