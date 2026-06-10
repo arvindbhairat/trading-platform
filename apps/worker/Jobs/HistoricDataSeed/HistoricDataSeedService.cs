@@ -224,7 +224,10 @@ public sealed class HistoricDataSeedService
         // INSERT...ON CONFLICT DO NOTHING into the target.
         var tempTableName = $"\"tmp_{tableName}\"";
 
+        // DROP before CREATE handles Npgsql connection pooling where temp tables
+        // persist on the same pooled connection across calls.
         var createTempSql = $@"
+DROP TABLE IF EXISTS {tempTableName};
 CREATE TEMPORARY TABLE {tempTableName} (
     ""Date""   DATE              NOT NULL,
     ""Open""   DOUBLE PRECISION  NOT NULL,
@@ -311,6 +314,7 @@ ON CONFLICT (""Date"") DO NOTHING;";
         var tempTable = $"\"tmp_{targetTable}\"";
 
         var createTempSql = $@"
+DROP TABLE IF EXISTS {tempTable};
 CREATE TEMPORARY TABLE {tempTable} (
     ""PeriodStart"" DATE              NOT NULL,
     ""Open""        DOUBLE PRECISION  NOT NULL,

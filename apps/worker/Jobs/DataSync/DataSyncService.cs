@@ -477,7 +477,11 @@ VALUES (@Date, @Open, @High, @Low, @Close, @Volume);";
     {
         var tempTable = $"\"tmp_ds_{targetTable}\"";
 
+        // DROP before CREATE to handle Npgsql connection pooling: temp tables
+        // persist on the same pooled connection, so a table created on a prior
+        // call will collide on the next call for the same suffix.
         var createTempSql = $@"
+DROP TABLE IF EXISTS {tempTable};
 CREATE TEMPORARY TABLE {tempTable} (
     ""PeriodStart"" DATE   NOT NULL,
     ""Open""        DOUBLE PRECISION  NOT NULL,
