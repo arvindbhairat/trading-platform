@@ -149,7 +149,7 @@ public static class AdminSystemHealthEndpoints
                 ["scheduled_run_time"] = now,
                 ["started_at"] = now,
                 ["ended_at"] = BsonNull.Value,
-                ["outcome"] = "pending",
+                ["outcome"] = BsonNull.Value,
                 ["triggered_by"] = $"admin:{userId}",
                 ["created_by"] = userId
             };
