@@ -21,6 +21,7 @@ namespace SignalStack.Worker.Integrations.Fyers;
 /// - <see cref="FyersMarketDataProvider"/> as <see cref="IMarketDataProvider"/>
 /// - A config-based access token provider (dev/test; replace with Key Vault in
 ///   production via P5-T14/P5-T15)
+/// - The FYERS App ID from <c>FYERS_APP_ID</c> env var or config
 /// </summary>
 public static class FyersMarketDataProviderExtensions
 {
@@ -41,7 +42,16 @@ public static class FyersMarketDataProviderExtensions
         var rateLimitSection = configuration.GetSection("integrations:fyers:rate_limit");
         services.AddMarketDataThrottle(ThrottleProviderKey, rateLimitSection);
 
-        // ── Step 2: Register the admin FYERS access token provider ────────
+        // ── Step 2: Resolve FYERS App ID (required) ───────────────────────
+        // Used in the Authorization header as: AppID:{access_token}
+        // FYERS v3 does NOT use Bearer scheme — it uses AppID:token format.
+        var appId = configuration["FYERS_APP_ID"]
+            ?? configuration["integrations:fyers:app_id"]
+            ?? throw new InvalidOperationException(
+                "FYERS_APP_ID is not configured. Set the FYERS_APP_ID environment variable " +
+                "or integrations:fyers:app_id in config.");
+
+        // ── Step 3: Register the admin FYERS access token provider ────────
         // Reads the shared-ingestion admin token from the fyers_tokens MongoDB
         // collection via SharedTokenHealthService. When the token is unavailable,
         // the service transitions to degraded mode (REQ-MARKET-016).
@@ -68,19 +78,15 @@ public static class FyersMarketDataProviderExtensions
             };
         });
 
-        // ── Step 3: Register HttpClient for FYERS API calls ───────────────
+        // ── Step 4: Register HttpClient for FYERS API calls ───────────────
         services.AddHttpClient<FyersMarketDataProvider>(client =>
         {
-            client.BaseAddress = new Uri(FyersApiEndpoints.BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Accept.Add(
                 new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
         });
 
-        // ── Step 4: Register as IMarketDataProvider ────────────────────────
-        // Note: For P3-T9, we register as the default IMarketDataProvider.
-        // For P3-T10 (cross-provider swap), this will become conditional
-        // based on market_data.provider.active.
+        // ── Step 5: Register as IMarketDataProvider ────────────────────────
         services.AddSingleton<IMarketDataProvider>(sp =>
         {
             var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
@@ -88,7 +94,7 @@ public static class FyersMarketDataProviderExtensions
             var throttle = sp.GetRequiredThrottle(ThrottleProviderKey);
             var tokenProvider = sp.GetRequiredService<Func<Task<string?>>>();
             var logger = sp.GetRequiredService<ILogger<FyersMarketDataProvider>>();
-            return new FyersMarketDataProvider(client, throttle, tokenProvider, logger);
+            return new FyersMarketDataProvider(client, throttle, tokenProvider, logger, appId);
         });
 
         return services;
