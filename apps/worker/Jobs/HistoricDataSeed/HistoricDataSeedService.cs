@@ -62,6 +62,20 @@ public sealed class HistoricDataSeedService
     private const int MaxDaysPerChunk = 365;
 
     /// <summary>
+    /// Shared permanent staging table for bulk-insert operations.
+    ///
+    /// Created once per connection before the backfill loop; TRUNCATE'd before
+    /// each use in <see cref="BulkInsertDailyAsync"/> and
+    /// <see cref="ComputeAndInsertAggregatesAsync"/>.
+    ///
+    /// Using a permanent table (not TEMPORARY) avoids the Npgsql prepared-statement
+    /// OID-invalidation problem that occurred with repeated DROP/CREATE of
+    /// session-scoped temp tables. A permanent table's OID never changes, so any
+    /// cached prepared statements referencing it stay valid across iterations.
+    /// </summary>
+    private const string StagingTableName = "\"public\".\"temp_seed_HDS\"";
+
+    /// <summary>
     /// Seeds historical data for a single symbol. Idempotent and resumable.
     ///
     /// <para>Backfills to inception: iterates backwards from the earliest data point
@@ -137,6 +151,28 @@ public sealed class HistoricDataSeedService
         {
             await (transaction?.DisposeAsync() ?? ValueTask.CompletedTask);
         }
+
+        // ── Step 2b: Ensure shared staging table exists (public, permanent) ──
+        // Using a permanent staging table avoids Npgsql prepared-statement
+        // OID invalidation that occurs with repeated DROP/CREATE of temp tables.
+        // The table is TRUNCATE'd before each use (OID stays the same).
+        var createStagingSql = $@"
+CREATE TABLE IF NOT EXISTS {StagingTableName} (
+    ""Date""   DATE              NOT NULL,
+    ""Open""   DOUBLE PRECISION  NOT NULL,
+    ""High""   DOUBLE PRECISION  NOT NULL,
+    ""Low""    DOUBLE PRECISION  NOT NULL,
+    ""Close""  DOUBLE PRECISION  NOT NULL,
+    ""Volume"" BIGINT            NOT NULL,
+    PRIMARY KEY (""Date"")
+)";
+
+        await using (var createStagingCmd = new NpgsqlCommand(createStagingSql, conn))
+        {
+            await createStagingCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        _logger.LogDebug("HDS staging table {Table} ensured.", StagingTableName);
 
         // ── Step 3: Find existing data boundaries ──────────────────────────
         var firstDate = await _ohlcvRepo.GetFirstCandleDateAsync(symbol, ct);
@@ -344,6 +380,8 @@ public sealed class HistoricDataSeedService
     /// Bulk-inserts daily OHLCV records into the specified D_ table.
     /// Skips rows where the Date already exists (idempotent insert).
     /// Uses NpgsqlBinaryImporter (binary COPY) for high-performance bulk load.
+    /// Stages data in the shared permanent staging table (<see cref="StagingTableName"/>),
+    /// which is TRUNCATE'd before each use.
     /// </summary>
     private async Task<int> BulkInsertDailyAsync(
         NpgsqlConnection conn,
@@ -351,33 +389,19 @@ public sealed class HistoricDataSeedService
         IReadOnlyList<SignalStack.MarketData.OhlcvRecord> records,
         CancellationToken ct)
     {
-        // Use a staging approach: insert rows that don't already exist.
-        // Create a temp table, bulk insert into it via binary COPY, then
-        // INSERT...ON CONFLICT DO NOTHING into the target.
-        var tempTableName = $"\"tmp_{tableName}\"";
-
-        // DROP before CREATE handles Npgsql connection pooling where temp tables
-        // persist on the same pooled connection across calls.
-        var createTempSql = $@"
-DROP TABLE IF EXISTS {tempTableName};
-CREATE TEMPORARY TABLE {tempTableName} (
-    ""Date""   DATE              NOT NULL,
-    ""Open""   DOUBLE PRECISION  NOT NULL,
-    ""High""   DOUBLE PRECISION  NOT NULL,
-    ""Low""    DOUBLE PRECISION  NOT NULL,
-    ""Close""  DOUBLE PRECISION  NOT NULL,
-    ""Volume"" BIGINT            NOT NULL,
-    PRIMARY KEY (""Date"")
-);";
-
-        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
+        // TRUNCATE the staging table before each use.
+        // TRUNCATE is faster than DELETE and resets storage immediately.
+        // Unlike DROP + CREATE, TRUNCATE does not change the table's OID,
+        // so any cached prepared statements referencing it remain valid.
+        // REQ-HIST-N: staging table created during Step 2b in SeedSymbolAsync.
+        await using (var truncateCmd = new NpgsqlCommand($"TRUNCATE {StagingTableName};", conn))
         {
-            await createCmd.ExecuteNonQueryAsync(ct);
+            await truncateCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Binary COPY into temp table — high-performance bulk load.
+        // Binary COPY into staging table — high-performance bulk load.
         await using (var writer = conn.BeginBinaryImport(
-            $"COPY {tempTableName} (\"Date\", \"Open\", \"High\", \"Low\", \"Close\", \"Volume\") FROM STDIN (FORMAT BINARY)"))
+            $"COPY {StagingTableName} (\"Date\", \"Open\", \"High\", \"Low\", \"Close\", \"Volume\") FROM STDIN (FORMAT BINARY)"))
         {
             foreach (var record in records)
             {
@@ -393,11 +417,11 @@ CREATE TEMPORARY TABLE {tempTableName} (
             await writer.CompleteAsync(ct);
         }
 
-        // INSERT from temp table into target — only rows that don't exist (idempotent).
+        // INSERT from staging table into target — only rows that don't exist (idempotent).
         var insertSql = $@"
 INSERT INTO ""{tableName}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
-FROM {tempTableName}
+FROM {StagingTableName}
 ON CONFLICT (""Date"") DO NOTHING;";
 
         await using (var insertCmd = new NpgsqlCommand(insertSql, conn))
@@ -406,7 +430,7 @@ ON CONFLICT (""Date"") DO NOTHING;";
         }
 
         // Count inserted rows.
-        var countSql = $"SELECT COUNT(*) FROM {tempTableName};";
+        var countSql = $"SELECT COUNT(*) FROM {StagingTableName};";
         await using (var countCmd = new NpgsqlCommand(countSql, conn))
         {
             var count = (long)(await countCmd.ExecuteScalarAsync(ct))!;
@@ -418,6 +442,9 @@ ON CONFLICT (""Date"") DO NOTHING;";
     /// Computes weekly or monthly aggregated candles from the D_ table and
     /// inserts them into the target W_ or M_ table. Uses INSERT...ON CONFLICT
     /// for idempotent upserts.
+    ///
+    /// Stages computed aggregates in the shared permanent staging table
+    /// (<see cref="StagingTableName"/>), TRUNCATE'd before each use.
     /// </summary>
     /// <param name="conn">Open Npgsql connection.</param>
     /// <param name="sourceTable">The D_ table name.</param>
@@ -442,33 +469,21 @@ ON CONFLICT (""Date"") DO NOTHING;";
         DateOnly toDate,
         CancellationToken ct)
     {
-        // Temp table for computed aggregates.
-        var tempTable = $"\"tmp_{targetTable}\"";
-
-        var createTempSql = $@"
-DROP TABLE IF EXISTS {tempTable};
-CREATE TEMPORARY TABLE {tempTable} (
-    ""PeriodStart"" DATE              NOT NULL,
-    ""Open""        DOUBLE PRECISION  NOT NULL,
-    ""High""        DOUBLE PRECISION  NOT NULL,
-    ""Low""         DOUBLE PRECISION  NOT NULL,
-    ""Close""       DOUBLE PRECISION  NOT NULL,
-    ""Volume""      BIGINT            NOT NULL,
-    PRIMARY KEY (""PeriodStart"")
-);";
-
-        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
+        // TRUNCATE the shared staging table before each use.
+        // The staging table has a "Date" column (instead of "PeriodStart") so
+        // computed aggregates use "Date" as their period-start alias.
+        await using (var truncateCmd = new NpgsqlCommand($"TRUNCATE {StagingTableName};", conn))
         {
-            await createCmd.ExecuteNonQueryAsync(ct);
+            await truncateCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Compute aggregates from D_ and insert into temp table.
+        // Compute aggregates from D_ and insert into staging table.
         // The Open is the first trading day's open of the period, Close is the
         // last trading day's close, High/Low are the period's extremes.
         var computeSql = $@"
-INSERT INTO {tempTable} (""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
+INSERT INTO {StagingTableName} (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 SELECT
-    {groupByExpression} AS ""PeriodStart"",
+    {groupByExpression} AS ""Date"",
     MAX(CASE WHEN rn_asc = 1 THEN ""Open"" END)  AS ""Open"",
     MAX(""High"")                                  AS ""High"",
     MIN(""Low"")                                   AS ""Low"",
@@ -482,7 +497,7 @@ FROM (
     WHERE ""Date"" >= @FromDate AND ""Date"" <= @ToDate
 ) AS subq
 GROUP BY {groupByExpression}
-ORDER BY ""PeriodStart"";";
+ORDER BY ""Date"";";
 
         await using (var computeCmd = new NpgsqlCommand(computeSql, conn))
         {
@@ -494,8 +509,8 @@ ORDER BY ""PeriodStart"";";
         // INSERT into target table — ON CONFLICT DO UPDATE for idempotent upsert.
         var mergeSql = $@"
 INSERT INTO ""{targetTable}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
-SELECT ""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
-FROM {tempTable}
+SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM {StagingTableName}
 ON CONFLICT (""Date"") DO UPDATE SET
     ""Open""   = EXCLUDED.""Open"",
     ""High""   = EXCLUDED.""High"",
@@ -509,7 +524,7 @@ ON CONFLICT (""Date"") DO UPDATE SET
         }
 
         // Count rows affected.
-        var countSql = $"SELECT COUNT(*) FROM {tempTable};";
+        var countSql = $"SELECT COUNT(*) FROM {StagingTableName};";
         await using (var countCmd = new NpgsqlCommand(countSql, conn))
         {
             var count = (long)(await countCmd.ExecuteScalarAsync(ct))!;
