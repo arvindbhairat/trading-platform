@@ -95,7 +95,8 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 chunkTo = toDate;
 
             var chunk = await FetchHistoricalChunkAsync(symbol, fyersSymbol, currentFrom, chunkTo, cancellationToken);
-            allResults.AddRange(chunk);
+            if (chunk is not null)
+                allResults.AddRange(chunk);
 
             currentFrom = chunkTo.AddDays(1);
         }
