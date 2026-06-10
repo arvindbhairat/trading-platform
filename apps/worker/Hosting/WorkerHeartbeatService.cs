@@ -17,11 +17,10 @@ internal sealed class WorkerHeartbeatService : BackgroundService
   // Maximum retry attempts for lease acquisition on conflict.
   // With exponential backoff (2^retry capped at 64 seconds), 8 retries span ~254s (~4 min),
   // covering the 60s lease TTL plus the Railway deploy overlap window where the old
-  // instance still holds the lease (starts refreshing at T=0, gets SIGTERM at some point
-  // during the deploy, lease expires 60s after its last refresh).
-  // At 6 retries (~126s) the old instance could refresh its lease at T=0, survive until
-  // T=60+ and the new instance would give up before the lease expired. 8 gives a wider
-  // margin (2× lease TTL after the last possible refresh).
+  // instance still holds the lease.
+  // With explicit lease release on graceful shutdown (StopAsync), the overlap window
+  // is reduced to nearly zero — the old instance deletes the Redis key before exiting,
+  // and the new instance acquires it immediately on its next retry.
   private const int MaxLeaseRetryAttempts = 8;
 
   public WorkerHeartbeatService(
@@ -36,6 +35,27 @@ internal sealed class WorkerHeartbeatService : BackgroundService
     _options = options.Value;
     _singletonCoordinator = singletonCoordinator;
     _identityProvider = identityProvider;
+  }
+
+  /// <summary>
+  /// Called by the host on graceful shutdown (SIGTERM). Releases the Redis lease
+  /// so the next worker instance can acquire it immediately, eliminating the
+  /// deployment overlap window.
+  ///
+  /// Sequence: Railway sends SIGTERM → Host calls StopAsync on all hosted services
+  /// → base.StopAsync cancels the ExecuteAsync loop → we release the lease → host
+  /// waits for all services to stop → process exits.
+  ///
+  /// The release is atomic (Lua DEL only if instance matches) and safe to call even
+  /// if the lease was already lost or never acquired.
+  /// </summary>
+  public override async Task StopAsync(CancellationToken cancellationToken)
+  {
+    // Let the heartbeat loop exit first (cancels stoppingToken, waits for ExecuteAsync to return).
+    await base.StopAsync(cancellationToken);
+
+    // Now release the lease so the next instance can acquire immediately.
+    await _singletonCoordinator.TryReleaseLeaseAsync();
   }
 
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)

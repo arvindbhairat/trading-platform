@@ -12,6 +12,14 @@ internal sealed class RedisWorkerSingletonLeaseBackend : IWorkerSingletonLeaseBa
     return 0
     """);
 
+  private static readonly LuaScript ReleaseScript = LuaScript.Prepare("""
+    if redis.call('GET', @leaseKey) == @instanceId then
+      redis.call('DEL', @leaseKey)
+      return 1
+    end
+    return 0
+    """);
+
   private readonly ILogger<RedisWorkerSingletonLeaseBackend> _logger;
   private readonly IConfiguration _configuration;
 
@@ -90,6 +98,27 @@ internal sealed class RedisWorkerSingletonLeaseBackend : IWorkerSingletonLeaseBa
     {
       _logger.LogWarning(ex, "Worker singleton lease refresh could not reach Redis.");
       return WorkerLeaseRefreshResult.Unavailable(ex.GetType().Name);
+    }
+  }
+
+  public async Task<bool> TryReleaseAsync(string leaseKey, string instanceId)
+  {
+    try
+    {
+      var database = await GetDatabaseAsync();
+      if (database is null)
+        return false;
+
+      var result = (int)await database.ScriptEvaluateAsync(
+        ReleaseScript,
+        new { leaseKey, instanceId });
+
+      return result == 1;
+    }
+    catch (Exception ex) when (ex is RedisConnectionException or RedisTimeoutException or SocketException)
+    {
+      _logger.LogWarning(ex, "Worker singleton lease release could not reach Redis. Lease will expire via TTL.");
+      return false;
     }
   }
 

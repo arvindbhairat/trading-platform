@@ -97,4 +97,33 @@ internal sealed class WorkerSingletonCoordinator : IWorkerSingletonCoordinator
       _options.LeaseKey,
       refreshResult.Reason ?? "unknown");
   }
+
+  public async Task TryReleaseLeaseAsync()
+  {
+    if (!_leaseHeld)
+      return;
+
+    var instanceId = _identityProvider.GetInstanceId();
+    _logger.LogInformation(
+      "Gracefully releasing singleton lease for instance {InstanceId} on key {LeaseKey}.",
+      instanceId,
+      _options.LeaseKey);
+
+    var released = await _leaseBackend.TryReleaseAsync(_options.LeaseKey, instanceId);
+    _leaseHeld = !released;
+
+    if (released)
+    {
+      _logger.LogInformation(
+        "Singleton lease released for instance {InstanceId}. Next instance can acquire immediately.",
+        instanceId);
+    }
+    else
+    {
+      _logger.LogWarning(
+        "Could not release singleton lease for instance {InstanceId}. It will expire via TTL ({Ttl}s).",
+        instanceId,
+        _options.LeaseTtlSeconds);
+    }
+  }
 }
