@@ -15,9 +15,11 @@ The `?.` operator on a nullable *document* (`nullableDoc?.GetBsonStringOrNull("f
 
 FYERS v3 uses a non-standard Authorization header format: `Authorization: {AppID}:{access_token}` — a single header value with NO space between AppID and the colon.
 
-Using `new AuthenticationHeaderValue(appId, $":{token}")` in .NET produces `Authorization: {appId} :{token}` (with a space before the colon), which FYERS may reject with HTTP 422.
+`AuthenticationHeaderValue` CANNOT be used for this format:
+- The two-arg constructor `new AuthenticationHeaderValue(appId, $":{token}")` inserts a space: `Authorization: {appId} :{token}` — FYERS rejects with HTTP 422.
+- The single-arg constructor `new AuthenticationHeaderValue($"{appId}:{token}")` validates the value as an HTTP token, and `:` is NOT a valid token character (RFC 7230) — throws `System.FormatException`.
 
-**Always use**: `new AuthenticationHeaderValue($"{appId}:{token}")` — the single-arg constructor with the combined `AppID:token` string produces the correct format (no embedded space).
+**Always use**: `request.Headers.TryAddWithoutValidation("Authorization", $"{appId}:{token}")` — bypasses the token validation and produces exactly `Authorization: AppID:token` with no extra space.
 
 ## FYERS API Error Telemetry Tags
 

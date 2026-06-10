@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -136,7 +135,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
 
             var url = $"{FyersApiEndpoints.MarketDataBaseUrl}{endpoint}{queryString}";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Authorization = authHeader;
+            request.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
             var requestBodyForLogging = $"(GET query string: {queryString})";
 
@@ -184,7 +183,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             {
                 Content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json"),
             };
-            request.Headers.Authorization = authHeader;
+            request.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
             var result = await SendAndParseAsync<FyersQuoteResponse, QuoteRecord?>(
                 request, requestBodyJson, endpoint, fyersSymbol,
@@ -263,15 +262,18 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
     // ── Private helpers ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds the FYERS v3 Authorization header in <c>{AppID}:{access_token}</c> format
+    /// Builds the FYERS v3 Authorization header value in <c>{AppID}:{access_token}</c> format
     /// as a single header value (no space between AppID and token).
     ///
     /// ⚠️ FYERS does NOT use the standard HTTP <c>scheme parameter</c> format.
-    /// Passing AppID as scheme and token as parameter (via <c>new AuthenticationHeaderValue(_appId, $":{token}")</c>)
-    /// produces <c>Authorization: {appId} :{token}</c> with an unwanted space before the colon,
-    /// which FYERS rejects with HTTP 422.
+    /// <c>AuthenticationHeaderValue</c> cannot be used because:
+    ///   - The single-arg constructor validates the value as an HTTP token (RFC 7230),
+    ///     and colon <c>:</c> is not a valid token character — throws <c>FormatException</c>.
+    ///   - The two-arg constructor inserts a space: <c>Authorization: {appId} :{token}</c>,
+    ///     which FYERS rejects with HTTP 422.
+    /// Instead, we return the raw string and callers use <c>TryAddWithoutValidation</c>.
     /// </summary>
-    private async Task<AuthenticationHeaderValue?> BuildAuthHeaderAsync(CancellationToken ct)
+    private async Task<string?> BuildAuthHeaderAsync(CancellationToken ct)
     {
         try
         {
@@ -284,10 +286,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
 
             _logger.LogDebug("Building FYERS auth header with AppID: {AppId}", _appId);
 
-            // FYERS format: "Authorization: {AppID}:{access_token}" — single value, no space.
-            // Using AuthenticationHeaderValue(scheme, parameter) inserts a space: AppID :token (WRONG).
-            // Using AuthenticationHeaderValue("AppID:token") as scheme-only omits the space (CORRECT).
-            return new AuthenticationHeaderValue($"{_appId}:{token}");
+            return $"{_appId}:{token}";
         }
         catch (Exception ex)
         {

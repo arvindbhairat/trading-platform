@@ -136,7 +136,7 @@ public sealed class FyersAuthService
         {
             var profileRequest = new HttpRequestMessage(HttpMethod.Get,
                 "https://api-t1.fyers.in/api/v3/profile");
-            profileRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(appId, $":{accessToken}");
+            profileRequest.Headers.TryAddWithoutValidation("Authorization", $"{appId}:{accessToken}");
             var profileResponse = await httpClient.SendAsync(profileRequest, ct);
             var profileJson = await profileResponse.Content.ReadAsStringAsync(ct);
             using var profileDoc = JsonDocument.Parse(profileJson);
