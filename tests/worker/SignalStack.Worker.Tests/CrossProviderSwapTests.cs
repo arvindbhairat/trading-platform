@@ -398,7 +398,8 @@ public sealed class CrossProviderSwapTests
                 var content = File.ReadAllText(file);
 
                 // Check for direct FYERS API endpoint references
-                if (content.Contains("api.fyers.in", StringComparison.OrdinalIgnoreCase))
+                if (content.Contains("api.fyers.in", StringComparison.OrdinalIgnoreCase)
+                    || content.Contains("api-t1.fyers.in", StringComparison.OrdinalIgnoreCase))
                 {
                     violations.Add(
                         $"{relativePath}: contains direct FYERS endpoint reference " +
