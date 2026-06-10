@@ -133,7 +133,7 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 $"&range_to={toDate:yyyy-MM-dd}" +
                 $"&cont_flag=1";
 
-            var url = $"{FyersApiEndpoints.BaseUrl}{endpoint}{queryString}";
+            var url = $"{FyersApiEndpoints.MarketDataBaseUrl}{endpoint}{queryString}";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = authHeader;
 
