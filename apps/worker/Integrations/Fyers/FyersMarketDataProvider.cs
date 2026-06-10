@@ -124,27 +124,23 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 return Array.Empty<OhlcvRecord>();
             }
 
-            var requestBody = new
-            {
-                symbol = fyersSymbol,
-                resolution = "D",
-                date_format = "1",
-                range_from = fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                range_to = toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                cont_flag = "1",
-            };
-
-            var requestBodyJson = JsonSerializer.Serialize(requestBody, LoggingJsonOptions);
             var endpoint = FyersApiEndpoints.History;
 
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{FyersApiEndpoints.BaseUrl}{endpoint}")
-            {
-                Content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json"),
-            };
+            // FYERS API v3 uses GET with query parameters for history, not POST with body.
+            var queryString = $"?symbol={Uri.EscapeDataString(fyersSymbol)}" +
+                $"&resolution=D&date_format=1" +
+                $"&range_from={fromDate:yyyy-MM-dd}" +
+                $"&range_to={toDate:yyyy-MM-dd}" +
+                $"&cont_flag=1";
+
+            var url = $"{FyersApiEndpoints.BaseUrl}{endpoint}{queryString}";
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = authHeader;
 
+            var requestBodyForLogging = $"(GET query string: {queryString})";
+
             return (await SendAndParseAsync<FyersHistoryResponse, IReadOnlyList<OhlcvRecord>>(
-                request, requestBodyJson, endpoint, fyersSymbol,
+                request, requestBodyForLogging, endpoint, fyersSymbol,
                 (body, _) => body?.S == "ok" && body.Data?.Candles is not null,
                 (body, sym) => body!.Data!.Candles!
                     .Select(candle => MapCandle(sym!, candle))

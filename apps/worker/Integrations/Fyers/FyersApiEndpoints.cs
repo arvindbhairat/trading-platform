@@ -11,7 +11,7 @@ internal static class FyersApiEndpoints
     /// <summary>Base URL for FYERS API v3.</summary>
     public const string BaseUrl = "https://api.fyers.in/api/v3";
 
-    /// <summary>Historical OHLCV data endpoint. POST.</summary>
+    /// <summary>Historical OHLCV data endpoint. GET (query parameters).</summary>
     public const string History = "/data/history";
 
     /// <summary>Quote endpoint. POST.</summary>
