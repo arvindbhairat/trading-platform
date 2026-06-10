@@ -15,9 +15,14 @@ internal sealed class WorkerHeartbeatService : BackgroundService
   private readonly IWorkerInstanceIdentityProvider _identityProvider;
 
   // Maximum retry attempts for lease acquisition on conflict.
-  // With exponential backoff (2^retry seconds), 6 retries span ~126s,
-  // comfortably covering the 60s lease TTL during overlapping deployments.
-  private const int MaxLeaseRetryAttempts = 6;
+  // With exponential backoff (2^retry capped at 64 seconds), 8 retries span ~254s (~4 min),
+  // covering the 60s lease TTL plus the Railway deploy overlap window where the old
+  // instance still holds the lease (starts refreshing at T=0, gets SIGTERM at some point
+  // during the deploy, lease expires 60s after its last refresh).
+  // At 6 retries (~126s) the old instance could refresh its lease at T=0, survive until
+  // T=60+ and the new instance would give up before the lease expired. 8 gives a wider
+  // margin (2× lease TTL after the last possible refresh).
+  private const int MaxLeaseRetryAttempts = 8;
 
   public WorkerHeartbeatService(
     IHostApplicationLifetime applicationLifetime,

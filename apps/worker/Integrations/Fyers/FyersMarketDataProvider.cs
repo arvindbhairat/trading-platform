@@ -263,8 +263,13 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
     // ── Private helpers ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds the FYERS v3 Authorization header in <c>AppID:{access_token}</c> format.
-    /// Returns null if the token could not be obtained.
+    /// Builds the FYERS v3 Authorization header in <c>{AppID}:{access_token}</c> format
+    /// as a single header value (no space between AppID and token).
+    ///
+    /// ⚠️ FYERS does NOT use the standard HTTP <c>scheme parameter</c> format.
+    /// Passing AppID as scheme and token as parameter (via <c>new AuthenticationHeaderValue(_appId, $":{token}")</c>)
+    /// produces <c>Authorization: {appId} :{token}</c> with an unwanted space before the colon,
+    /// which FYERS rejects with HTTP 422.
     /// </summary>
     private async Task<AuthenticationHeaderValue?> BuildAuthHeaderAsync(CancellationToken ct)
     {
@@ -278,7 +283,11 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
             }
 
             _logger.LogDebug("Building FYERS auth header with AppID: {AppId}", _appId);
-            return new AuthenticationHeaderValue(_appId, $":{token}");
+
+            // FYERS format: "Authorization: {AppID}:{access_token}" — single value, no space.
+            // Using AuthenticationHeaderValue(scheme, parameter) inserts a space: AppID :token (WRONG).
+            // Using AuthenticationHeaderValue("AppID:token") as scheme-only omits the space (CORRECT).
+            return new AuthenticationHeaderValue($"{_appId}:{token}");
         }
         catch (Exception ex)
         {
@@ -323,6 +332,13 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                     statusCode,
                     requestBodyJson,
                     responseBody);
+
+                // Tag the current span with the failing symbol and response body
+                // for searchable observability (captured in the http.client span).
+                Activity.Current?.SetTag("fyers.symbol", fyersSymbol);
+                Activity.Current?.SetTag("fyers.endpoint", endpoint);
+                Activity.Current?.SetTag("fyers.status_code", statusCode);
+                Activity.Current?.SetTag("fyers.response_body", responseBody);
 
                 // 4xx are client errors (bad symbol, delisted, invalid params) —
                 // return null so the caller handles gracefully as "data unavailable".
