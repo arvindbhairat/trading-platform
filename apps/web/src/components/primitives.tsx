@@ -694,15 +694,20 @@ export function SideNav({
       <div style={{ marginTop: "auto" }}>
         {!collapsed && (
           <div
+            onClick={handleCopyBuildId}
+            title={buildId ? "Click to copy build ID" : undefined}
             style={{
               padding: "8px 12px",
               fontSize: "10px",
-              color: "var(--fg-4)",
+              color: copied ? "var(--brand-300)" : "var(--fg-4)",
               letterSpacing: "0.06em",
-              textTransform: "uppercase",
+              cursor: buildId ? "pointer" : "default",
+              transition: "color 0.15s",
+              whiteSpace: "nowrap",
+              fontFamily: buildId ? "var(--font-mono)" : undefined,
             }}
           >
-            System
+            {copied ? "Copied!" : `SYSTEM [${buildId ? buildId.substring(0, 7) : "—"}]`}
           </div>
         )}
         {role === "admin" && (
@@ -772,26 +777,6 @@ export function SideNav({
           <Icon name="external" size={16} />
           {!collapsed && "Sign out"}
         </button>
-        {/* Version / build ID */}
-        {!collapsed && buildId && (
-          <span
-            onClick={handleCopyBuildId}
-            title="Click to copy build ID"
-            style={{
-              display: "block",
-              padding: "4px 12px",
-              fontSize: "10px",
-              fontFamily: "var(--font-mono)",
-              color: copied ? "var(--brand-300)" : "var(--fg-4)",
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "color 0.15s",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {copied ? "Copied!" : buildId.substring(0, 7)}
-          </span>
-        )}
         <button
           onClick={toggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
