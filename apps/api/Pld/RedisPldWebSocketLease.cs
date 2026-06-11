@@ -35,13 +35,16 @@ internal sealed class RedisPldWebSocketLease : IPldWebSocketLease
 
     private readonly ILogger<RedisPldWebSocketLease> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IDatabase _redisDb;
 
     public RedisPldWebSocketLease(
         ILogger<RedisPldWebSocketLease> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IConnectionMultiplexer redis)
     {
         _logger = logger;
         _configuration = configuration;
+        _redisDb = redis.GetDatabase();
     }
 
     public async Task<PldLeaseAcquireResult> TryAcquireAsync(
@@ -52,23 +55,19 @@ internal sealed class RedisPldWebSocketLease : IPldWebSocketLease
 
         try
         {
-            var db = await GetDatabaseAsync();
-            if (db is null)
-                return PldLeaseAcquireResult.Unavailable("redis_connection_string_missing");
-
             // REQ-SESSION-014(a): try to acquire with SET NX EX.
-            var acquired = await db.StringSetAsync(
+            var acquired = await _redisDb.StringSetAsync(
                 leaseKey, instanceId, ttl, When.NotExists, CommandFlags.DemandMaster);
 
             if (acquired)
                 return PldLeaseAcquireResult.Acquired();
 
             // REQ-SESSION-014(b): conflict — read the previous holder.
-            var previous = await db.StringGetAsync(leaseKey, CommandFlags.DemandMaster);
+            var previous = await _redisDb.StringGetAsync(leaseKey, CommandFlags.DemandMaster);
             var previousId = previous.HasValue ? previous.ToString() : null;
 
             // Overwrite with the new instance (latest-tab-wins).
-            await db.StringSetAsync(leaseKey, instanceId, ttl, flags: CommandFlags.DemandMaster);
+            await _redisDb.StringSetAsync(leaseKey, instanceId, ttl, flags: CommandFlags.DemandMaster);
 
             _logger.LogInformation(
                 "PLD lease for user {UserId} transferred from {PreviousInstance} to {NewInstance}",
@@ -91,11 +90,7 @@ internal sealed class RedisPldWebSocketLease : IPldWebSocketLease
 
         try
         {
-            var db = await GetDatabaseAsync();
-            if (db is null)
-                return PldLeaseRefreshResult.Unavailable("redis_connection_string_missing");
-
-            var result = (int)await db.ScriptEvaluateAsync(
+            var result = (int)await _redisDb.ScriptEvaluateAsync(
                 RefreshScript,
                 new { leaseKey, instanceId, ttlMs },
                 flags: CommandFlags.DemandMaster);
@@ -117,11 +112,7 @@ internal sealed class RedisPldWebSocketLease : IPldWebSocketLease
 
         try
         {
-            var db = await GetDatabaseAsync();
-            if (db is null)
-                return;
-
-            await db.ScriptEvaluateAsync(
+            await _redisDb.ScriptEvaluateAsync(
                 ReleaseScript,
                 new { leaseKey, instanceId },
                 flags: CommandFlags.DemandMaster);
@@ -138,17 +129,5 @@ internal sealed class RedisPldWebSocketLease : IPldWebSocketLease
     {
         var seconds = _configuration.GetValue<int>("Pld:LeaseTtlSeconds");
         return seconds > 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.FromSeconds(1800);
-    }
-
-    private async Task<IDatabase?> GetDatabaseAsync()
-    {
-        var connectionString = _configuration.GetConnectionString("Redis")
-            ?? _configuration["Redis:ConnectionString"];
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-            return null;
-
-        var multiplexer = await ConnectionMultiplexer.ConnectAsync(connectionString);
-        return multiplexer.GetDatabase();
     }
 }

@@ -82,6 +82,7 @@ var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
   var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+  builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
   builder.Services.AddDataProtection()
       .SetApplicationName("SignalStack.Api")
       .PersistKeysToStackExchangeRedis(() => redis.GetDatabase(), "DataProtection-Keys");

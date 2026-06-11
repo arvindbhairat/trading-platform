@@ -55,6 +55,10 @@ public static class ChartEndpoints
         [FromServices] ITimeframeService timeframeService,
         CancellationToken ct)
     {
+        // Normalize: strip "NSE:" prefix if present (frontend sends NSE:SBIN-EQ,
+        // symbol master stores SBIN-EQ). REQ-HIST-011.
+        symbol = StripExchangePrefix(symbol);
+
         // Validate symbol exists in the mapping.
         var suffix = await tableMapping.GetSuffixAsync(symbol, ct);
         if (suffix is null)
@@ -103,6 +107,8 @@ public static class ChartEndpoints
         [FromServices] ISymbolTableMapping tableMapping,
         CancellationToken ct)
     {
+        symbol = StripExchangePrefix(symbol);
+
         var suffix = await tableMapping.GetSuffixAsync(symbol, ct);
         if (suffix is null)
         {
@@ -129,6 +135,8 @@ public static class ChartEndpoints
         [FromServices] ISymbolTableMapping tableMapping,
         CancellationToken ct)
     {
+        symbol = StripExchangePrefix(symbol);
+
         var suffix = await tableMapping.GetSuffixAsync(symbol, ct);
         if (suffix is null)
         {
@@ -146,6 +154,19 @@ public static class ChartEndpoints
         var results = await repository.GetRollingAsync(symbol, windowSize, toDate, ct);
 
         return TypedResults.Ok(results);
+    }
+
+    /// <summary>
+    /// Strips the "NSE:" exchange prefix from a symbol if present.
+    /// The frontend sends symbols in "NSE:SBIN-EQ" format, but the symbol master
+    /// stores them as "SBIN-EQ". REQ-HIST-011.
+    /// </summary>
+    private static string StripExchangePrefix(string symbol)
+    {
+        const string prefix = "NSE:";
+        return symbol.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? symbol[prefix.Length..]
+            : symbol;
     }
 }
 
