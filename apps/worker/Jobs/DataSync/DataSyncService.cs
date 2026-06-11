@@ -32,6 +32,21 @@ namespace SignalStack.Worker.Jobs.DataSync;
 /// </summary>
 public sealed class DataSyncService
 {
+    /// <summary>
+    /// Shared permanent staging table for aggregate computation.
+    ///
+    /// Using a permanent table (not TEMPORARY) avoids the Npgsql prepared-statement
+    /// OID-invalidation problem that occurs with repeated DROP/CREATE of
+    /// session-scoped temp tables. A permanent table's OID never changes, so any
+    /// cached prepared statements referencing it stay valid across iterations
+    /// during the ~1000+ sequential aggregate calls over all symbols.
+    ///
+    /// This is the same pattern used by HistoricDataSeedService with its own
+    /// "temp_seed_HDS" table. We use a separate table (not shared) because DS
+    /// and HDS could theoretically run concurrently.
+    /// </summary>
+    private const string StagingTableName = "\"public\".\"temp_seed_DS\"";
+
     private readonly string _sqlConnectionString;
     private readonly ISymbolTableMapping _tableMapping;
     private readonly IMarketDataProvider _marketDataProvider;
@@ -455,6 +470,24 @@ ON CONFLICT (""Date"") DO NOTHING;";
         await using var conn = new NpgsqlConnection(_sqlConnectionString);
         await conn.OpenAsync(ct);
 
+        // Ensure the shared permanent staging table exists.
+        // Using a permanent table (not TEMPORARY) avoids the Npgsql prepared-statement
+        // OID-invalidation problem that temp tables suffer from (same pattern as HDS).
+        var createStagingSql = $@"
+CREATE TABLE IF NOT EXISTS {StagingTableName} (
+    ""Date""   DATE              NOT NULL,
+    ""Open""   DOUBLE PRECISION  NOT NULL,
+    ""High""   DOUBLE PRECISION  NOT NULL,
+    ""Low""    DOUBLE PRECISION  NOT NULL,
+    ""Close""  DOUBLE PRECISION  NOT NULL,
+    ""Volume"" BIGINT            NOT NULL,
+    PRIMARY KEY (""Date"")
+)";
+        await using (var createStagingCmd = new NpgsqlCommand(createStagingSql, conn))
+        {
+            await createStagingCmd.ExecuteNonQueryAsync(ct);
+        }
+
         // Get all distinct suffixes that have data in the affected range.
         var activeSymbols = await _symbolMasterRepo.GetAllAsync(archived: false, ct);
         var suffixes = activeSymbols
@@ -502,7 +535,12 @@ ON CONFLICT (""Date"") DO NOTHING;";
 
     /// <summary>
     /// Computes and upserts aggregate candles from D_ into the target (W_ or M_) table
-    /// for a given date range, using a temp-table + INSERT...ON CONFLICT approach.
+    /// for a given date range, using the permanent staging table + INSERT...ON CONFLICT
+    /// approach (same pattern as HistoricDataSeedService.ComputeAndInsertAggregatesAsync).
+    ///
+    /// The shared permanent staging table (<see cref="StagingTableName"/>) is TRUNCATE'd
+    /// before each use. Using a permanent table avoids the Npgsql prepared-statement
+    /// OID-invalidation problem that occurred with session-scoped temp tables.
     /// </summary>
     private static async Task UpsertAggregateAsync(
         NpgsqlConnection conn,
@@ -513,33 +551,19 @@ ON CONFLICT (""Date"") DO NOTHING;";
         DateOnly rangeEnd,
         CancellationToken ct)
     {
-        var tempTable = $"\"tmp_ds_{targetTable}\"";
-
-        // DROP before CREATE to handle Npgsql connection pooling: temp tables
-        // persist on the same pooled connection, so a table created on a prior
-        // call will collide on the next call for the same suffix.
-        var createTempSql = $@"
-DROP TABLE IF EXISTS {tempTable};
-CREATE TEMPORARY TABLE {tempTable} (
-    ""PeriodStart"" DATE   NOT NULL,
-    ""Open""        DOUBLE PRECISION  NOT NULL,
-    ""High""        DOUBLE PRECISION  NOT NULL,
-    ""Low""         DOUBLE PRECISION  NOT NULL,
-    ""Close""       DOUBLE PRECISION  NOT NULL,
-    ""Volume""      BIGINT NOT NULL,
-    PRIMARY KEY (""PeriodStart"")
-);";
-
-        await using (var createCmd = new NpgsqlCommand(createTempSql, conn))
+        // TRUNCATE the shared staging table before each use.
+        await using (var truncateCmd = new NpgsqlCommand($"TRUNCATE {StagingTableName};", conn))
         {
-            await createCmd.ExecuteNonQueryAsync(ct);
+            await truncateCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Compute aggregates from D_ for the specified date range.
+        // Compute aggregates from D_ for the specified date range into staging table.
+        // The staging table uses "Date" as its period-start column (matching target
+        // table naming), so computed aggregates alias the group-by expression as "Date".
         var computeSql = $@"
-INSERT INTO {tempTable} (""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
+INSERT INTO {StagingTableName} (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
 SELECT
-    {groupByExpression} AS ""PeriodStart"",
+    {groupByExpression} AS ""Date"",
     MAX(CASE WHEN rn_asc = 1 THEN ""Open"" END)  AS ""Open"",
     MAX(""High"")                                  AS ""High"",
     MIN(""Low"")                                   AS ""Low"",
@@ -553,7 +577,7 @@ FROM (
     WHERE ""Date"" >= @RangeStart AND ""Date"" <= @RangeEnd
 ) AS subq
 GROUP BY {groupByExpression}
-ORDER BY ""PeriodStart"";";
+ORDER BY ""Date"";";
 
         await using (var computeCmd = new NpgsqlCommand(computeSql, conn))
         {
@@ -562,11 +586,11 @@ ORDER BY ""PeriodStart"";";
             await computeCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // INSERT from temp table into target — ON CONFLICT DO UPDATE for idempotent upsert.
+        // INSERT into target table — ON CONFLICT DO UPDATE for idempotent upsert.
         var mergeSql = $@"
 INSERT INTO ""{targetTable}"" (""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume"")
-SELECT ""PeriodStart"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
-FROM {tempTable}
+SELECT ""Date"", ""Open"", ""High"", ""Low"", ""Close"", ""Volume""
+FROM {StagingTableName}
 ON CONFLICT (""Date"") DO UPDATE SET
     ""Open""   = EXCLUDED.""Open"",
     ""High""   = EXCLUDED.""High"",
