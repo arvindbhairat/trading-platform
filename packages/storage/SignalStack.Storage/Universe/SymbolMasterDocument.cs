@@ -64,6 +64,17 @@ public sealed class SymbolMasterDocument
     [BsonIgnoreIfNull]
     public DateTime? LastUnknownSymbolAt { get; set; }
 
+    // ── FYERS Invalid Symbol tracking ──────────────────────────────────────
+
+    /// <summary>
+    /// UTC timestamp when FYERS last returned code -300 ("Invalid symbol provided")
+    /// for this symbol via a market data API call. Null if FYERS has never rejected
+    /// this symbol. Set by the DataSync/worker pipeline; cleared on admin resolution.
+    /// </summary>
+    [BsonElement("fyers_marked_invalid_at")]
+    [BsonIgnoreIfNull]
+    public DateTime? FyersMarkedInvalidAt { get; set; }
+
     [BsonElement("created_at")]
     public required DateTime CreatedAt { get; init; }
 

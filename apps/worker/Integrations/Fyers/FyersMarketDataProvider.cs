@@ -66,6 +66,14 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
     /// <summary>Maximum days per FYERS historical data request (daily resolution).</summary>
     private const int MaxDaysPerRequest = 365;
 
+    /// <summary>
+    /// Optional callback invoked when FYERS returns code -300 ("Invalid symbol provided")
+    /// for a market data API call. The callback receives the original NSE symbol
+    /// (not the FYERS-format symbol). Set by the DI registration in
+    /// <see cref="FyersMarketDataProviderExtensions"/>.
+    /// </summary>
+    public Func<string, Task>? InvalidSymbolCallback { get; set; }
+
     public async Task<IReadOnlyList<OhlcvRecord>> FetchHistoricalOhlcvAsync(
         string symbol,
         DateOnly fromDate,
@@ -344,7 +352,20 @@ public sealed class FyersMarketDataProvider : IMarketDataProvider
                 // 5xx are server errors — throw so they surface as exception traces
                 // for monitoring.
                 if (statusCode < 500)
+                {
+                    // Check for FYERS "Invalid symbol provided" (code -300) and
+                    // invoke the optional callback so the symbol can be flagged
+                    // in the symbol_master collection for admin review.
+                    if (responseBody is not null
+                        && responseBody.Contains("\"code\":-300")
+                        && InvalidSymbolCallback is not null
+                        && symbol is not null)
+                    {
+                        await InvalidSymbolCallback(symbol);
+                    }
+
                     return default;
+                }
 
                 response.EnsureSuccessStatusCode();
             }

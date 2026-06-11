@@ -155,4 +155,31 @@ public sealed class MongoSymbolMasterRepository : ISymbolMasterRepository
         var combined = Builders<SymbolMasterDocument>.Update.Combine(updateDefs);
         await _collection.UpdateOneAsync(filter, combined, cancellationToken: ct);
     }
+
+    public async Task MarkFyersInvalidAsync(
+        ObjectId id,
+        DateTime timestamp,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<SymbolMasterDocument>.Filter.Eq(s => s.Id, id);
+        var update = Builders<SymbolMasterDocument>.Update
+            .Set(s => s.FyersMarkedInvalidAt, timestamp)
+            .Set(s => s.UpdatedAt, DateTime.UtcNow)
+            .Inc(s => s.ConsecutiveFailureCount, 1);
+
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
+
+    public async Task ClearFyersInvalidAsync(
+        ObjectId id,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<SymbolMasterDocument>.Filter.Eq(s => s.Id, id);
+        var update = Builders<SymbolMasterDocument>.Update
+            .Set(s => s.FyersMarkedInvalidAt, null)
+            .Set(s => s.ConsecutiveFailureCount, 0)
+            .Set(s => s.UpdatedAt, DateTime.UtcNow);
+
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }

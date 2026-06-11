@@ -71,4 +71,24 @@ public interface ISymbolMasterRepository
         DateTime? lastSuccessfulProbeAt = null,
         DateTime? lastUnknownSymbolAt = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Records that FYERS returned code -300 ("Invalid symbol provided") for this symbol.
+    /// Sets <see cref="SymbolMasterDocument.FyersMarkedInvalidAt"/> to the given timestamp
+    /// and increments <see cref="SymbolMasterDocument.ConsecutiveFailureCount"/> by 1.
+    /// </summary>
+    Task MarkFyersInvalidAsync(
+        ObjectId id,
+        DateTime timestamp,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Clears the FYERS invalid-symbol flag on this symbol.
+    /// Sets <see cref="SymbolMasterDocument.FyersMarkedInvalidAt"/> to null and resets
+    /// <see cref="SymbolMasterDocument.ConsecutiveFailureCount"/> to 0.
+    /// Called when an admin resolves the FYERS-invalid work queue item.
+    /// </summary>
+    Task ClearFyersInvalidAsync(
+        ObjectId id,
+        CancellationToken ct = default);
 }

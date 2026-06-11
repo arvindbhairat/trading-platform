@@ -559,7 +559,7 @@ public static class UniverseSyncEndpoints
         .WithTags(Tag);
 
         // GET /api/v1/admin/universe/work-queue — admin work queue (REQ-UNIV-021b).
-        // Returns probe-flagged symbols plus pending rename candidates.
+        // Returns probe-flagged symbols, FYERS-invalid symbols, and pending rename candidates.
         admin.MapGet("/work-queue", async (
             ISymbolMasterRepository symbolRepo,
             ISysConfigRepository configRepo,
@@ -578,12 +578,14 @@ public static class UniverseSyncEndpoints
             var probeEnabled = enabledDoc?.GetValue("value", true) is BsonValue bv2
                 && bv2.IsBoolean && bv2.AsBoolean;
 
-            // Get all active symbols — check for probe flags.
+            // Get all active symbols — check for probe flags and FYERS-invalid flags.
             var symbols = await symbolRepo.GetAllAsync(archived: false, ct);
 
             var items = new List<WorkQueueItem>();
 
-            foreach (var sym in symbols.Where(s => s.ConsecutiveFailureCount >= flagThreshold))
+            // ── Probe-flagged symbols ────────────────────────────────────────
+            foreach (var sym in symbols.Where(s => s.ConsecutiveFailureCount >= flagThreshold
+                && s.FyersMarkedInvalidAt is null))
             {
                 // Check if this symbol was also flagged as a rename candidate
                 // in a recent upload (REQ-UNIV-020 detection).
@@ -606,6 +608,27 @@ public static class UniverseSyncEndpoints
                     sym.LastUnknownSymbolAt?.ToString("o")
                         ?? sym.UpdatedAt.ToString("o"),
                     hadRenameFlag
+                ));
+            }
+
+            // ── FYERS-invalid symbols ───────────────────────────────────────
+            foreach (var sym in symbols.Where(s => s.FyersMarkedInvalidAt is not null))
+            {
+                items.Add(new WorkQueueItem(
+                    sym.Id.ToString(),
+                    "fyers_invalid",
+                    sym.Symbol,
+                    sym.CompanyName,
+                    sym.Isin,
+                    new WorkQueueItemDetail(
+                        sym.ConsecutiveFailureCount,
+                        flagThreshold,
+                        sym.LastSuccessfulProbeAt?.ToString("o"),
+                        sym.FyersMarkedInvalidAt?.ToString("o")
+                    ),
+                    sym.FyersMarkedInvalidAt?.ToString("o")
+                        ?? sym.UpdatedAt.ToString("o"),
+                    highConfidence: true
                 ));
             }
 
@@ -642,8 +665,7 @@ public static class UniverseSyncEndpoints
                         return Results.BadRequest(new ErrorResponse("new_symbol is required for approve_rename."));
 
                     await symbolRepo.RenameSymbolAsync(symbol.Id, request.NewSymbol, ct);
-                    await symbolRepo.UpdateSymbolHealthAsync(
-                        symbol.Id, consecutiveFailureCount: 0, ct: ct);
+                    await symbolRepo.ClearFyersInvalidAsync(symbol.Id, ct);
 
                     await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
                         new Dictionary<string, object?>
@@ -651,15 +673,15 @@ public static class UniverseSyncEndpoints
                             ["resolution"] = "approve_rename",
                             ["symbol"] = request.Symbol,
                             ["new_symbol"] = request.NewSymbol,
-                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount
+                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount,
+                            ["cleared_fyers_invalid"] = symbol.FyersMarkedInvalidAt is not null
                         }, ct);
 
                     return Results.Ok(new ResolveRenameResponse("renamed", request.Symbol, request.NewSymbol!));
 
                 case "mark_delisting":
                     await symbolRepo.UpdateMetadataAsync(symbol.Id, isArchived: true, ct: ct);
-                    await symbolRepo.UpdateSymbolHealthAsync(
-                        symbol.Id, consecutiveFailureCount: 0, ct: ct);
+                    await symbolRepo.ClearFyersInvalidAsync(symbol.Id, ct);
 
                     await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
                         new Dictionary<string, object?>
@@ -667,7 +689,8 @@ public static class UniverseSyncEndpoints
                             ["resolution"] = "mark_delisting",
                             ["symbol"] = request.Symbol,
                             ["reason"] = request.Reason ?? "",
-                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount
+                            ["previous_failure_count"] = symbol.ConsecutiveFailureCount,
+                            ["cleared_fyers_invalid"] = symbol.FyersMarkedInvalidAt is not null
                         }, ct);
 
                     // REQ-UNIV-015: notify users with open positions in archived symbols.
@@ -680,12 +703,22 @@ public static class UniverseSyncEndpoints
                     return Results.Ok(new ResolveResponse("archived", request.Symbol));
 
                 case "dismiss":
+                    // Dismiss: clear the FYERS-invalid flag but leave the symbol
+                    // active. Only clear consecutive_failure_count if a FYERS
+                    // invalid flag is being cleared (the probe system manages its
+                    // own count separately).
+                    if (symbol.FyersMarkedInvalidAt is not null)
+                    {
+                        await symbolRepo.ClearFyersInvalidAsync(symbol.Id, ct);
+                    }
+
                     await auditRepo.RecordAsync(adminId, "work_queue_resolve", DateTime.UtcNow,
                         new Dictionary<string, object?>
                         {
                             ["resolution"] = "dismiss",
                             ["symbol"] = request.Symbol,
                             ["reason"] = request.Reason ?? "",
+                            ["cleared_fyers_invalid"] = symbol.FyersMarkedInvalidAt is not null,
                             ["failure_count_not_reset"] = true
                         }, ct);
 

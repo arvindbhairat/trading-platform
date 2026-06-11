@@ -137,7 +137,7 @@ interface HdsStatusData {
 
 interface WorkQueueItem {
   id: string;
-  type: "probe_flag";
+  type: "probe_flag" | "fyers_invalid";
   symbol: string;
   company_name: string;
   isin: string;
@@ -1744,7 +1744,11 @@ function WorkQueueItemCard({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)", flexWrap: "wrap" }}>
-          <Pill tone="warn">Probe flag</Pill>
+          {item.type === "fyers_invalid" ? (
+            <Pill tone="warn">FYERS invalid</Pill>
+          ) : (
+            <Pill tone="warn">Probe flag</Pill>
+          )}
           {item.high_confidence && <Pill tone="brand">High confidence</Pill>}
           <span style={{ fontFamily: "var(--ff-mono)", fontSize: "var(--fs-sm)", fontWeight: 600 }}>
             {item.symbol}
@@ -1754,10 +1758,23 @@ function WorkQueueItemCard({
           </span>
         </div>
         <span className="t-body-sm" style={{ color: "var(--t-3)" }}>
-          {item.details.consecutive_failure_count} consecutive failures
-          (threshold: {item.details.flag_threshold})
+          {item.type === "fyers_invalid"
+            ? "FYERS returned Invalid symbol"
+            : `${item.details.consecutive_failure_count} consecutive failures (threshold: ${item.details.flag_threshold})`
+          }
         </span>
       </div>
+
+      {/* FYERS-invalid explanation */}
+      {item.type === "fyers_invalid" && (
+        <p className="t-body-sm" style={{ color: "var(--t-2)", marginTop: "var(--s-2)" }}>
+          FYERS returned code <strong>-300</strong> ("Invalid symbol provided") when
+          querying market data for this symbol. This typically means the symbol has
+          been delisted, renamed, or is not recognised by the market data provider.
+          Archive the symbol to remove it from the active universe, or dismiss if
+          the error is expected to be temporary.
+        </p>
+      )}
 
       {/* Action buttons (shown when no action is selected) */}
       {!action && (

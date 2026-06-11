@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using SignalStack.MarketData;
 using SignalStack.MarketData.Throttling;
+using SignalStack.Storage.Universe;
 
 namespace SignalStack.Worker.Integrations.Fyers;
 
@@ -94,7 +95,63 @@ public static class FyersMarketDataProviderExtensions
             var throttle = sp.GetRequiredThrottle(ThrottleProviderKey);
             var tokenProvider = sp.GetRequiredService<Func<Task<string?>>>();
             var logger = sp.GetRequiredService<ILogger<FyersMarketDataProvider>>();
-            return new FyersMarketDataProvider(client, throttle, tokenProvider, logger, appId);
+
+            var provider = new FyersMarketDataProvider(client, throttle, tokenProvider, logger, appId);
+
+            // Wire the invalid-symbol callback: when FYERS returns code -300
+            // ("Invalid symbol provided"), flag the symbol in MongoDB so it
+            // appears in the admin work queue for review.
+            try
+            {
+                var symbolRepo = sp.GetService<ISymbolMasterRepository>();
+                if (symbolRepo is not null)
+                {
+                    provider.InvalidSymbolCallback = async symbol =>
+                    {
+                        try
+                        {
+                            var doc = await symbolRepo.FindBySymbolAsync(symbol);
+                            if (doc is not null)
+                            {
+                                await symbolRepo.MarkFyersInvalidAsync(doc.Id, DateTime.UtcNow);
+                                logger.LogWarning(
+                                    "Flagged symbol {Symbol} as FYERS-invalid (code -300) " +
+                                    "in symbol_master for admin review.",
+                                    symbol);
+                            }
+                            else
+                            {
+                                logger.LogWarning(
+                                    "FYERS returned code -300 for symbol {Symbol}, " +
+                                    "but no matching document exists in symbol_master. " +
+                                    "Cannot flag for review.",
+                                    symbol);
+                            }
+                        }
+                        catch (Exception innerEx)
+                        {
+                            logger.LogError(innerEx,
+                                "Failed to flag symbol {Symbol} as FYERS-invalid " +
+                                "in symbol_master.",
+                                symbol);
+                        }
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "ISymbolMasterRepository is not registered. " +
+                        "FYERS invalid-symbol detection callback will be a no-op.");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Failed to wire FYERS invalid-symbol callback. " +
+                    "Invalid-symbol detection will be a no-op.");
+            }
+
+            return provider;
         });
 
         return services;
