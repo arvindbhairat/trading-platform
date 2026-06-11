@@ -628,7 +628,7 @@ public static class UniverseSyncEndpoints
                     ),
                     sym.FyersMarkedInvalidAt?.ToString("o")
                         ?? sym.UpdatedAt.ToString("o"),
-                    highConfidence: true
+                    HighConfidence: true
                 ));
             }
 

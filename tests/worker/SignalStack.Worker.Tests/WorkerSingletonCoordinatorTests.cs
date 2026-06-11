@@ -69,5 +69,10 @@ public sealed class WorkerSingletonCoordinatorTests
     {
       return Task.FromResult(WorkerLeaseRefreshResult.Refreshed());
     }
+
+    public Task<bool> TryReleaseAsync(string leaseKey, string instanceId)
+    {
+      return Task.FromResult(true);
+    }
   }
 }
