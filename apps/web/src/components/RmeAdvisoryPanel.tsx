@@ -72,7 +72,7 @@ function pnlColor(pnl: number): string {
 
 interface Props {
   symbol: string;
-  symbolName?: string;
+  companyName?: string | null;
   currentPrice: number | null;
   priceColor: string;
   pendingConf?: {
@@ -85,7 +85,7 @@ interface Props {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function RmeAdvisoryPanel({ symbol, symbolName, currentPrice, priceColor, pendingConf }: Props) {
+export default function RmeAdvisoryPanel({ symbol, companyName, currentPrice, priceColor, pendingConf }: Props) {
   const [advisory, setAdvisory] = useState<RmeAdvisoryData | null>(null);
   const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,7 +170,7 @@ export default function RmeAdvisoryPanel({ symbol, symbolName, currentPrice, pri
           <Label>RME advisory</Label>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
             <h3 style={{ margin: 0, fontSize: 15, color: "var(--fg-1)" }}>
-              {symbolName || symbol}
+              {companyName || symbol}
             </h3>
             {hasPosition && advisory?.state && (
               <Pill tone={statePillTone(advisory.state)} dot>{advisory.state}</Pill>

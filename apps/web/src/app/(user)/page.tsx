@@ -82,7 +82,6 @@ export default function DashboardPage() {
   // ── Exit modal state (P7-T11 / T-8) ──────────────────────────────────
   const [exitSymbol, setExitSymbol] = useState<string | null>(null);
   const [exitPrice, setExitPrice] = useState<number | null>(null);
-  const [exitSymbolName, setExitSymbolName] = useState("");
 
   // ── FYERS widget state (P7-T7) ──────────────────────────────────────────
   const [activeFyersOrder, setActiveFyersOrder] = useState<{
@@ -162,13 +161,11 @@ export default function DashboardPage() {
   const handleExitClick = (symbol: string, price: number | null) => {
     setExitSymbol(symbol);
     setExitPrice(price);
-    setExitSymbolName(symbol);
   };
 
   const handleCloseExitModal = () => {
     setExitSymbol(null);
     setExitPrice(null);
-    setExitSymbolName("");
   };
 
   const handleExitProceed = (params: ProceedParams) => {
@@ -180,7 +177,6 @@ export default function DashboardPage() {
     }
     setExitSymbol(null);
     setExitPrice(null);
-    setExitSymbolName("");
   };
 
   const handleFyersDismiss = () => {
@@ -466,7 +462,7 @@ export default function DashboardPage() {
       {exitSymbol !== null && (
         <Phase1Modal
           symbol={exitSymbol}
-          symbolName={exitSymbolName}
+          companyName={null}
           actionType="exit"
           currentPrice={exitPrice}
           pendingConf={null}

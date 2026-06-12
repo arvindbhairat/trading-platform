@@ -71,7 +71,7 @@ interface SignedPayloadResponse {
 
 interface Props {
   symbol: string;
-  symbolName?: string;
+  companyName?: string | null;
   actionType: ActionType;
   currentPrice: number | null;
   pendingConf?: {
@@ -121,7 +121,7 @@ function heatColor(heat: number, max: number): string {
 
 export default function Phase1Modal({
   symbol,
-  symbolName,
+  companyName,
   actionType,
   currentPrice,
   pendingConf,
@@ -514,9 +514,9 @@ export default function Phase1Modal({
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700 }}>
                     {symbol}
                   </div>
-                  {symbolName && (
+                  {companyName && (
                     <div style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 2 }}>
-                      {symbolName}
+                      {companyName}
                     </div>
                   )}
                 </div>

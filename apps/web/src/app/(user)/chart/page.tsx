@@ -74,10 +74,9 @@ function ChartPageInner() {
   // Default to "SBIN" if no ?symbol= param is present.
   const urlSymbol = searchParams.get("symbol");
   const initialSymbol = urlSymbol ?? "SBIN";
-  const initialName = initialSymbol;
 
   const [symbol, setSymbol] = useState(initialSymbol);
-  const [symbolName, setSymbolName] = useState(initialName);
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>("daily");
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [change, setChange] = useState<number>(0);
@@ -96,9 +95,31 @@ function ChartPageInner() {
       setCurrentPrice(null);
       setChange(0);
       setChangePct(0);
-      setSymbolName(sym);
+      setCompanyName(null);
     }
   }, [searchParams]);
+
+  // ── Fetch company name from universe endpoint ──────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchCompanyName() {
+      try {
+        const res = await apiFetch(`/api/v1/universe/symbols/${encodeURIComponent(symbol)}`);
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { company_name: string };
+          if (!cancelled) {
+            setCompanyName(data.company_name);
+          }
+        }
+      } catch {
+        // Silently handle — symbol display falls back to ticker only.
+      }
+    }
+
+    fetchCompanyName();
+    return () => { cancelled = true; };
+  }, [symbol]);
 
   // ── Awaiting-confirmation state (P7-T9 / REQ-ORDER-015e) ─────────────────
   const [pendingConf, setPendingConf] = useState<{
@@ -393,12 +414,16 @@ function ChartPageInner() {
             flexWrap: "wrap",
           }}
         >
-          {/* Symbol identity */}
+          {/* Symbol identity — ticker with company name */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700 }}>
               {symbol}
             </span>
-            <span style={{ color: "var(--fg-3)", fontSize: 14 }}>{symbolName}</span>
+            {companyName && (
+              <span style={{ color: "var(--fg-3)", fontSize: 14 }}>
+                {companyName}
+              </span>
+            )}
           </div>
 
           <div style={{ width: 1, height: 24, background: "var(--line-2)" }} />
@@ -418,8 +443,14 @@ function ChartPageInner() {
                 {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
               </span>
             </>
+          ) : connStatus === "disconnected" ? (
+            <Pill tone="neutral">Price unavailable</Pill>
+          ) : connStatus === "evicted" ? (
+            <Pill tone="warn">Disconnected</Pill>
+          ) : connStatus === "rest_fallback" ? (
+            <Pill tone="info">Fetching price...</Pill>
           ) : (
-            <Pill tone="neutral">Loading price...</Pill>
+            <Pill tone="neutral">Connecting for live price...</Pill>
           )}
 
           <div style={{ flex: 1 }} />
@@ -523,7 +554,7 @@ function ChartPageInner() {
           <div>
             <RmeAdvisoryPanel
               symbol={symbol}
-              symbolName={symbolName}
+              companyName={companyName}
               currentPrice={currentPrice}
               priceColor={priceColor}
               pendingConf={pendingConf}
@@ -592,7 +623,7 @@ function ChartPageInner() {
       {showModal && modalAction && (
         <Phase1Modal
           symbol={symbol}
-          symbolName={symbolName}
+          companyName={companyName}
           actionType={modalAction}
           currentPrice={currentPrice}
           pendingConf={pendingConf}
