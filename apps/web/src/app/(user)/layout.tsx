@@ -15,6 +15,7 @@ import {
   resolveActiveNavId,
   userNavItemsWithNotificationCount,
 } from "@/components/primitives";
+import SymbolSearch from "@/components/SymbolSearch";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -96,6 +97,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
       onNavigate={handleNavigate}
       userInitials={initials}
       fyersUserId={fyersUserId}
+      search={<SymbolSearch />}
     >
       {children}
     </Shell>

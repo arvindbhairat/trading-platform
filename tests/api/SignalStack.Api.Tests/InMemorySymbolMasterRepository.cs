@@ -89,6 +89,23 @@ public sealed class InMemorySymbolMasterRepository : ISymbolMasterRepository
         return Task.FromResult((long)query.Count());
     }
 
+    public Task<List<SymbolMasterDocument>> SearchAsync(
+        string query, int limit = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return Task.FromResult(new List<SymbolMasterDocument>());
+
+        var results = _bySymbol.Values
+            .Where(s =>
+                s.Symbol.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                s.CompanyName.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Symbol)
+            .Take(limit)
+            .ToList();
+
+        return Task.FromResult(results);
+    }
+
     public Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default)
     {
         var doc = _bySymbol.Values.FirstOrDefault(s => s.Id == id);

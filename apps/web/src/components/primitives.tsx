@@ -483,7 +483,7 @@ export function TopBar({
   fyersUserId,
 }: {
   admin?: boolean;
-  search?: boolean;
+  search?: boolean | ReactNode;
   userInitials?: string;
   /** The FYERS client ID (fy_id) to show in the connection pill, or null/undefined to show a placeholder. */
   fyersUserId?: string | null;
@@ -529,7 +529,7 @@ export function TopBar({
           </span>
         )}
       </div>
-      {search ? (
+      {search === true ? (
         <div
           style={{
             flex: 1,
@@ -563,6 +563,8 @@ export function TopBar({
             }}
           />
         </div>
+      ) : search && typeof search !== "boolean" ? (
+        search
       ) : (
         <div style={{ flex: 1 }} />
       )}
@@ -826,7 +828,7 @@ export function Shell({
   current: string;
   onNavigate?: (id: string) => void;
   admin?: boolean;
-  search?: boolean;
+  search?: boolean | ReactNode;
   navItems: NavItem[];
   userInitials?: string;
   fyersUserId?: string | null;

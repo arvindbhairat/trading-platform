@@ -121,6 +121,26 @@ public sealed class MongoSymbolMasterRepository : ISymbolMasterRepository
         return await _collection.Find(combined).AnyAsync(ct);
     }
 
+    public async Task<List<SymbolMasterDocument>> SearchAsync(
+        string query, int limit = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return [];
+
+        var escaped = System.Text.RegularExpressions.Regex.Escape(query);
+        var pattern = new BsonRegularExpression(escaped, "i"); // case-insensitive
+
+        var filter = Builders<SymbolMasterDocument>.Filter.Or(
+            Builders<SymbolMasterDocument>.Filter.Regex(s => s.Symbol, pattern),
+            Builders<SymbolMasterDocument>.Filter.Regex(s => s.CompanyName, pattern));
+
+        return await _collection
+            .Find(filter)
+            .Sort(Builders<SymbolMasterDocument>.Sort.Ascending(s => s.Symbol))
+            .Limit(limit)
+            .ToListAsync(ct);
+    }
+
     public async Task RenameSymbolAsync(ObjectId id, string newSymbol, CancellationToken ct = default)
     {
         var filter = Builders<SymbolMasterDocument>.Filter.Eq(s => s.Id, id);

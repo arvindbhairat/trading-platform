@@ -7,7 +7,8 @@
 //
 // Design reference: design_system/ui_kits/user-portal/ChartPage.jsx
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   Btn,
@@ -56,12 +57,29 @@ const ROLLING_TIMEFRAMES: { id: Timeframe; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 export default function ChartPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChartPageInner />
+    </Suspense>
+  );
+}
+
+function ChartPageInner() {
+  const searchParams = useSearchParams();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
-  const [symbol, setSymbol] = useState("NSE:SBIN-EQ");
-  const [symbolName, setSymbolName] = useState("State Bank of India");
+  // Read symbol from URL search params for sharable links (REQ-DASH-001).
+  // Default to "NSE:SBIN-EQ" if no ?symbol= param is present.
+  const urlSymbol = searchParams.get("symbol");
+  const initialSymbol = urlSymbol ?? "NSE:SBIN-EQ";
+  const initialName = initialSymbol
+    .replace(/^NSE:/, "")
+    .replace(/-EQ$/, "");
+
+  const [symbol, setSymbol] = useState(initialSymbol);
+  const [symbolName, setSymbolName] = useState(initialName);
   const [timeframe, setTimeframe] = useState<Timeframe>("daily");
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [change, setChange] = useState<number>(0);
@@ -69,7 +87,21 @@ export default function ChartPage() {
   const [dataFreshness, setDataFreshness] = useState<string | null>(null);
   const [connStatus, setConnStatus] = useState<ConnectionStatus>("disconnected");
   const [, setConnMessage] = useState<string | undefined>();
-  const [searchInput, setSearchInput] = useState("SBIN");
+
+  // Sync symbol from URL search params (e.g. when user searches from the TopBar
+  // while already on the chart page). Next.js does not remount on query-param-only
+  // navigation, so we need a useEffect to pick up the change.
+  useEffect(() => {
+    const sym = searchParams.get("symbol");
+    if (sym) {
+      setSymbol(sym);
+      setCurrentPrice(null);
+      setChange(0);
+      setChangePct(0);
+      const name = sym.replace(/^NSE:/, "").replace(/-EQ$/, "");
+      setSymbolName(name);
+    }
+  }, [searchParams]);
 
   // ── Awaiting-confirmation state (P7-T9 / REQ-ORDER-015e) ─────────────────
   const [pendingConf, setPendingConf] = useState<{
@@ -282,18 +314,6 @@ export default function ChartPage() {
     };
   }, [symbol]);
 
-  // -------------------------------------------------------------------
-  // Handle symbol navigation
-  // -------------------------------------------------------------------
-
-  const handleSymbolChange = (newSymbol: string) => {
-    setSymbol(newSymbol);
-    setCurrentPrice(null);
-    setChange(0);
-    setChangePct(0);
-    // The data will be reloaded by the useEffect above.
-  };
-
   // ── Phase 1 modal handlers (P7-T4) + FYERS widget (P7-T7) ────────────────
 
   const handleCloseModal = useCallback(() => {
@@ -330,24 +350,6 @@ export default function ChartPage() {
     // The intent status (matched/submission_failed) is shown in the widget.
     telemetry.trackCustom("fyers_order_complete", { nonce, status });
   }, []);
-
-  const handleSearch = () => {
-    const input = searchInput.trim().toUpperCase();
-    if (!input) return;
-
-    // If the input doesn't have "NSE:" prefix, prepend it.
-    const sym = input.startsWith("NSE:") ? input : `NSE:${input}`;
-    // If the input doesn't have "-EQ" suffix and no exchange prefix, append.
-    const finalSym = sym.includes("-EQ") || !sym.startsWith("NSE:") ? sym : `${sym}-EQ`;
-
-    handleSymbolChange(finalSym);
-
-    // Update the name hint based on input (stripping prefixes/suffixes).
-    const nameHint = finalSym
-      .replace(/^NSE:/, "")
-      .replace(/-EQ$/, "");
-    setSymbolName(nameHint);
-  };
 
   // -------------------------------------------------------------------
   // Render
@@ -394,31 +396,6 @@ export default function ChartPage() {
             flexWrap: "wrap",
           }}
         >
-          {/* Symbol search */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-              placeholder="Search symbol (e.g. SBIN)"
-              style={{
-                background: "var(--bg-2)",
-                border: "1px solid var(--line-1)",
-                color: "var(--fg-1)",
-                padding: "7px 12px",
-                borderRadius: "var(--r-sm)",
-                fontFamily: "var(--font-sans)",
-                fontSize: 13,
-                width: 180,
-              }}
-            />
-            <Btn size="sm" variant="secondary" onClick={handleSearch} icon="search">
-              Go
-            </Btn>
-          </div>
-
-          <div style={{ width: 1, height: 24, background: "var(--line-2)" }} />
-
           {/* Symbol identity */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700 }}>

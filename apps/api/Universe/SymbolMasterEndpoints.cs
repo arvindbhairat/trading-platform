@@ -13,11 +13,19 @@ public static class SymbolMasterEndpoints
     public static RouteGroupBuilder MapSymbolMasterEndpoints(this RouteGroupBuilder group)
     {
         // GET /api/v1/universe/symbols — list all symbols, optional ?archived=true|false filter
+        // or ?q=RELIANCE for autocomplete search (matches symbol and company name).
         group.MapGet("/symbols", async (
             ISymbolMasterRepository repo,
             bool? archived,
+            string? q,
             CancellationToken ct) =>
         {
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var results = await repo.SearchAsync(q, ct: ct);
+                return Results.Ok(results);
+            }
+
             var symbols = await repo.GetAllAsync(archived, ct);
             return Results.Ok(symbols);
         })
