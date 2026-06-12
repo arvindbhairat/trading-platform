@@ -154,4 +154,28 @@ public sealed class InMemorySymbolMasterRepository : ISymbolMasterRepository
              string.Equals(s.Isin, isin, StringComparison.OrdinalIgnoreCase)));
         return Task.FromResult(hasConflict);
     }
+
+    public Task MarkFyersInvalidAsync(
+        ObjectId id, DateTime timestamp, CancellationToken ct = default)
+    {
+        var doc = _bySymbol.Values.FirstOrDefault(s => s.Id == id);
+        if (doc is not null)
+        {
+            doc.FyersMarkedInvalidAt = timestamp;
+            doc.UpdatedAt = DateTime.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task ClearFyersInvalidAsync(
+        ObjectId id, CancellationToken ct = default)
+    {
+        var doc = _bySymbol.Values.FirstOrDefault(s => s.Id == id);
+        if (doc is not null)
+        {
+            doc.FyersMarkedInvalidAt = null;
+            doc.UpdatedAt = DateTime.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
 }
