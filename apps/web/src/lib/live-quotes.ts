@@ -10,10 +10,15 @@
  *
  * REQ-STOP-006c: When the configured provider delivers delayed quotes, a
  * persistent indicator is surfaced. With FYERS (default), quotes are real-time.
+ *
+ * FYERS v3 Data WebSocket: Uses fyers-web-sdk-v3 (fyersDataSocket) which handles
+ * the HSM binary protocol internally. The raw JSON WebSocket at
+ * wss://socket.fyers.in/data/v3 is deprecated. See task_logs/ for migration details.
  */
 
 import { getToken, apiFetch, resolveWsUrl } from "./auth";
 import { telemetry } from "./telemetry";
+import { fyersDataSocket } from "fyers-web-sdk-v3";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,8 +43,6 @@ export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "ev
 export type StatusCallback = (status: ConnectionStatus, message?: string) => void;
 
 export interface LiveQuotesConfig {
-  /** FYERS Data WebSocket URL. Defaults to wss://socket.fyers.in/data/v3 */
-  wsUrl?: string;
   /** FYERS App ID (needed for auth header format) */
   appId?: string;
   /** How often to poll REST fallback when WebSocket is down (ms). Default 5000 */
@@ -50,17 +53,48 @@ export interface LiveQuotesConfig {
   pldCheckIntervalMs?: number;
 }
 
+// FYERS v3 SDK message type — the SDK decodes the binary HSM protocol
+// and applies field-name mapping (see HSM/mapper.js in the package).
+// Output field names:
+//   sf (equity): type, ltp, ch, chp, open_price, high_price, low_price,
+//                prev_close_price, vol_traded_today, last_traded_qty, ...
+//   if (index):  same but ltp = iv, and additional index-specific fields
+interface FyersSdkMessage {
+  type: "sf" | "if" | "cn" | "sub" | "ful" | "dp";
+  symbol?: string;
+  ltp?: number;
+  /** change (from raw cng) */
+  ch?: number;
+  /** change percent (from raw nc) */
+  chp?: number;
+  /** open price (from raw op) */
+  open_price?: number;
+  /** high price (from raw h) */
+  high_price?: number;
+  /** low price (from raw lo) */
+  low_price?: number;
+  /** previous close (from raw c) */
+  prev_close_price?: number;
+  /** volume traded today (from raw v) */
+  vol_traded_today?: number;
+  /** last traded qty */
+  last_traded_qty?: number;
+  /** exchange feed time */
+  exch_feed_time?: number;
+  [key: string]: unknown;
+}
+
 // ---------------------------------------------------------------------------
-// FYERS Data WebSocket client
+// FYERS Data WebSocket client (via fyers-web-sdk-v3)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_WS_URL = "wss://socket.fyers.in/data/v3";
 const DEFAULT_REST_POLL_MS = 5_000;
 const DEFAULT_PLD_URL = "/ws/pld";
 const DEFAULT_PLD_CHECK_MS = 30_000;
 
 export class LiveQuotesClient {
-  private ws: WebSocket | null = null;
+  /** The fyers-web-sdk-v3 DataSocket instance. */
+  private fyersSocket: ReturnType<typeof fyersDataSocket.getInstance> | null = null;
   private pldWs: WebSocket | null = null;
   private restPollTimer: ReturnType<typeof setInterval> | null = null;
   private pldCheckTimer: ReturnType<typeof setInterval> | null = null;
@@ -78,7 +112,6 @@ export class LiveQuotesClient {
 
   constructor(config: LiveQuotesConfig = {}) {
     this.config = {
-      wsUrl: config.wsUrl ?? DEFAULT_WS_URL,
       appId: config.appId ?? "",
       restPollIntervalMs: config.restPollIntervalMs ?? DEFAULT_REST_POLL_MS,
       pldUrl: config.pldUrl ?? DEFAULT_PLD_URL,
@@ -110,8 +143,8 @@ export class LiveQuotesClient {
     for (const s of symbols) {
       this.subscribedSymbols.add(s);
     }
-    // If already connected via WebSocket, send the subscribe message.
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    // If already connected via SDK, send the subscribe.
+    if (this.fyersSocket) {
       this.sendSubscribe([...symbols]);
     }
   }
@@ -120,6 +153,15 @@ export class LiveQuotesClient {
   unsubscribe(symbols: string[]): void {
     for (const s of symbols) {
       this.subscribedSymbols.delete(s);
+    }
+    // SDK unsubscribe: call with symbols to remove
+    if (this.fyersSocket && symbols.length > 0) {
+      try {
+        const fyersSymbols = symbols.map((s) => this.toFyersSymbol(s));
+        this.fyersSocket.unsubscribe(fyersSymbols, false);
+      } catch {
+        // unsubscribe failure is non-critical
+      }
     }
   }
 
@@ -139,7 +181,7 @@ export class LiveQuotesClient {
    * Start the live quotes client.
    * 1. Fetches the user's FYERS token from the backend.
    * 2. Connects to the PLD WebSocket to acquire the lease.
-   * 3. Opens the FYERS Data WebSocket.
+   * 3. Opens the FYERS Data WebSocket via fyers-web-sdk-v3.
    * 4. Falls back to REST poll if WebSocket disconnects.
    */
   async start(): Promise<void> {
@@ -162,7 +204,7 @@ export class LiveQuotesClient {
     // Step 2: connect to PLD WebSocket for lease.
     await this.connectPld();
 
-    // Step 3: connect to FYERS Data WebSocket.
+    // Step 3: connect to FYERS Data WebSocket via SDK.
     this.connectFyersWs();
   }
 
@@ -243,7 +285,7 @@ export class LiveQuotesClient {
   }
 
   // -----------------------------------------------------------------------
-  // FYERS Data WebSocket (REQ-MARKET-002b)
+  // FYERS Data WebSocket via fyers-web-sdk-v3 (REQ-MARKET-002b)
   // -----------------------------------------------------------------------
 
   private connectFyersWs(): void {
@@ -254,51 +296,67 @@ export class LiveQuotesClient {
     this.clearRestPoll();
 
     try {
-      this.ws = new WebSocket(this.config.wsUrl);
+      // Auth token in format "APPID:AccessToken" as required by FYERS SDK
+      const token = `${this.config.appId}:${this.fyersToken}`;
 
-      this.ws.onopen = () => {
+      // Create the SDK DataSocket instance (singleton pattern)
+      // Params: (token, logPath, enableLogging)
+      this.fyersSocket = fyersDataSocket.getInstance(token, "", true);
+
+      // ── Connect event: subscribe to queued symbols ──────────────────
+      this.fyersSocket.on("connect", () => {
         this.setStatus("connected");
 
-        // Authenticate: FYERS expects Authorization at connection time.
-        // For the raw WebSocket, we send auth as the first message.
-        // Format: { "type": "auth", "authorization": "appId:accessToken" }
-        if (this.fyersToken) {
-          const authMsg = JSON.stringify({
-            type: "auth",
-            authorization: `${this.config.appId}:${this.fyersToken}`,
-          });
-          this.ws?.send(authMsg);
-        }
-
-        // Subscribe to all queued symbols.
+        // Subscribe to all queued symbols
         if (this.subscribedSymbols.size > 0) {
           this.sendSubscribe([...this.subscribedSymbols]);
         }
-      };
 
-      this.ws.onmessage = (ev: MessageEvent) => {
-        this.handleWsMessage(ev.data);
-      };
+        // Use FullMode for complete data (ltp, ch, chp, open, high, low, volume, etc.)
+        // LiteMode only gives: type, ltp, last_traded_time, exch_feed_time, vol_traded_today
+        this.fyersSocket?.mode(this.fyersSocket.FullMode, 1);
+      });
 
-      this.ws.onclose = () => {
-        if (this.status === "evicted") return; // Don't fall back to REST if evicted.
+      // ── Message event: handle decoded market data ──────────────────
+      this.fyersSocket.on("message", (message: unknown) => {
+        this.handleSdkMessage(message);
+      });
+
+      // ── Error event ──────────────────────────────────────────────────
+      this.fyersSocket.on("error", (error: unknown) => {
+        telemetry.trackCustom("live_quotes_sdk_error", {
+          error: String(error),
+        });
+        // onerror is followed by onclose, so fallback starts there
+      });
+
+      // ── Close event: start REST fallback ─────────────────────────────
+      this.fyersSocket.on("close", () => {
+        if (this.status === "evicted") return;
         this.setStatus("disconnected");
         this.startRestFallback();
-      };
+      });
 
-      this.ws.onerror = () => {
-        // onerror is followed by onclose, so the fallback will start there.
-      };
-    } catch {
+      // Auto-reconnect: up to 10 attempts
+      this.fyersSocket.autoReconnect(10);
+
+      // Connect
+      this.fyersSocket.connect();
+    } catch (err) {
+      telemetry.trackCustom("live_quotes_sdk_error", {
+        error: `SDK init failed: ${String(err)}`,
+      });
       this.setStatus("disconnected");
       this.startRestFallback();
     }
   }
 
   private closeFyersWs(): void {
-    if (this.ws) {
-      try { this.ws.close(1000, "client stop"); } catch { /* ignore */ }
-      this.ws = null;
+    if (this.fyersSocket) {
+      try {
+        this.fyersSocket.close();
+      } catch { /* ignore */ }
+      this.fyersSocket = null;
     }
   }
 
@@ -314,58 +372,64 @@ export class LiveQuotesClient {
   }
 
   private sendSubscribe(symbols: string[]): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const msg = JSON.stringify({
-      type: "subscribe",
-      symbols: symbols.map((s) => this.toFyersSymbol(s)),
-      dataType: "SymbolUpdate",
-    });
-    this.ws.send(msg);
-  }
-
-  // -----------------------------------------------------------------------
-  // WebSocket message handling
-  // -----------------------------------------------------------------------
-
-  private handleWsMessage(data: unknown): void {
+    if (!this.fyersSocket) return;
     try {
-      const msg = typeof data === "string" ? JSON.parse(data) : data;
-      if (!msg || typeof msg !== "object") return;
-
-      // Handle different FYERS WebSocket message types.
-      // 'sf' = equity/option data, 'if' = index data
-      if (msg.type === "sf" || msg.type === "if") {
-        const quote = this.parseQuote(msg, "websocket");
-        if (quote) {
-          this.emitQuote(quote);
-        }
-      }
-      // 'cn' = connection message (auth confirmation)
-      // 'sub' = subscribe confirmation
-      // Ignored — they're protocol-level, not data.
-    } catch {
-      // Ignore malformed messages.
+      const fyersSymbols = symbols.map((s) => this.toFyersSymbol(s));
+      // Subscribe: (symbols[], isDepth=false, flag=1)
+      // Third param (1) = standard SymbolUpdate data type
+      this.fyersSocket.subscribe(fyersSymbols, false, 1);
+    } catch (err) {
+      telemetry.trackCustom("live_quotes_subscribe_error", {
+        error: String(err),
+        symbols: symbols.join(","),
+      });
     }
   }
 
-  private parseQuote(msg: Record<string, unknown>, source: "websocket" | "rest"): LiveQuote | null {
-    const symbol = msg.symbol as string | undefined;
-    const ltp = Number(msg.ltp ?? msg.v ?? 0);
-    if (!symbol || !ltp) return null;
+  // -----------------------------------------------------------------------
+  // SDK message handling
+  // -----------------------------------------------------------------------
 
-    return {
-      symbol,
-      ltp,
-      change: Number(msg.ch ?? 0),
-      changePct: Number(msg.chp ?? 0),
-      open: Number(msg.o ?? 0),
-      high: Number(msg.h ?? 0),
-      low: Number(msg.l ?? 0),
-      prevClose: Number(msg.pc ?? 0),
-      volume: Number(msg.v ?? 0),
-      timestamp: new Date(),
-      source,
-    };
+  /**
+   * Handle a decoded message from the fyers-web-sdk-v3 DataSocket.
+   *
+   * The SDK decodes the HSM binary protocol and applies field-name mapping:
+   * - Equity data: type="sf", fields: ltp, ch, chp, open_price, high_price,
+   *                low_price, prev_close_price, vol_traded_today, ...
+   * - Index data:  type="if", same fields with ltp mapped from iv
+   * - Confirmation: type="cn"/"sub"/"ful" (auth, subscribe, mode confirmations)
+   */
+  private handleSdkMessage(data: unknown): void {
+    try {
+      if (!data || typeof data !== "object") return;
+
+      const msg = data as FyersSdkMessage;
+
+      // Only process data messages (sf = stock/future, if = index)
+      if (msg.type !== "sf" && msg.type !== "if") return;
+
+      const symbol = msg.symbol ?? "";
+      const ltp = Number(msg.ltp ?? 0);
+      if (!symbol || !ltp) return;
+
+      const quote: LiveQuote = {
+        symbol,
+        ltp,
+        change: Number(msg.ch ?? 0),
+        changePct: Number(msg.chp ?? 0),
+        open: Number(msg.open_price ?? 0),
+        high: Number(msg.high_price ?? 0),
+        low: Number(msg.low_price ?? 0),
+        prevClose: Number(msg.prev_close_price ?? 0),
+        volume: Number(msg.vol_traded_today ?? 0),
+        timestamp: new Date(),
+        source: "websocket",
+      };
+
+      this.emitQuote(quote);
+    } catch {
+      // Ignore malformed messages
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -392,9 +456,9 @@ export class LiveQuotesClient {
 
         for (const [symbol, quoteData] of Object.entries(quotes)) {
           if (quoteData && typeof quoteData === "object") {
-            const quote = this.parseQuote(
-              { ...(quoteData as Record<string, unknown>), symbol },
-              "rest",
+            const quote = this.parseRestQuote(
+              symbol,
+              quoteData as Record<string, unknown>,
             );
             if (quote) {
               this.emitQuote(quote);
@@ -405,6 +469,29 @@ export class LiveQuotesClient {
         // Silent — keep polling.
       }
     }, this.config.restPollIntervalMs);
+  }
+
+  /** Parse a REST quote response into a LiveQuote (uses raw FYERS field names). */
+  private parseRestQuote(
+    symbol: string,
+    d: Record<string, unknown>,
+  ): LiveQuote | null {
+    const ltp = Number(d.ltp ?? d.v ?? 0);
+    if (!ltp) return null;
+
+    return {
+      symbol,
+      ltp,
+      change: Number(d.ch ?? 0),
+      changePct: Number(d.chp ?? 0),
+      open: Number(d.o ?? d.open_price ?? 0),
+      high: Number(d.h ?? d.high_price ?? 0),
+      low: Number(d.l ?? d.low_price ?? 0),
+      prevClose: Number(d.pc ?? d.prev_close_price ?? 0),
+      volume: Number(d.v ?? d.vol_traded_today ?? 0),
+      timestamp: new Date(),
+      source: "rest",
+    };
   }
 
   private clearRestPoll(): void {
