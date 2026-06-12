@@ -74,6 +74,20 @@ try
     }
 
     Console.Error.WriteLine($"SEED COMPLETE: {report.InsertedCount} inserted, {report.SkippedCount} skipped, sentinel={report.SentinelKey}={report.SentinelValue}");
+
+    // ── TTL index provisioning (non-fatal) ───────────────────────────────
+    try
+    {
+        var ttlProvisioner = new TtlIndexProvisioningService(connectionString, databaseName);
+        var ttlReport = await ttlProvisioner.RunAsync();
+        Console.Error.WriteLine();
+        Console.Error.WriteLine($"TTL INDEX PROVISIONING COMPLETE: created={ttlReport.TtlIndexesCreated.Count}, skipped={ttlReport.TtlIndexesSkipped.Count}, collections={ttlReport.PresentCollections.Count}, missing={ttlReport.MissingCollections.Count}");
+    }
+    catch (Exception ttlEx)
+    {
+        Console.Error.WriteLine($"TTL INDEX PROVISIONING FAILED (non-fatal): {ttlEx.Message}");
+    }
+
     return 0;
 }
 catch (Exception ex)

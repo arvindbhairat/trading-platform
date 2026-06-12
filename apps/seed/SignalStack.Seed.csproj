@@ -13,6 +13,10 @@
     <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\packages\migrations\SignalStack.Migrations\SignalStack.Migrations.csproj" />
+  </ItemGroup>
+
   <!-- Transitive dependency overrides: pinned to resolve known vulnerabilities -->
   <ItemGroup>
     <!-- SharpCompress: transitive from MongoDB.Driver; pinned to fix CVE-2026-44788 (directory traversal) -->
