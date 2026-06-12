@@ -97,6 +97,21 @@ Created `src/types/fyers-web-sdk-v3.d.ts` covering:
 - `fyersModel` (REST API)
 - `fyersOrderSocket` (Order WebSocket)
 
+## Bug Fix: SSR Crash (Round 2)
+
+**Problem**: The SDK's `hslib.js` references `window.WebSocket` at the **top level** of the module (line 1). During Next.js SSR of the `"use client"` chart page, Node.js evaluates the static import chain, hits this reference, and throws `ReferenceError: window is not defined`. This crashes the SSR render silently — the page shows but the WebSocket never starts, falling back to REST polling.
+
+**Fix**: Changed the SDK import from static to **dynamic**:
+```typescript
+// BEFORE (crashes SSR):
+import { fyersDataSocket } from "fyers-web-sdk-v3";
+
+// AFTER (browser-only):
+const { fyersDataSocket } = await import("fyers-web-sdk-v3");
+```
+
+The dynamic import inside `connectFyersWs()` only executes in the browser when the user's chart page actually attempts to connect.
+
 ## Verification
 
 - ✅ `tsc --noEmit` passes with zero errors in `live-quotes.ts`
@@ -105,3 +120,16 @@ Created `src/types/fyers-web-sdk-v3.d.ts` covering:
 - ✅ PLD lease monitoring preserved
 - ✅ All public API methods unchanged (`start`, `stop`, `subscribe`, `unsubscribe`, `onQuote`, `onStatus`)
 - ✅ New `unsubscribe()` calls SDK's native unsubscribe to reduce bandwidth
+- ✅ SDK confirmation messages (`cn`, `sub`, `ful`) now logged to browser console for debugging
+- ✅ Telemetry events fired for SDK errors and confirmation messages
+
+## Debugging Tip
+
+Open the browser console on the chart page. You should see:
+```
+[LiveQuotes] SDK cn: Authentication done   ← auth succeeded
+[LiveQuotes] SDK sub: Subscribed            ← subscribe succeeded  
+[LiveQuotes] SDK ful: Full Mode On          ← mode set
+```
+
+If you see these, the WebSocket is working. If not, the dynamic import or connection failed.

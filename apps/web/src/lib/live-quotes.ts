@@ -14,11 +14,22 @@
  * FYERS v3 Data WebSocket: Uses fyers-web-sdk-v3 (fyersDataSocket) which handles
  * the HSM binary protocol internally. The raw JSON WebSocket at
  * wss://socket.fyers.in/data/v3 is deprecated. See task_logs/ for migration details.
+ *
+ * Debugging: Open browser DevTools → Console. Filter by "live_quotes" to trace
+ * the full connection lifecycle.
  */
 
 import { getToken, apiFetch, resolveWsUrl } from "./auth";
 import { telemetry } from "./telemetry";
-import { fyersDataSocket } from "fyers-web-sdk-v3";
+import { createClientLogger } from "./client-logger";
+
+// NOTE: fyers-web-sdk-v3 is NOT imported at the top level.
+// The SDK's hslib.js references `window` at module scope (for browser WebSocket),
+// which crashes during Next.js SSR. Import it dynamically inside connectFyersWs().
+
+// Module-level logger. Prefix convention: file_or_type.MethodName
+// e.g. [live_quotes.LiveQuotesClient.connectFyersWs]
+const logger = createClientLogger("live_quotes.LiveQuotesClient");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,8 +104,8 @@ const DEFAULT_PLD_URL = "/ws/pld";
 const DEFAULT_PLD_CHECK_MS = 30_000;
 
 export class LiveQuotesClient {
-  /** The fyers-web-sdk-v3 DataSocket instance. */
-  private fyersSocket: ReturnType<typeof fyersDataSocket.getInstance> | null = null;
+  /** The fyers-web-sdk-v3 DataSocket instance (dynamic import, browser only). */
+  private fyersSocket: any = null;
   private pldWs: WebSocket | null = null;
   private restPollTimer: ReturnType<typeof setInterval> | null = null;
   private pldCheckTimer: ReturnType<typeof setInterval> | null = null;
@@ -117,6 +128,7 @@ export class LiveQuotesClient {
       pldUrl: config.pldUrl ?? DEFAULT_PLD_URL,
       pldCheckIntervalMs: config.pldCheckIntervalMs ?? DEFAULT_PLD_CHECK_MS,
     };
+    logger.log("config:", this.config);
   }
 
   // -----------------------------------------------------------------------
@@ -140,10 +152,10 @@ export class LiveQuotesClient {
 
   /** Subscribe to quote updates for a set of symbols. */
   subscribe(symbols: string[]): void {
+    logger.log("subscribe: symbols=", symbols, "| queued total:", this.subscribedSymbols.size + symbols.length);
     for (const s of symbols) {
       this.subscribedSymbols.add(s);
     }
-    // If already connected via SDK, send the subscribe.
     if (this.fyersSocket) {
       this.sendSubscribe([...symbols]);
     }
@@ -151,16 +163,17 @@ export class LiveQuotesClient {
 
   /** Unsubscribe from a set of symbols. */
   unsubscribe(symbols: string[]): void {
+    logger.log("unsubscribe: symbols=", symbols);
     for (const s of symbols) {
       this.subscribedSymbols.delete(s);
     }
-    // SDK unsubscribe: call with symbols to remove
     if (this.fyersSocket && symbols.length > 0) {
       try {
         const fyersSymbols = symbols.map((s) => this.toFyersSymbol(s));
         this.fyersSocket.unsubscribe(fyersSymbols, false);
-      } catch {
-        // unsubscribe failure is non-critical
+        logger.log("unsubscribe: SDK unsubscribed", fyersSymbols);
+      } catch (err) {
+        logger.warn("unsubscribe", "SDK call failed:", err);
       }
     }
   }
@@ -185,9 +198,12 @@ export class LiveQuotesClient {
    * 4. Falls back to REST poll if WebSocket disconnects.
    */
   async start(): Promise<void> {
+    logger.log("start: step 1 — fetching FYERS token");
+
     // Step 1: fetch the FYERS token for the browser-tier WebSocket.
     const tokenRes = await apiFetch("/api/v1/fyers/token");
     if (!tokenRes.ok) {
+      logger.error("start", "token fetch failed:", tokenRes.status, tokenRes.statusText);
       this.setStatus("disconnected", "Failed to fetch FYERS token");
       return;
     }
@@ -196,20 +212,25 @@ export class LiveQuotesClient {
       access_token: string | null;
     };
     if (!tokenData.has_token || !tokenData.access_token) {
+      logger.warn("start", "no FYERS token — user needs to connect FYERS");
       this.setStatus("disconnected", "No FYERS token available. Connect FYERS first.");
       return;
     }
     this.fyersToken = tokenData.access_token;
+    logger.log("start: token OK —", `${tokenData.access_token.substring(0, 8)}...`);
 
     // Step 2: connect to PLD WebSocket for lease.
+    logger.log("start: step 2 — connecting PLD lease");
     await this.connectPld();
 
     // Step 3: connect to FYERS Data WebSocket via SDK.
+    logger.log("start: step 3 — connecting FYERS Data WebSocket");
     this.connectFyersWs();
   }
 
   /** Stop the live quotes client: close all connections, clear timers. */
   stop(): void {
+    logger.log("stop: shutting down");
     this.closeFyersWs();
     this.closePld();
     this.clearRestPoll();
@@ -224,7 +245,10 @@ export class LiveQuotesClient {
 
   private async connectPld(): Promise<void> {
     const jwt = getToken();
-    if (!jwt) return;
+    if (!jwt) {
+      logger.warn("connectPld", "no JWT — skipping PLD");
+      return;
+    }
 
     const resolvedUrl = await resolveWsUrl(this.config.pldUrl);
     const url = `${resolvedUrl}?token=${encodeURIComponent(jwt)}`;
@@ -233,13 +257,14 @@ export class LiveQuotesClient {
       this.pldWs = new WebSocket(url);
 
       this.pldWs.onopen = () => {
-        // PLD lease acquired server-side. Start checking for eviction.
+        logger.log("connectPld: PLD lease acquired");
         this.startPldCheck();
       };
 
       this.pldWs.onclose = (ev: CloseEvent) => {
-        // REQ-SESSION-014(c): close code 4001 means evicted by another tab.
+        logger.log("connectPld: closed — code:", ev.code, ev.reason);
         if (ev.code === 4001) {
+          logger.warn("connectPld", "evicted by another tab (code 4001)");
           this.setStatus("evicted", "Another tab opened a live chart");
           this.closeFyersWs();
         }
@@ -248,17 +273,18 @@ export class LiveQuotesClient {
       };
 
       this.pldWs.onerror = () => {
-        // PLD lease failure is non-critical; the chart still works.
-        // The user loses the "latest-tab-wins" protection.
+        logger.error("connectPld", "WebSocket error (lease not acquired)");
         telemetry.trackCustom("live_quotes_pld_error", { message: "PLD WebSocket error — lease not acquired" });
         this.pldWs?.close();
       };
-    } catch {
+    } catch (err) {
+      logger.error("connectPld", "failed to create PLD WebSocket:", err);
       telemetry.trackCustom("live_quotes_pld_error", { message: "Failed to create PLD WebSocket" });
     }
   }
 
   private closePld(): void {
+    logger.log("closePld: closing PLD connection");
     this.stopPldCheck();
     if (this.pldWs) {
       try { this.pldWs.close(1000, "client stop"); } catch { /* ignore */ }
@@ -267,10 +293,11 @@ export class LiveQuotesClient {
   }
 
   private startPldCheck(): void {
+    logger.log("startPldCheck: monitoring every", this.config.pldCheckIntervalMs, "ms");
     this.stopPldCheck();
     this.pldCheckTimer = setInterval(() => {
       if (this.pldWs && this.pldWs.readyState !== WebSocket.OPEN) {
-        // PLD connection lost — another tab may have taken over.
+        logger.warn("startPldCheck", "PLD lease lost — closing FYERS WS");
         this.setStatus("evicted", "PLD lease lost");
         this.closeFyersWs();
       }
@@ -288,32 +315,40 @@ export class LiveQuotesClient {
   // FYERS Data WebSocket via fyers-web-sdk-v3 (REQ-MARKET-002b)
   // -----------------------------------------------------------------------
 
-  private connectFyersWs(): void {
-    if (!this.fyersToken) return;
+  private async connectFyersWs(): Promise<void> {
+    if (!this.fyersToken) {
+      logger.warn("connectFyersWs", "no token — aborting");
+      return;
+    }
 
     this.closeFyersWs();
     this.setStatus("connecting");
     this.clearRestPoll();
 
     try {
-      // Auth token in format "APPID:AccessToken" as required by FYERS SDK
+      logger.log("connectFyersWs: dynamically importing fyers-web-sdk-v3...");
+      const { fyersDataSocket } = await import("fyers-web-sdk-v3");
+      logger.log("connectFyersWs: SDK imported");
+
       const token = `${this.config.appId}:${this.fyersToken}`;
 
-      // Create the SDK DataSocket instance (singleton pattern)
-      // Params: (token, logPath, enableLogging)
+      logger.log("connectFyersWs: creating SDK instance (appId:", this.config.appId, ")");
       this.fyersSocket = fyersDataSocket.getInstance(token, "", true);
+      logger.log("connectFyersWs: SDK instance created");
 
       // ── Connect event: subscribe to queued symbols ──────────────────
       this.fyersSocket.on("connect", () => {
+        logger.log("connectFyersWs: 'connect' fired — WebSocket is up");
+
         this.setStatus("connected");
 
-        // Subscribe to all queued symbols
         if (this.subscribedSymbols.size > 0) {
-          this.sendSubscribe([...this.subscribedSymbols]);
+          const syms = [...this.subscribedSymbols];
+          logger.log("connectFyersWs: subscribing to tracked symbols:", syms);
+          this.sendSubscribe(syms);
         }
 
-        // Use FullMode for complete data (ltp, ch, chp, open, high, low, volume, etc.)
-        // LiteMode only gives: type, ltp, last_traded_time, exch_feed_time, vol_traded_today
+        logger.log("connectFyersWs: setting FullMode");
         this.fyersSocket?.mode(this.fyersSocket.FullMode, 1);
       });
 
@@ -324,25 +359,26 @@ export class LiveQuotesClient {
 
       // ── Error event ──────────────────────────────────────────────────
       this.fyersSocket.on("error", (error: unknown) => {
-        telemetry.trackCustom("live_quotes_sdk_error", {
-          error: String(error),
-        });
-        // onerror is followed by onclose, so fallback starts there
+        logger.error("connectFyersWs", "SDK 'error':", error);
+        telemetry.trackCustom("live_quotes_sdk_error", { error: String(error) });
       });
 
       // ── Close event: start REST fallback ─────────────────────────────
       this.fyersSocket.on("close", () => {
+        logger.log("connectFyersWs: 'close' fired");
         if (this.status === "evicted") return;
         this.setStatus("disconnected");
+        logger.log("connectFyersWs: starting REST fallback after WS close");
         this.startRestFallback();
       });
 
-      // Auto-reconnect: up to 10 attempts
+      logger.log("connectFyersWs: enabling autoReconnect(10)");
       this.fyersSocket.autoReconnect(10);
 
-      // Connect
+      logger.log("connectFyersWs: calling SDK connect()");
       this.fyersSocket.connect();
     } catch (err) {
+      logger.error("connectFyersWs", "SDK init failed:", err);
       telemetry.trackCustom("live_quotes_sdk_error", {
         error: `SDK init failed: ${String(err)}`,
       });
@@ -353,9 +389,12 @@ export class LiveQuotesClient {
 
   private closeFyersWs(): void {
     if (this.fyersSocket) {
+      logger.log("closeFyersWs: closing SDK WebSocket");
       try {
         this.fyersSocket.close();
-      } catch { /* ignore */ }
+      } catch (err) {
+        logger.warn("closeFyersWs", "close() threw:", err);
+      }
       this.fyersSocket = null;
     }
   }
@@ -372,13 +411,16 @@ export class LiveQuotesClient {
   }
 
   private sendSubscribe(symbols: string[]): void {
-    if (!this.fyersSocket) return;
+    if (!this.fyersSocket) {
+      logger.warn("sendSubscribe", "no SDK socket");
+      return;
+    }
     try {
       const fyersSymbols = symbols.map((s) => this.toFyersSymbol(s));
-      // Subscribe: (symbols[], isDepth=false, flag=1)
-      // Third param (1) = standard SymbolUpdate data type
+      logger.log("sendSubscribe: FYERS symbols:", fyersSymbols);
       this.fyersSocket.subscribe(fyersSymbols, false, 1);
     } catch (err) {
+      logger.error("sendSubscribe", "failed:", err);
       telemetry.trackCustom("live_quotes_subscribe_error", {
         error: String(err),
         symbols: symbols.join(","),
@@ -401,16 +443,65 @@ export class LiveQuotesClient {
    */
   private handleSdkMessage(data: unknown): void {
     try {
-      if (!data || typeof data !== "object") return;
+      if (!data || typeof data !== "object") {
+        logger.warn("handleSdkMessage", "non-object data:", typeof data);
+        return;
+      }
 
-      const msg = data as FyersSdkMessage;
+      const msg = data as Record<string, unknown>;
+      const msgType = String(msg.type ?? "");
 
-      // Only process data messages (sf = stock/future, if = index)
-      if (msg.type !== "sf" && msg.type !== "if") return;
+      // Confirmation messages
+      if (msgType === "cn") {
+        logger.log("SDK cn —", msg.message ?? "authenticated", "| code:", msg.code ?? "?");
+        telemetry.trackCustom("live_quotes_sdk_event", {
+          type: "cn", message: String(msg.message ?? ""), code: String(msg.code ?? ""),
+        });
+        return;
+      }
+      if (msgType === "sub") {
+        logger.log("SDK sub —", msg.message ?? "subscribed", "| code:", msg.code ?? "?");
+        telemetry.trackCustom("live_quotes_sdk_event", {
+          type: "sub", message: String(msg.message ?? ""), code: String(msg.code ?? ""),
+        });
+        return;
+      }
+      if (msgType === "ful") {
+        logger.log("SDK ful —", msg.message ?? "mode set", "| code:", msg.code ?? "?");
+        telemetry.trackCustom("live_quotes_sdk_event", {
+          type: "ful", message: String(msg.message ?? ""), code: String(msg.code ?? ""),
+        });
+        return;
+      }
 
-      const symbol = msg.symbol ?? "";
+      // Only data messages (sf = stock/future, if = index)
+      if (msgType !== "sf" && msgType !== "if") {
+        logger.log("SDK unknown msg type:", msgType, JSON.stringify(msg).substring(0, 200));
+        return;
+      }
+
+      // Resolve symbol: mapped name or raw token
+      let symbol = String(msg.symbol ?? msg.sym ?? "");
+
+      if (!symbol) {
+        if (msg.tk && msg.e) {
+          logger.warn("handleSdkMessage", "no symbol resolution for tk=", msg.tk, "e=", msg.e);
+          telemetry.trackCustom("live_quotes_sdk_no_symbol", {
+            tk: String(msg.tk ?? ""), e: String(msg.e ?? ""),
+          });
+          return;
+        }
+        if (process.env.NODE_ENV === "development") {
+          logger.log("handleSdkMessage: skipping msg without symbol —", JSON.stringify(msg).substring(0, 150));
+        }
+        return;
+      }
+
       const ltp = Number(msg.ltp ?? 0);
-      if (!symbol || !ltp) return;
+      if (!ltp) {
+        logger.warn("handleSdkMessage", "no LTP for", symbol, JSON.stringify(msg));
+        return;
+      }
 
       const quote: LiveQuote = {
         symbol,
@@ -426,9 +517,13 @@ export class LiveQuotesClient {
         source: "websocket",
       };
 
+      if (process.env.NODE_ENV === "development") {
+        logger.log("quote:", symbol, "LTP:", quote.ltp, "CH:", quote.change, "CH%:", quote.changePct);
+      }
+
       this.emitQuote(quote);
-    } catch {
-      // Ignore malformed messages
+    } catch (err) {
+      logger.warn("handleSdkMessage", "error:", err);
     }
   }
 
@@ -437,47 +532,53 @@ export class LiveQuotesClient {
   // -----------------------------------------------------------------------
 
   private startRestFallback(): void {
-    if (this.restPollTimer) return;
-    if (this.subscribedSymbols.size === 0) return;
+    if (this.restPollTimer) {
+      logger.log("startRestFallback: already polling");
+      return;
+    }
+    if (this.subscribedSymbols.size === 0) {
+      logger.log("startRestFallback: no symbols to poll");
+      return;
+    }
 
+    logger.log("startRestFallback: polling every", this.config.restPollIntervalMs, "ms");
     this.setStatus("rest_fallback");
 
     this.restPollTimer = setInterval(async () => {
       try {
         const symbols = [...this.subscribedSymbols].join(",");
         const res = await apiFetch(`/api/v1/fyers/quotes?symbols=${encodeURIComponent(symbols)}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          logger.warn("startRestFallback", "fetch failed:", res.status);
+          return;
+        }
 
         const data = (await res.json()) as Record<string, unknown>;
-
-        // The FYERS quotes API returns data in the `d` key.
         const quotes = data.d as Record<string, unknown> | undefined;
-        if (!quotes) return;
+        if (!quotes) {
+          logger.warn("startRestFallback", "no 'd' key:", JSON.stringify(data).substring(0, 200));
+          return;
+        }
 
         for (const [symbol, quoteData] of Object.entries(quotes)) {
           if (quoteData && typeof quoteData === "object") {
-            const quote = this.parseRestQuote(
-              symbol,
-              quoteData as Record<string, unknown>,
-            );
-            if (quote) {
-              this.emitQuote(quote);
-            }
+            const quote = this.parseRestQuote(symbol, quoteData as Record<string, unknown>);
+            if (quote) this.emitQuote(quote);
           }
         }
-      } catch {
-        // Silent — keep polling.
+      } catch (err) {
+        logger.warn("startRestFallback", "poll error:", err);
       }
     }, this.config.restPollIntervalMs);
   }
 
-  /** Parse a REST quote response into a LiveQuote (uses raw FYERS field names). */
-  private parseRestQuote(
-    symbol: string,
-    d: Record<string, unknown>,
-  ): LiveQuote | null {
+  /** Parse a REST quote response into a LiveQuote. */
+  private parseRestQuote(symbol: string, d: Record<string, unknown>): LiveQuote | null {
     const ltp = Number(d.ltp ?? d.v ?? 0);
-    if (!ltp) return null;
+    if (!ltp) {
+      logger.warn("parseRestQuote", "no LTP for", symbol, JSON.stringify(d));
+      return null;
+    }
 
     return {
       symbol,
@@ -496,6 +597,7 @@ export class LiveQuotesClient {
 
   private clearRestPoll(): void {
     if (this.restPollTimer) {
+      logger.log("clearRestPoll: stopping REST poll");
       clearInterval(this.restPollTimer);
       this.restPollTimer = null;
     }
@@ -506,18 +608,25 @@ export class LiveQuotesClient {
   // -----------------------------------------------------------------------
 
   private setStatus(status: ConnectionStatus, message?: string): void {
+    const prev = this.status;
     this.status = status;
+    if (prev !== status) {
+      logger.log("status:", prev, "→", status, message ? `(${message})` : "");
+    }
     for (const cb of this.statusCallbacks) {
-      try { cb(status, message); } catch { /* ignore callback errors */ }
+      try { cb(status, message); } catch (err) {
+        logger.warn("setStatus", "callback error:", err);
+      }
     }
   }
 
   private emitQuote(quote: LiveQuote): void {
     this._lastQuoteTimestamps.set(quote.symbol, quote.timestamp);
     this._lastUpdateOverall = quote.timestamp;
-
     for (const cb of this.quoteCallbacks) {
-      try { cb(quote); } catch { /* ignore callback errors */ }
+      try { cb(quote); } catch (err) {
+        logger.warn("emitQuote", "callback error:", err);
+      }
     }
   }
 }
@@ -536,12 +645,14 @@ export function getLiveQuotes(): LiveQuotesClient {
         ? (window as unknown as Record<string, string>).__FYERS_APP_ID__ ?? ""
         : "",
     });
+    logger.log("singleton created (appId:", _instance["config"].appId, ")");
   }
   return _instance;
 }
 
 /** Resets the singleton (for testing or cleanup). */
 export function resetLiveQuotes(): void {
+  logger.log("resetLiveQuotes: resetting singleton");
   if (_instance) {
     _instance.stop();
     _instance = null;
