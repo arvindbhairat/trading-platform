@@ -550,7 +550,7 @@ export function TopBar({
             <Icon name="search" size={14} />
           </span>
           <input
-            placeholder="Search symbol · NSE:RELIANCE"
+            placeholder="Search symbol · RELIANCE"
             style={{
               width: "100%",
               background: "var(--bg-2)",

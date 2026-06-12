@@ -162,7 +162,7 @@ export default function DashboardPage() {
   const handleExitClick = (symbol: string, price: number | null) => {
     setExitSymbol(symbol);
     setExitPrice(price);
-    setExitSymbolName(symbol.replace(/^NSE:/, "").replace(/-EQ$/, ""));
+    setExitSymbolName(symbol);
   };
 
   const handleCloseExitModal = () => {

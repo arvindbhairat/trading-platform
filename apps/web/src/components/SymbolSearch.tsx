@@ -2,7 +2,7 @@
 
 // SymbolSearch — autocomplete search bar for the TopBar header.
 // Fetches symbols from /api/v1/universe/symbols?q= and navigates to
-// /chart?symbol=NSE:{symbol} on selection.
+// /chart?symbol={symbol} on selection.
 //
 // Design reference: built as a drop-in replacement for the plain search
 // <input> in primitives.tsx TopBar. Uses only design tokens (--bg-*, --fg-*,
@@ -96,9 +96,8 @@ export default function SymbolSearch() {
     (symbol: string) => {
       setIsOpen(false);
       setInputValue("");
-      // Navigate to chart page with symbol in URL for sharable links.
-      // Chart page reads ?symbol=NSE:{raw_symbol} and strips the prefix.
-      router.push(`/chart?symbol=NSE:${symbol}`);
+      // Navigate to chart page with bare NSE symbol for sharable links.
+      router.push(`/chart?symbol=${symbol}`);
     },
     [router]
   );
@@ -206,7 +205,7 @@ export default function SymbolSearch() {
         onFocus={() => {
           if (results.length > 0) setIsOpen(true);
         }}
-        placeholder="Search symbol or company · NSE:RELIANCE"
+        placeholder="Search symbol or company · RELIANCE"
         style={{
           width: "100%",
           background: "var(--bg-2)",

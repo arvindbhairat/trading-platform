@@ -239,9 +239,10 @@ public static class FyersEndpoints
             return Results.Ok(new FyersTokenResponse(HasToken: true, AccessToken: token));
         }).RequireAuthorization();
 
-        // GET /api/v1/fyers/quotes?symbols=NSE:SBIN-EQ,NSE:RELIANCE-EQ
+        // GET /api/v1/fyers/quotes?symbols=RELIANCE,TCS
         // REST fallback for live quotes when the FYERS Data WebSocket is unavailable.
         // Proxies the FYERS REST quotes API using the logged-in user's FYERS token.
+        // Accepts bare NSE symbols (e.g. RELIANCE) or FYERS-format (NSE:RELIANCE-EQ).
         // REQ-MARKET-002b: browser-tier REST fallback for live data.
         // CSRF is NOT required: this is a GET (read-only) endpoint.
         fyers.MapGet("/quotes", async (
@@ -276,7 +277,12 @@ public static class FyersEndpoints
                 ?? configuration["FYERS_APP_ID"]
                 ?? "";
 
-            var requestUrl = $"https://api-t1.fyers.in/data/quotes?symbols={Uri.EscapeDataString(symbols)}";
+            // Normalize bare NSE symbols (e.g. RELIANCE → NSE:RELIANCE-EQ) for FYERS.
+            // The frontend sends bare symbols; FYERS requires NSE: prefix + -EQ suffix.
+            var normalizedSymbols = string.Join(",", symbols.Split(',', StringSplitOptions.TrimEntries)
+                .Select(NormalizeSymbolForFyers));
+
+            var requestUrl = $"https://api-t1.fyers.in/data/quotes?symbols={Uri.EscapeDataString(normalizedSymbols)}";
             var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
             request.Headers.TryAddWithoutValidation("Authorization", $"{appId}:{token}");
 
@@ -306,6 +312,22 @@ public static class FyersEndpoints
         if (string.IsNullOrWhiteSpace(authCode) || authCode.Length <= 8)
             return "<empty or too short>";
         return authCode[..4] + "..." + authCode[^4..];
+    }
+
+    /// <summary>
+    /// Normalize a bare NSE trading symbol to FYERS API format.
+    /// "RELIANCE" → "NSE:RELIANCE-EQ". Handles pre-formatted symbols as well.
+    /// </summary>
+    private static string NormalizeSymbolForFyers(string symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol)) return symbol;
+        var trimmed = symbol.Trim();
+        if (trimmed.StartsWith("NSE:", StringComparison.OrdinalIgnoreCase))
+            return trimmed; // Already has prefix — assume fully formatted
+        var withSuffix = trimmed.EndsWith("-EQ", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : $"{trimmed}-EQ";
+        return $"NSE:{withSuffix}";
     }
 }
 

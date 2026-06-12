@@ -204,7 +204,8 @@ export default function Phase1Modal({
     const lq = getLiveQuotes();
 
     const unsub = lq.onQuote((quote: LiveQuote) => {
-      if (quote.symbol === symbol || quote.symbol === symbol.replace("NSE:", "")) {
+      // quote.symbol from FYERS is NSE:SYMBOL-EQ; symbol prop is bare (RELIANCE)
+      if (quote.symbol === `NSE:${symbol}-EQ` || quote.symbol === symbol) {
         setLivePrice(quote.ltp);
         setQuoteTimestamp(
           quote.timestamp.toLocaleTimeString("en-IN", {

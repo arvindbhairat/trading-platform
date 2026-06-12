@@ -71,12 +71,10 @@ function ChartPageInner() {
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
   // Read symbol from URL search params for sharable links (REQ-DASH-001).
-  // Default to "NSE:SBIN-EQ" if no ?symbol= param is present.
+  // Default to "SBIN" if no ?symbol= param is present.
   const urlSymbol = searchParams.get("symbol");
-  const initialSymbol = urlSymbol ?? "NSE:SBIN-EQ";
-  const initialName = initialSymbol
-    .replace(/^NSE:/, "")
-    .replace(/-EQ$/, "");
+  const initialSymbol = urlSymbol ?? "SBIN";
+  const initialName = initialSymbol;
 
   const [symbol, setSymbol] = useState(initialSymbol);
   const [symbolName, setSymbolName] = useState(initialName);
@@ -98,8 +96,7 @@ function ChartPageInner() {
       setCurrentPrice(null);
       setChange(0);
       setChangePct(0);
-      const name = sym.replace(/^NSE:/, "").replace(/-EQ$/, "");
-      setSymbolName(name);
+      setSymbolName(sym);
     }
   }, [searchParams]);
 
@@ -242,16 +239,18 @@ function ChartPageInner() {
 
   useEffect(() => {
     const lq = getLiveQuotes();
+    // Derive FYERS symbol format — quote.symbol from FYERS uses NSE:SYMBOL-EQ
+    const fyersSymbol = `NSE:${symbol}-EQ`;
 
     // Start the live quotes client.
     lq.start();
 
-    // Subscribe to the current symbol.
+    // Subscribe to the current symbol (bare NSE symbol).
     lq.subscribe([symbol]);
 
     // Listen for quote updates.
     const unsubQuote = lq.onQuote((quote: LiveQuote) => {
-      if (quote.symbol === symbol) {
+      if (quote.symbol === fyersSymbol || quote.symbol === symbol) {
         setCurrentPrice(quote.ltp);
         setChange(quote.change);
         setChangePct(quote.changePct);
@@ -282,11 +281,9 @@ function ChartPageInner() {
     let cancelled = false;
 
     async function fetchPendingConf() {
-      // Strip exchange prefix for matching with intent ledger symbols
-      const sym = symbol.replace(/^NSE:/, "").replace(/-EQ$/, "");
       try {
         const res = await apiFetch(
-          `/api/v1/execution/intent/pending-confirmations?symbol=${encodeURIComponent(sym)}`
+          `/api/v1/execution/intent/pending-confirmations?symbol=${encodeURIComponent(symbol)}`
         );
         if (!cancelled && res.ok) {
           const data = (await res.json()) as { pending_confirmations: Array<{

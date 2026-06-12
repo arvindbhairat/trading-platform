@@ -302,11 +302,22 @@ export class LiveQuotesClient {
     }
   }
 
+  // ── FYERS symbol format ──────────────────────────────────────────────────
+  // FYERS requires NSE:SYMBOL-EQ format for NSE equities (e.g. NSE:RELIANCE-EQ).
+  // The rest of the app uses bare symbols (RELIANCE). Normalize here at the boundary.
+
+  /** Normalize a bare NSE symbol to FYERS WebSocket format. */
+  private toFyersSymbol(symbol: string): string {
+    if (symbol.startsWith("NSE:")) return symbol;
+    const base = symbol.endsWith("-EQ") ? symbol : `${symbol}-EQ`;
+    return `NSE:${base}`;
+  }
+
   private sendSubscribe(symbols: string[]): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const msg = JSON.stringify({
       type: "subscribe",
-      symbols,
+      symbols: symbols.map((s) => this.toFyersSymbol(s)),
       dataType: "SymbolUpdate",
     });
     this.ws.send(msg);
