@@ -22,7 +22,7 @@ import RmeAdvisoryPanel from "@/components/RmeAdvisoryPanel";
 import PortfolioHealthStrip from "@/components/PortfolioHealthStrip";
 import Phase1Modal, { type ProceedParams } from "@/components/Phase1Modal";
 import FyersButtonWidget from "@/components/FyersButtonWidget";
-import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type Time } from "lightweight-charts";
+import { createChart, type IChartApi, type ISeriesApi, type CandlestickSeriesPartialOptions, type BarData, type HistogramData, type HistogramSeriesPartialOptions, type Time } from "lightweight-charts";
 import { cssVar } from "@/lib/css-vars";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +69,7 @@ function ChartPageInner() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   // Tracks the current live candle for real-time chart updates.
   // Initialised when the first live quote arrives for the current trading period
@@ -172,12 +173,24 @@ function ChartPageInner() {
         close: r.close,
       }));
 
+      // Map volume histogram data — colour each bar by directional movement.
+      const volumeData: HistogramData[] = data.map((r) => ({
+        time: (new Date(r.date).getTime() / 1000) as Time,
+        value: r.volume,
+        color: r.close >= r.open ? cssVar("--up-500") : cssVar("--down-500"),
+      }));
+
       // Sort by time ascending.
       barData.sort((a, b) => Number(a.time) - Number(b.time));
+      volumeData.sort((a, b) => Number(a.time) - Number(b.time));
 
       if (seriesRef.current) {
         seriesRef.current.setData(barData);
         chartRef.current?.timeScale().fitContent();
+      }
+
+      if (volumeSeriesRef.current) {
+        volumeSeriesRef.current.setData(volumeData);
       }
     } catch {
       // Silently handle errors.
@@ -220,7 +233,7 @@ function ChartPageInner() {
         secondsVisible: false,
       },
       width: chartContainerRef.current.clientWidth,
-      height: 400,
+      height: 500,
     });
 
     const series = chart.addCandlestickSeries({
@@ -235,6 +248,29 @@ function ChartPageInner() {
     chartRef.current = chart;
     seriesRef.current = series;
 
+    // ── Volume histogram series (overlay) ────────────────────────────────────
+    // Uses priceScaleId '' to create an overlay (no dedicated left/right scale).
+    // Positioned in the bottom 30% of the chart via scaleMargins on the series'
+    // own price scale object.
+    // https://tradingview.github.io/lightweight-charts/tutorials/how_to/price-and-volume
+    const volumeSeries = chart.addHistogramSeries({
+      color: "rgba(0,0,0,0.12)", // fallback; per-bar colors override via data
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+    } satisfies HistogramSeriesPartialOptions);
+
+    // Confine the candlestick price scale to the top 70%.
+    series.priceScale().applyOptions({
+      scaleMargins: { top: 0, bottom: 0.3 },
+    });
+
+    // Position the volume overlay in the bottom 30%.
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.7, bottom: 0 },
+    });
+
+    volumeSeriesRef.current = volumeSeries;
+
     // Handle resize.
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -248,6 +284,7 @@ function ChartPageInner() {
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      volumeSeriesRef.current = null;
     };
   }, []);
 
@@ -324,6 +361,19 @@ function ChartPageInner() {
             low: Math.min(candleOpen, quote.ltp),
             close: quote.ltp,
           });
+
+          // Update the volume histogram for the current trading day.
+          // The FYERS WebSocket and REST fallback both provide today's
+          // traded volume, so the bar fills up during the session.
+          if (volumeSeriesRef.current) {
+            volumeSeriesRef.current.update({
+              time: barTime,
+              value: quote.volume,
+              color: quote.ltp >= candleOpen
+                ? cssVar("--up-500")
+                : cssVar("--down-500"),
+            });
+          }
         }
       }
     });
@@ -591,7 +641,7 @@ function ChartPageInner() {
             </div>
 
             {/* lightweight-charts container */}
-            <div ref={chartContainerRef} style={{ width: "100%", height: 400 }} />
+            <div ref={chartContainerRef} style={{ width: "100%", height: 500 }} />
           </Card>
 
           {/* RME advisory panel — P6-T27 */}
