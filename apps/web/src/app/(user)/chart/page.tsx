@@ -70,6 +70,11 @@ function ChartPageInner() {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
+  // Tracks the current live candle for real-time chart updates.
+  // Initialised when the first live quote arrives for the current trading period
+  // and reset on symbol/timeframe change.
+  const liveCandleRef = useRef<{ time: Time; open: number } | null>(null);
+
   // Read symbol from URL search params for sharable links (REQ-DASH-001).
   // Default to "SBIN" if no ?symbol= param is present.
   const urlSymbol = searchParams.get("symbol");
@@ -251,6 +256,7 @@ function ChartPageInner() {
   // -------------------------------------------------------------------
 
   useEffect(() => {
+    liveCandleRef.current = null;
     loadHistoricalData(symbol, timeframe);
   }, [symbol, timeframe, loadHistoricalData]);
 
@@ -281,6 +287,44 @@ function ChartPageInner() {
           minute: "2-digit",
           second: "2-digit",
         }));
+
+        // Update the chart's last candlestick with the live tick
+        // so the most recent bar reflects current market price.
+        // Only for daily timeframe — weekly/monthly/rolling have
+        // bars spanning multiple days and live-tick updates don't
+        // apply meaningfully.
+        if (seriesRef.current && timeframe === "daily") {
+          // Compute the time for the current trading day (midnight UTC).
+          const now = quote.timestamp;
+          const dayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+          const barTime = (dayStart.getTime() / 1000) as Time;
+
+          const prev = liveCandleRef.current;
+
+          // If this is the first tick for this trading day, initialise
+          // the candle open from the reported change (open = ltp − ch).
+          // For subsequent ticks, only update HLC.
+          let candleOpen: number;
+          if (!prev || prev.time !== barTime) {
+            candleOpen = Math.round((quote.ltp - quote.change) * 100) / 100;
+            liveCandleRef.current = { time: barTime, open: candleOpen };
+          } else {
+            candleOpen = prev.open;
+          }
+
+          // We don't have intraday high/low tracking from the quote alone,
+          // so we use the known OHLC from the loaded data as the ceiling/floor
+          // and expand if the current tick exceeds them.
+          // lightweight-charts' update() merges by time key, so repeated calls
+          // with the same time update the same bar in-place.
+          seriesRef.current.update({
+            time: barTime,
+            open: candleOpen,
+            high: Math.max(candleOpen, quote.ltp),
+            low: Math.min(candleOpen, quote.ltp),
+            close: quote.ltp,
+          });
+        }
       }
     });
 

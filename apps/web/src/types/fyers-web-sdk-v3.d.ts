@@ -76,9 +76,13 @@ declare module "fyers-web-sdk-v3" {
     /** Check if the socket is currently connected. */
     isConnected(): boolean;
 
-    /** Enable auto-reconnect on disconnection.
-     * @param retries Maximum number of reconnect attempts (max 50) */
-    autoReconnect(retries: number): void;
+    /**
+     * NOTE: autoReconnect is deliberately omitted here — the browser-
+     * compatible fyers-web-sdk-v3 DataSocket (datasocket.min.js) does not
+     * include this method. It only exists on the Node.js fyers-api-v3
+     * DataSocket and on the OrderSocket. Manual reconnection with
+     * exponential backoff is implemented in LiveQuotesClient instead.
+     */
   }
 
   /** DataSocket factory — singleton pattern. */

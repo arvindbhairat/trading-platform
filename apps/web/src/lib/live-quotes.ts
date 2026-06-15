@@ -121,6 +121,12 @@ export class LiveQuotesClient {
   private _lastQuoteTimestamps: Map<string, Date> = new Map();
   private _lastUpdateOverall: Date | null = null;
 
+  // Manual reconnection state (DataSocket in the browser SDK does not
+  // support autoReconnect — see datasocket.min.js in the package).
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(config: LiveQuotesConfig = {}) {
     this.config = {
       appId: config.appId ?? "",
@@ -340,6 +346,11 @@ export class LiveQuotesClient {
       this.fyersSocket.on("connect", () => {
         logger.log("connectFyersWs: 'connect' fired — WebSocket is up");
 
+        // Reset reconnection state on successful connect.
+        this.reconnectAttempts = 0;
+        this.clearReconnect();
+        this.clearRestPoll();
+
         this.setStatus("connected");
 
         if (this.subscribedSymbols.size > 0) {
@@ -363,17 +374,18 @@ export class LiveQuotesClient {
         telemetry.trackCustom("live_quotes_sdk_error", { error: String(error) });
       });
 
-      // ── Close event: start REST fallback ─────────────────────────────
+      // ── Close event: REST fallback + background reconnection ─────────
+      // NOTE: The browser DataSocket (fyers-web-sdk-v3@1.8.0) does NOT
+      // include autoReconnect — the method only exists on the OrderSocket.
+      // REST fallback starts immediately so the user never misses quotes;
+      // reconnection with exponential backoff runs in the background.
       this.fyersSocket.on("close", () => {
         logger.log("connectFyersWs: 'close' fired");
         if (this.status === "evicted") return;
         this.setStatus("disconnected");
-        logger.log("connectFyersWs: starting REST fallback after WS close");
         this.startRestFallback();
+        this.scheduleReconnect();
       });
-
-      logger.log("connectFyersWs: enabling autoReconnect(10)");
-      this.fyersSocket.autoReconnect(10);
 
       logger.log("connectFyersWs: calling SDK connect()");
       this.fyersSocket.connect();
@@ -388,6 +400,7 @@ export class LiveQuotesClient {
   }
 
   private closeFyersWs(): void {
+    this.clearReconnect();
     if (this.fyersSocket) {
       logger.log("closeFyersWs: closing SDK WebSocket");
       try {
@@ -396,6 +409,45 @@ export class LiveQuotesClient {
         logger.warn("closeFyersWs", "close() threw:", err);
       }
       this.fyersSocket = null;
+    }
+  }
+
+  /**
+   * Schedule a reconnection attempt with exponential backoff.
+   *
+   * The browser DataSocket (fyers-web-sdk-v3@1.8.0) does not support
+   * the autoReconnect method — this is a manual replacement.
+   * REST fallback is started immediately on close (so the user continues
+   * to receive quotes), so this runs in the background only.
+   * After MAX_RECONNECT_ATTEMPTS, reconnection is abandoned and REST
+   * fallback keeps running.
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      logger.log("scheduleReconnect: max attempts reached — staying on REST fallback");
+      this.reconnectAttempts = 0;
+      return;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 64s, 64s, ...
+    const delayMs = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 64_000);
+    this.reconnectAttempts++;
+
+    logger.log(
+      `scheduleReconnect: attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delayMs}ms`,
+    );
+
+    this.clearReconnect();
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connectFyersWs();
+    }, delayMs);
+  }
+
+  private clearReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
   }
 
@@ -572,24 +624,45 @@ export class LiveQuotesClient {
     }, this.config.restPollIntervalMs);
   }
 
-  /** Parse a REST quote response into a LiveQuote. */
+  /**
+   * Parse a REST quote response into a LiveQuote.
+   *
+   * FYERS REST quotes API format (d is an array element from data.d):
+   *   { "n": "NSE:HDFCBANK-EQ", "v": { "lp": 780, "ch": 7.55, "chp": 0.98, ... }, "s": "ok" }
+   *
+   * The symbol parameter from Object.entries() on an array is the numeric index
+   * ("0", "1", ...), so the real symbol must be extracted from d.n.
+   * LTP and all other fields live inside the d.v sub-object.
+   *
+   * Also handles flat-format fallback (non-FYERS adapters) where fields
+   * are at the top level.
+   */
   private parseRestQuote(symbol: string, d: Record<string, unknown>): LiveQuote | null {
-    const ltp = Number(d.ltp ?? d.v ?? 0);
+    // Extract the real symbol (d.n for FYERS array format, fallback to
+    // the Object.entries key which may be an array index).
+    const realSymbol = (d.n as string) || symbol;
+
+    // Values may be nested inside d.v (FYERS format) or at the top level.
+    const v = (d.v && typeof d.v === "object" && !Array.isArray(d.v))
+      ? (d.v as Record<string, unknown>)
+      : d;
+
+    const ltp = Number(v.lp ?? v.ltp ?? d.lp ?? d.ltp ?? 0);
     if (!ltp) {
-      logger.warn("parseRestQuote", "no LTP for", symbol, JSON.stringify(d));
+      logger.warn("parseRestQuote", "no LTP for", realSymbol, JSON.stringify(d));
       return null;
     }
 
     return {
-      symbol,
+      symbol: realSymbol,
       ltp,
-      change: Number(d.ch ?? 0),
-      changePct: Number(d.chp ?? 0),
-      open: Number(d.o ?? d.open_price ?? 0),
-      high: Number(d.h ?? d.high_price ?? 0),
-      low: Number(d.l ?? d.low_price ?? 0),
-      prevClose: Number(d.pc ?? d.prev_close_price ?? 0),
-      volume: Number(d.v ?? d.vol_traded_today ?? 0),
+      change: Number(v.ch ?? d.ch ?? 0),
+      changePct: Number(v.chp ?? d.chp ?? 0),
+      open: Number(v.open_price ?? d.open_price ?? d.o ?? 0),
+      high: Number(v.high_price ?? d.high_price ?? d.h ?? 0),
+      low: Number(v.low_price ?? d.low_price ?? d.l ?? 0),
+      prevClose: Number(v.prev_close_price ?? d.prev_close_price ?? d.pc ?? 0),
+      volume: Number(v.vol_traded_today ?? d.vol_traded_today ?? d.v ?? 0),
       timestamp: new Date(),
       source: "rest",
     };
